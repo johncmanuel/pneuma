@@ -1,0 +1,171 @@
+package scanner
+
+import (
+	"context"
+	"io/fs"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"pneuma/internal/fingerprint/chromaprint"
+	"pneuma/internal/library"
+	"pneuma/internal/metadata/parser"
+)
+
+// Scheduler performs periodic full-directory reconciliation scans to catch any
+// files that were missed by inotify (e.g. files added while the server was
+// offline, or network-mounted paths that don't generate events).
+type Scheduler struct {
+	lib      *library.Service
+	parser   *parser.Parser
+	fpcalc   *chromaprint.Service
+	bus      EventBus
+	dirs     []string
+	interval time.Duration
+	log      *slog.Logger
+}
+
+// NewScheduler creates a Scheduler that will scan dirs every interval.
+func NewScheduler(lib *library.Service, p *parser.Parser, fp *chromaprint.Service, bus EventBus, dirs []string, interval time.Duration) *Scheduler {
+	return &Scheduler{
+		lib:      lib,
+		parser:   p,
+		fpcalc:   fp,
+		bus:      bus,
+		dirs:     dirs,
+		interval: interval,
+		log:      slog.Default().With("component", "scheduler"),
+	}
+}
+
+// Start runs an immediate scan then repeats on interval until ctx is cancelled.
+func (sc *Scheduler) Start(ctx context.Context) {
+	sc.scan(ctx)
+	ticker := time.NewTicker(sc.interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			sc.scan(ctx)
+		}
+	}
+}
+
+// ScanNow triggers an ad-hoc scan of all directories synchronously.
+func (sc *Scheduler) ScanNow(ctx context.Context) {
+	sc.scan(ctx)
+}
+
+// ScanAll triggers a scan using a background context (satisfies scanTrigger interface).
+func (sc *Scheduler) ScanAll() {
+	sc.scan(context.Background())
+}
+
+func (sc *Scheduler) scan(ctx context.Context) {
+	sc.bus.Publish("scan.started", nil)
+	start := time.Now()
+	added, updated, removed := 0, 0, 0
+
+	for _, dir := range sc.dirs {
+		if _, err := os.Stat(dir); err != nil {
+			sc.log.Warn("watch dir unavailable", "dir", dir, "err", err)
+			continue
+		}
+		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			if !audioExts[strings.ToLower(filepath.Ext(path))] {
+				return nil
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+
+			existing, err := sc.lib.TrackByPath(ctx, path)
+			if err != nil {
+				return nil
+			}
+
+			// Skip if file hasn't changed since last ingest.
+			if existing != nil && !info.ModTime().After(existing.LastModified) {
+				return nil
+			}
+
+			track, err := sc.parser.ParseFile(ctx, path)
+			if err != nil {
+				sc.log.Error("parse error in scan", "path", path, "err", err)
+				return nil
+			}
+
+			isNew := existing == nil
+			if existing != nil {
+				// Preserve stable identity fields so the upsert matches on ID.
+				track.ID = existing.ID
+				track.CreatedAt = existing.CreatedAt
+			}
+
+			// ── Dedup: SHA-256 content hash (exact copies across folders) ────────
+			if hash, hashErr := contentHash(path); hashErr == nil {
+				track.Fingerprint = hash
+				if dup, _ := sc.lib.TrackByFingerprint(ctx, hash); dup != nil && dup.Path != path {
+					sc.log.Info("skipping duplicate (content hash match)", "path", path, "existing", dup.Path)
+					return nil
+				}
+			}
+
+			// ── Dedup: acoustic fingerprint (perceptually-same songs) ────────────
+			if sc.fpcalc != nil && sc.fpcalc.Available() {
+				if res, fpErr := sc.fpcalc.Fingerprint(ctx, path); fpErr == nil && res.Fingerprint != "" {
+					if dup, _ := sc.lib.TrackByFingerprint(ctx, res.Fingerprint); dup != nil && dup.Path != path {
+						sc.log.Info("skipping duplicate (acoustic match)", "path", path, "existing", dup.Path)
+						return nil
+					}
+				}
+			}
+
+			if err := sc.lib.UpsertTrack(ctx, track); err != nil {
+				sc.log.Error("upsert error in scan", "path", path, "err", err)
+				return nil
+			}
+
+			if isNew {
+				added++
+				sc.bus.Publish("track.added", track)
+			} else {
+				updated++
+				sc.bus.Publish("track.updated", track)
+			}
+			return nil
+		})
+		if err != nil {
+			sc.log.Error("walk error", "dir", dir, "err", err)
+		}
+	}
+
+	// Deduplicate tracks sharing a content hash or acoustic fingerprint.
+	if n, err := sc.lib.DeduplicateFingerprints(ctx); err != nil {
+		sc.log.Error("fingerprint dedup failed", "err", err)
+	} else if n > 0 {
+		removed += n
+		sc.log.Info("removed fingerprint duplicates", "count", n)
+		sc.bus.Publish("library.deduped", map[string]int{"removed": n})
+	}
+
+	sc.log.Info("scan complete",
+		"duration", time.Since(start).Round(time.Millisecond),
+		"added", added, "updated", updated, "removed", removed,
+	)
+	sc.bus.Publish("scan.completed", map[string]int{
+		"added": added, "updated": updated, "removed": removed,
+	})
+}

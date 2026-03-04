@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "pneuma",
+  "outputfilename": "pneuma",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "John Carlo Manuel",
+    "email": "39042556+johncmanuel@users.noreply.github.com"
+  }
+}

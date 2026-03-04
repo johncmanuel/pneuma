@@ -1,0 +1,196 @@
+package sqlite
+
+import (
+	"database/sql"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	_ "modernc.org/sqlite"
+)
+
+// Store wraps a SQLite database connection.
+type Store struct {
+	db *sql.DB
+}
+
+// Open creates or opens the SQLite database at path and applies the schema.
+func Open(path string) (*Store, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("create db dir: %w", err)
+	}
+
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite open %s: %w", path, err)
+	}
+
+	// Performance pragmas.
+	for _, pragma := range []string{
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA foreign_keys=ON",
+		"PRAGMA busy_timeout=5000",
+		"PRAGMA cache_size=-32000",
+	} {
+		if _, err := db.Exec(pragma); err != nil {
+			return nil, fmt.Errorf("pragma: %w", err)
+		}
+	}
+
+	if err := migrate(db); err != nil {
+		return nil, err
+	}
+	return &Store{db: db}, nil
+}
+
+// Close closes the database.
+func (s *Store) Close() error {
+	return s.db.Close()
+}
+
+// DB returns the underlying *sql.DB (for testing).
+func (s *Store) DB() *sql.DB {
+	return s.db
+}
+
+func migrate(db *sql.DB) error {
+	_, err := db.Exec(schema)
+	return err
+}
+
+const schema = `
+CREATE TABLE IF NOT EXISTS users (
+	id TEXT PRIMARY KEY,
+	username TEXT NOT NULL UNIQUE,
+	password_hash TEXT NOT NULL,
+	is_admin INTEGER NOT NULL DEFAULT 0,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS artists (
+	id TEXT PRIMARY KEY,
+	name TEXT NOT NULL,
+	mb_artist_id TEXT DEFAULT '',
+	created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS artworks (
+	id TEXT PRIMARY KEY,
+	path TEXT NOT NULL UNIQUE,
+	width INTEGER DEFAULT 0,
+	height INTEGER DEFAULT 0,
+	format TEXT DEFAULT '',
+	created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS albums (
+	id TEXT PRIMARY KEY,
+	title TEXT NOT NULL,
+	artist_id TEXT,
+	year INTEGER DEFAULT 0,
+	mb_release_id TEXT DEFAULT '',
+	artwork_id TEXT,
+	created_at TEXT NOT NULL,
+	FOREIGN KEY (artist_id) REFERENCES artists(id),
+	FOREIGN KEY (artwork_id) REFERENCES artworks(id)
+);
+
+CREATE TABLE IF NOT EXISTS tracks (
+	id TEXT PRIMARY KEY,
+	path TEXT NOT NULL UNIQUE,
+	title TEXT NOT NULL DEFAULT '',
+	artist_id TEXT,
+	album_id TEXT,
+	album_artist TEXT DEFAULT '',
+	album_name TEXT DEFAULT '',
+	genre TEXT DEFAULT '',
+	year INTEGER DEFAULT 0,
+	track_number INTEGER DEFAULT 0,
+	disc_number INTEGER DEFAULT 0,
+	duration_ms INTEGER DEFAULT 0,
+	bitrate_kbps INTEGER DEFAULT 0,
+	sample_rate_hz INTEGER DEFAULT 0,
+	codec TEXT DEFAULT '',
+	file_size_bytes INTEGER DEFAULT 0,
+	last_modified TEXT NOT NULL,
+	fingerprint TEXT DEFAULT '',
+	mb_recording_id TEXT DEFAULT '',
+	replay_gain_track REAL DEFAULT 0,
+	replay_gain_album REAL DEFAULT 0,
+	artwork_id TEXT,
+	enriched_at TEXT,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (artist_id) REFERENCES artists(id),
+	FOREIGN KEY (album_id) REFERENCES albums(id),
+	FOREIGN KEY (artwork_id) REFERENCES artworks(id)
+);
+
+CREATE TABLE IF NOT EXISTS playlists (
+	id TEXT PRIMARY KEY,
+	user_id TEXT NOT NULL,
+	name TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS playlist_tracks (
+	playlist_id TEXT NOT NULL,
+	track_id TEXT NOT NULL,
+	position INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (playlist_id, track_id),
+	FOREIGN KEY (playlist_id) REFERENCES playlists(id),
+	FOREIGN KEY (track_id) REFERENCES tracks(id)
+);
+
+CREATE TABLE IF NOT EXISTS watch_folders (
+	id TEXT PRIMARY KEY,
+	path TEXT NOT NULL UNIQUE,
+	user_id TEXT NOT NULL,
+	created_at TEXT NOT NULL,
+	FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS devices (
+	id TEXT PRIMARY KEY,
+	user_id TEXT NOT NULL,
+	name TEXT NOT NULL,
+	last_seen_at TEXT,
+	created_at TEXT NOT NULL,
+	FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS playback_sessions (
+	id TEXT PRIMARY KEY,
+	device_id TEXT NOT NULL UNIQUE,
+	user_id TEXT NOT NULL,
+	track_id TEXT,
+	position_ms INTEGER DEFAULT 0,
+	queue_json TEXT DEFAULT '[]',
+	updated_at TEXT NOT NULL,
+	FOREIGN KEY (device_id) REFERENCES devices(id),
+	FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS offline_packs (
+	id TEXT PRIMARY KEY,
+	user_id TEXT NOT NULL,
+	track_id TEXT NOT NULL,
+	local_path TEXT NOT NULL,
+	downloaded_at TEXT NOT NULL,
+	UNIQUE(user_id, track_id),
+	FOREIGN KEY (user_id) REFERENCES users(id),
+	FOREIGN KEY (track_id) REFERENCES tracks(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist_id);
+CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_id);
+CREATE INDEX IF NOT EXISTS idx_tracks_path ON tracks(path);
+CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(artist_id);
+CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_device ON playback_sessions(device_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON playback_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_offline_user ON offline_packs(user_id);
+`
