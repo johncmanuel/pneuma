@@ -4,6 +4,9 @@ export type PanelName = "queue" | "devices" | null
 
 export const activePanel = writable<PanelName>(null)
 
+/** The currently active main view (library | downloads | settings). */
+export const currentView = writable<string>("library")
+
 // Convenience derived stores for backward compat
 export const queuePanelOpen = derived(activePanel, $p => $p === "queue")
 

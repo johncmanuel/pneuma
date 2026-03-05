@@ -2,7 +2,7 @@
   import { playerState, isPlaying, type Track } from "../stores/player"
   import { tracks } from "../stores/library"
   import { localTracks, type LocalTrack } from "../stores/localLibrary"
-  import { activePanel, togglePanel, toggleQueuePanel } from "../stores/ui"
+  import { activePanel, togglePanel, toggleQueuePanel, currentView } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
   import { streamUrl, artworkUrl, connected } from "./api"
   import { wsSend } from "../stores/ws"
@@ -10,9 +10,15 @@
   let audio: HTMLAudioElement
   let deviceId = "desktop"
   let volume = 1
+  let prevVolume = 1  // last non-zero volume, restored on unmute
   let audioDurationMs = 0  // actual duration from <audio> element
   let seeking = false       // true while user is dragging seekbar
   let seekSyncTimer: ReturnType<typeof setTimeout> | null = null
+  // Track the URL we set on audio.src ourselves — do NOT compare against
+  // audio.src directly because the browser normalizes percent-encoding
+  // (e.g. %27 → ') so the comparison never matches for paths with special
+  // characters, causing a continuous src reset that prevents playback.
+  let currentAudioSrc = ""
 
   $: track = $playerState.track
   $: hasTrack = !!$playerState.trackId
@@ -146,12 +152,88 @@
     const target = e.target as HTMLInputElement
     volume = Number(target.value)
     if (audio) audio.volume = volume
+    if (volume > 0) prevVolume = volume
+  }
+
+  function toggleMute() {
+    if (!audio) return
+    if (audio.volume > 0) {
+      prevVolume = audio.volume
+      audio.volume = 0
+      volume = 0
+    } else {
+      volume = prevVolume || 1
+      audio.volume = volume
+    }
+  }
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  // Guards: don't intercept when typing in an input / textarea / contenteditable.
+  function handleKeyDown(e: KeyboardEvent) {
+    const target = e.target as HTMLElement
+    if (
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      (target as HTMLElement).isContentEditable
+    ) return
+
+    const ctrl = e.ctrlKey || e.metaKey // Ctrl on Linux/Win, Cmd on macOS
+
+    // Space → play/pause
+    if (e.code === "Space" && !ctrl && !e.altKey && !e.shiftKey) {
+      e.preventDefault()
+      togglePause()
+      return
+    }
+    // Ctrl/Cmd+S → shuffle
+    if (ctrl && e.key === "s" && !e.altKey && !e.shiftKey) {
+      e.preventDefault()
+      toggleShuffle()
+      return
+    }
+    // Ctrl/Cmd+R → repeat
+    if (ctrl && e.key === "r" && !e.altKey && !e.shiftKey) {
+      e.preventDefault()
+      toggleRepeat()
+      return
+    }
+    // Ctrl/Cmd+, → open settings
+    if (ctrl && e.key === "," && !e.altKey && !e.shiftKey) {
+      e.preventDefault()
+      currentView.set("settings")
+      return
+    }
+    // Alt+Shift+Q → toggle queue panel
+    if (e.altKey && e.shiftKey && (e.key === "Q" || e.key === "q")) {
+      e.preventDefault()
+      toggleQueuePanel()
+      return
+    }
+    // Left arrow → previous track
+    if (e.code === "ArrowLeft" && !ctrl && !e.altKey && !e.shiftKey) {
+      e.preventDefault()
+      skipPrev()
+      return
+    }
+    // Right arrow → next track
+    if (e.code === "ArrowRight" && !ctrl && !e.altKey && !e.shiftKey) {
+      e.preventDefault()
+      skipNext()
+      return
+    }
+    // M → mute/unmute
+    if ((e.key === "m" || e.key === "M") && !ctrl && !e.altKey && !e.shiftKey) {
+      e.preventDefault()
+      toggleMute()
+      return
+    }
   }
 
   // Sync HTML audio element when track changes
   $: if (audio && $playerState.trackId) {
     const url = streamUrl($playerState.trackId, $playerState.track?.path)
-    if (audio.src !== url && url) {
+    if (currentAudioSrc !== url && url) {
+      currentAudioSrc = url
       audio.src = url
       audio.currentTime = $playerState.positionMs / 1000
     }
@@ -188,6 +270,8 @@
     }
   }
 </script>
+
+<svelte:window on:keydown={handleKeyDown} />
 
 <div class="player">
   <audio

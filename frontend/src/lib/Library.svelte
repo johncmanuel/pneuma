@@ -326,7 +326,7 @@
 </section>
 
 <style>
-  section { height: 100%; display: flex; flex-direction: column; overflow-y: auto; }
+  section { display: flex; flex-direction: column; }
 
   /* Tab bar */
   .tab-bar {
@@ -476,7 +476,7 @@
   .offline-sub { margin: 0; font-size: 13px; color: var(--text-3); }
 
   /* Track list within album detail */
-  .track-list { flex: 1; overflow-y: auto; }
+  .track-list { }
 
   .track-header {
     display: grid;

@@ -3,7 +3,7 @@
   import { initApi, connected } from "./lib/api"
   import { connectWS, disconnectWS } from "./stores/ws"
   import { loadTracks } from "./stores/library"
-  import { activePanel } from "./stores/ui"
+  import { activePanel, currentView } from "./stores/ui"
 
   import Sidebar from "./lib/Sidebar.svelte"
   import Player from "./lib/Player.svelte"
@@ -16,7 +16,6 @@
   import Settings from "./lib/Settings.svelte"
   import DisconnectBanner from "./lib/DisconnectBanner.svelte"
 
-  let view = "library"
   let wasConnected = false
 
   onMount(async () => {
@@ -39,13 +38,13 @@
   }
 
   function handleNavigate(e: CustomEvent<string>) {
-    view = e.detail
+    currentView.set(e.detail)
   }
 </script>
 
 <div class="shell" class:panel-open={$activePanel !== null}>
   <div class="sidebar-area">
-    <Sidebar activeView={view} on:navigate={handleNavigate} />
+    <Sidebar activeView={$currentView} on:navigate={handleNavigate} />
   </div>
 
   <header class="topbar">
@@ -55,11 +54,11 @@
   </header>
 
   <main class="content">
-    {#if view === "library"}
+    {#if $currentView === "library"}
       <Library />
-    {:else if view === "downloads"}
+    {:else if $currentView === "downloads"}
       <Downloads />
-    {:else if view === "settings"}
+    {:else if $currentView === "settings"}
       <Settings />
     {/if}
   </main>
