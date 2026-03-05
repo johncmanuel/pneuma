@@ -5,8 +5,18 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"pneuma/internal/api/http/middleware"
 	"pneuma/internal/playback"
 )
+
+// claimsUserID extracts the user ID from the JWT claims attached to c, or ""
+// if the request is unauthenticated.
+func claimsUserID(c echo.Context) string {
+	if claims := middleware.GetClaims(c); claims != nil {
+		return claims.UserID
+	}
+	return ""
+}
 
 // PlaybackHandler handles /api/playback/* and /api/handoff routes.
 type PlaybackHandler struct {
@@ -36,7 +46,7 @@ func (h *PlaybackHandler) Play(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
-	return h.engine.Play(c.Request().Context(), c.Param("device_id"), body.TrackID, body.PositionMS)
+	return h.engine.Play(c.Request().Context(), c.Param("device_id"), claimsUserID(c), body.TrackID, body.PositionMS)
 }
 
 // Pause POST /api/playback/:device_id/pause  body: {paused}
@@ -47,7 +57,7 @@ func (h *PlaybackHandler) Pause(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
-	return h.engine.Pause(c.Request().Context(), c.Param("device_id"), body.Paused)
+	return h.engine.Pause(c.Request().Context(), c.Param("device_id"), claimsUserID(c), body.Paused)
 }
 
 // Seek POST /api/playback/:device_id/seek  body: {position_ms}
@@ -58,12 +68,12 @@ func (h *PlaybackHandler) Seek(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
-	return h.engine.Seek(c.Request().Context(), c.Param("device_id"), body.PositionMS)
+	return h.engine.Seek(c.Request().Context(), c.Param("device_id"), claimsUserID(c), body.PositionMS)
 }
 
 // Next POST /api/playback/:device_id/next
 func (h *PlaybackHandler) Next(c echo.Context) error {
-	nextID, queueIdx, err := h.engine.Next(c.Request().Context(), c.Param("device_id"))
+	nextID, queueIdx, err := h.engine.Next(c.Request().Context(), c.Param("device_id"), claimsUserID(c))
 	if err != nil {
 		return internalErr(err)
 	}
@@ -72,7 +82,7 @@ func (h *PlaybackHandler) Next(c echo.Context) error {
 
 // Prev POST /api/playback/:device_id/prev
 func (h *PlaybackHandler) Prev(c echo.Context) error {
-	prevID, queueIdx, err := h.engine.Prev(c.Request().Context(), c.Param("device_id"))
+	prevID, queueIdx, err := h.engine.Prev(c.Request().Context(), c.Param("device_id"), claimsUserID(c))
 	if err != nil {
 		return internalErr(err)
 	}
@@ -88,7 +98,7 @@ func (h *PlaybackHandler) SetQueue(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
-	return h.engine.SetQueue(c.Request().Context(), c.Param("device_id"), body.TrackIDs, body.StartIndex)
+	return h.engine.SetQueue(c.Request().Context(), c.Param("device_id"), claimsUserID(c), body.TrackIDs, body.StartIndex)
 }
 
 // SetRepeat POST /api/playback/:device_id/repeat  body: {mode}
@@ -99,7 +109,7 @@ func (h *PlaybackHandler) SetRepeat(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
-	return h.engine.SetRepeat(c.Request().Context(), c.Param("device_id"), body.Mode)
+	return h.engine.SetRepeat(c.Request().Context(), c.Param("device_id"), claimsUserID(c), body.Mode)
 }
 
 // SetShuffle POST /api/playback/:device_id/shuffle  body: {enabled}
@@ -110,7 +120,7 @@ func (h *PlaybackHandler) SetShuffle(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
-	return h.engine.SetShuffle(c.Request().Context(), c.Param("device_id"), body.Enabled)
+	return h.engine.SetShuffle(c.Request().Context(), c.Param("device_id"), claimsUserID(c), body.Enabled)
 }
 
 // Transfer POST /api/handoff  body: {user_id, source_device_id, target_device_id}

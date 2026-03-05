@@ -35,7 +35,7 @@
 >
   <span class="num text-3">{track?.track_number || "–"}</span>
   <span class="title truncate">{track?.title ?? "Unknown"}</span>
-  <span class="artist truncate text-2">{track?.album_artist || "–"}</span>
+  <span class="artist truncate text-2">{track?.artist_name || track?.album_artist || "–"}</span>
   <span class="album truncate text-2">{track?.album_name || "–"}</span>
   <span class="duration text-3">{formatDuration(track?.duration_ms ?? 0)}</span>
 </button>

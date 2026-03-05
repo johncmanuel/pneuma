@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { loggedIn } from "./lib/api"
+  import { onMount, onDestroy } from "svelte"
+  import { loggedIn, tryAutoAuth } from "./lib/api"
+  import { connectWS, disconnectWS } from "./lib/ws"
   import Login from "./lib/Login.svelte"
   import Sidebar from "./lib/Sidebar.svelte"
   import Library from "./pages/Library.svelte"
@@ -7,13 +9,29 @@
   import Player from "./lib/Player.svelte"
 
   let view = "library"
+  let ready = false
+
+  onMount(async () => {
+    await tryAutoAuth()
+    ready = true
+    // Connect WebSocket once authenticated
+    if ($loggedIn) connectWS()
+  })
+
+  // Reconnect WS when auth state changes
+  $: if (ready && $loggedIn) connectWS()
+  $: if (ready && !$loggedIn) disconnectWS()
+
+  onDestroy(() => disconnectWS())
 
   function handleNavigate(e: CustomEvent<string>) {
     view = e.detail
   }
 </script>
 
-{#if $loggedIn}
+{#if !ready}
+  <div class="loading-screen"><p>Connecting…</p></div>
+{:else if $loggedIn}
   <div class="shell">
     <div class="sidebar-area">
       <Sidebar activeView={view} on:navigate={handleNavigate} />
@@ -34,6 +52,14 @@
 {/if}
 
 <style>
+  .loading-screen {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-3);
+    font-size: 14px;
+  }
   .shell {
     display: grid;
     grid-template-columns: var(--sidebar-w) 1fr;

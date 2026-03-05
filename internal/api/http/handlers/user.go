@@ -40,7 +40,7 @@ func (h *UserHandler) Register(c echo.Context) error {
 	}
 
 	token, err := middleware.GenerateToken(
-		h.secret, u.ID, u.IsAdmin,
+		h.secret, u.ID, u.Username, u.IsAdmin,
 		u.CanUpload, u.CanEdit, u.CanDelete,
 		middleware.AccessTokenTTL,
 	)
@@ -72,7 +72,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 	}
 
 	token, err := middleware.GenerateToken(
-		h.secret, u.ID, u.IsAdmin,
+		h.secret, u.ID, u.Username, u.IsAdmin,
 		u.CanUpload, u.CanEdit, u.CanDelete,
 		middleware.AccessTokenTTL,
 	)
@@ -103,7 +103,7 @@ func (h *UserHandler) Refresh(c echo.Context) error {
 	}
 
 	token, err := middleware.GenerateToken(
-		h.secret, u.ID, u.IsAdmin,
+		h.secret, u.ID, u.Username, u.IsAdmin,
 		u.CanUpload, u.CanEdit, u.CanDelete,
 		middleware.AccessTokenTTL,
 	)
@@ -152,7 +152,7 @@ func (h *UserHandler) StreamToken(c echo.Context) error {
 	}
 
 	token, err := middleware.GenerateToken(
-		h.secret, claims.UserID, claims.IsAdmin,
+		h.secret, claims.UserID, claims.Username, claims.IsAdmin,
 		claims.CanUpload, claims.CanEdit, claims.CanDelete,
 		middleware.StreamTokenTTL,
 	)

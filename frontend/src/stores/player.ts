@@ -8,7 +8,8 @@ export interface Track {
   title: string
   artist_id: string
   album_id: string
-  album_artist: string
+  artist_name?: string  // track-level artist (preferred for display)
+  album_artist: string  // album artist tag (fallback)
   album_name: string
   genre: string
   year: number

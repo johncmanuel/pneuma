@@ -4,7 +4,8 @@
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import type { Track } from "../stores/player"
-  import { serverFetch, artworkUrl, connected, localBase } from "./api"
+  import { serverFetch, artworkUrl, connected, isReconnecting, localBase } from "./api"
+  import { wsSend } from "../stores/ws"
   import { onMount } from "svelte"
 
   type LibTab = "library" | "local"
@@ -77,7 +78,8 @@
         title: t.title,
         artist_id: "",
         album_id: "",
-        album_artist: t.album_artist || t.artist,
+        artist_name: t.artist,
+        album_artist: t.album_artist,
         album_name: t.album,
         genre: t.genre,
         year: t.year,
@@ -140,28 +142,21 @@
     }
 
     if (!$connected) return
-    await serverFetch("/api/playback/desktop/queue", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ track_ids: queueIds, start_index: idx >= 0 ? idx : 0 }),
-    })
 
-    const res = await serverFetch("/api/playback/desktop/play", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ track_id: track.id, position_ms: 0 }),
-    })
-    if (res.ok) {
-      playerState.update(s => ({
-        ...s,
-        trackId: track.id,
-        track,
-        queue: queueIds,
-        queueIndex: idx >= 0 ? idx : 0,
-        positionMs: 0,
-        paused: false,
-      }))
-    }
+    // Update local state immediately — no round-trip needed.
+    playerState.update(s => ({
+      ...s,
+      trackId: track.id,
+      track,
+      queue: queueIds,
+      queueIndex: idx >= 0 ? idx : 0,
+      positionMs: 0,
+      paused: false,
+    }))
+
+    // Sync server state via WS (fire-and-forget).
+    wsSend("playback.queue", { device_id: "desktop", track_ids: queueIds, start_index: idx >= 0 ? idx : 0 })
+    wsSend("playback.play",  { device_id: "desktop", track_id: track.id, position_ms: 0 })
   }
 
   function addToQueue(track: Track) {
@@ -173,15 +168,8 @@
     }
     if (!$connected) return
     const newQueue = [...$playerState.queue, track.id]
-    serverFetch("/api/playback/desktop/queue", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ track_ids: newQueue, start_index: $playerState.queueIndex }),
-    })
-    playerState.update(s => ({
-      ...s,
-      queue: newQueue,
-    }))
+    wsSend("playback.queue", { device_id: "desktop", track_ids: newQueue, start_index: $playerState.queueIndex })
+    playerState.update(s => ({ ...s, queue: newQueue }))
   }
 
   async function scanLibrary() {
@@ -220,6 +208,11 @@
 
   async function handleAddFolder() {
     await addLocalFolder()
+  }
+
+  function hideImgOnError(e: Event) {
+    const img = e.currentTarget as HTMLImageElement
+    if (img) img.style.display = "none"
   }
 </script>
 
@@ -291,7 +284,13 @@
       </div>
     {/if}
 
-    {#if isLoading}
+    {#if activeTab === "library" && !$connected}
+      <div class="offline-state">
+        <span class="offline-icon">⚠</span>
+        <p class="offline-title">{$isReconnecting ? "Reconnecting to server…" : "Not connected to a server"}</p>
+        <p class="offline-sub">{$isReconnecting ? "Your library will appear once the connection is restored." : "Open Settings to connect to your pneuma server."}</p>
+      </div>
+    {:else if isLoading}
       <p class="text-3">Loading…</p>
     {:else if albumGroups.length === 0}
       {#if activeTab === "local"}
@@ -312,7 +311,7 @@
                 <img
                   src="{getArtUrl(album)}"
                   alt={album.name}
-                  on:error={(e) => { e.currentTarget.style.display = 'none' }}
+                  on:error={hideImgOnError}
                 />
               {/if}
               <div class="album-art-placeholder">{album.key === UNORGANIZED_KEY ? "📂" : "♫"}</div>
@@ -460,6 +459,21 @@
     background: transparent;
   }
   .unorg-title { font-style: italic; }
+
+  /* Offline state */
+  .offline-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 8px;
+    padding: 60px 20px;
+    text-align: center;
+  }
+  .offline-icon { font-size: 36px; opacity: 0.4; }
+  .offline-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-1); }
+  .offline-sub { margin: 0; font-size: 13px; color: var(--text-3); }
 
   /* Track list within album detail */
   .track-list { flex: 1; overflow-y: auto; }

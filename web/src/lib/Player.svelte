@@ -1,21 +1,28 @@
 <script lang="ts">
   import { webPlayerState, isPlaying } from "./playerStore"
   import { streamUrl, artworkUrl, apiFetch } from "./api"
+  import { wsSend, setTrackList } from "./ws"
   import { formatDuration } from "./TrackRow.svelte"
+  import type { Track } from "./TrackRow.svelte"
 
   let audio: HTMLAudioElement
+  let deviceId = "web"
   let volume = 1
   let audioDurationMs = 0
   let seeking = false
+  let seekSyncTimer: ReturnType<typeof setTimeout> | null = null
 
   // A resolved list of all tracks for next/prev lookup
-  let allTracks: import("./TrackRow.svelte").Track[] = []
+  let allTracks: Track[] = []
 
   // Load tracks list once for queue resolution
   ;(async () => {
     try {
       const r = await apiFetch("/api/library/tracks")
-      if (r.ok) allTracks = await r.json()
+      if (r.ok) {
+        allTracks = await r.json()
+        setTrackList(allTracks)
+      }
     } catch { /* ignore */ }
   })()
 
@@ -44,6 +51,7 @@
       positionMs: 0,
       paused: false,
     }))
+    wsSend("playback.play", { device_id: deviceId, track_id: nextId, position_ms: 0 })
   }
 
   function skipPrev() {
@@ -63,11 +71,14 @@
       positionMs: 0,
       paused: false,
     }))
+    wsSend("playback.play", { device_id: deviceId, track_id: prevId, position_ms: 0 })
   }
 
   function togglePause() {
     if (!hasTrack) return
-    webPlayerState.update((s) => ({ ...s, paused: !s.paused }))
+    const newPaused = !$webPlayerState.paused
+    webPlayerState.update((s) => ({ ...s, paused: newPaused }))
+    wsSend("playback.pause", { device_id: deviceId, paused: newPaused })
   }
 
   function onSeekInput(e: Event) {
@@ -81,6 +92,7 @@
     const ms = Number((e.target as HTMLInputElement).value)
     if (audio) audio.currentTime = ms / 1000
     webPlayerState.update((s) => ({ ...s, positionMs: ms }))
+    wsSend("playback.seek", { device_id: deviceId, position_ms: ms })
   }
 
   function setVolume(e: Event) {
@@ -103,6 +115,13 @@
   function onTimeUpdate() {
     if (!seeking) {
       webPlayerState.update((s) => ({ ...s, positionMs: audio.currentTime * 1000 }))
+    }
+    // Debounced position sync to server (every 5 s)
+    if (!seekSyncTimer) {
+      seekSyncTimer = setTimeout(() => {
+        seekSyncTimer = null
+        wsSend("playback.seek", { device_id: deviceId, position_ms: audio.currentTime * 1000 })
+      }, 5000)
     }
   }
   function onLoadedMetadata() {

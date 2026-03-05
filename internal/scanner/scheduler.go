@@ -65,6 +65,43 @@ func (sc *Scheduler) ScanAll() {
 	sc.scan(context.Background())
 }
 
+// ScanPath parses and upserts a single file, then publishes track.added or
+// track.updated via the event bus. Used for post-upload metadata enrichment.
+func (sc *Scheduler) ScanPath(path string) {
+	ctx := context.Background()
+
+	track, err := sc.parser.ParseFile(ctx, path)
+	if err != nil {
+		sc.log.Error("ScanPath parse error", "path", path, "err", err)
+		return
+	}
+
+	existing, err := sc.lib.TrackByPath(ctx, path)
+	if err != nil {
+		sc.log.Error("ScanPath db lookup error", "path", path, "err", err)
+		return
+	}
+
+	isNew := existing == nil
+	if existing != nil {
+		// Preserve stable identity so the upsert overwrites rather than duplicates.
+		track.ID = existing.ID
+		track.CreatedAt = existing.CreatedAt
+		track.UploadedByUserID = existing.UploadedByUserID
+	}
+
+	if err := sc.lib.UpsertTrack(ctx, track); err != nil {
+		sc.log.Error("ScanPath upsert error", "path", path, "err", err)
+		return
+	}
+
+	if isNew {
+		sc.bus.Publish("track.added", track)
+	} else {
+		sc.bus.Publish("track.updated", track)
+	}
+}
+
 func (sc *Scheduler) scan(ctx context.Context) {
 	sc.bus.Publish("scan.started", nil)
 	start := time.Now()

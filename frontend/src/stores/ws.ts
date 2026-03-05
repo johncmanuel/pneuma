@@ -1,24 +1,38 @@
+import { writable } from "svelte/store"
 import { playerState } from "./player"
 import type { Track } from "./player"
 import { loadTracks, tracks } from "./library"
-import { wsBase, authToken, connected } from "../lib/api"
+import { wsBase, authToken, connected, serverFetch, autoReconnect } from "../lib/api"
 import { addToast } from "./toasts"
 import { get } from "svelte/store"
 
+/** True when the WS connection dropped unexpectedly (drives the banner). */
+export const serverDisconnected = writable(false)
+
 let socket: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+let intentionalClose = false
 
 export function connectWS() {
   if (!get(connected)) return
   const base = wsBase()
   if (!base) return
 
+  intentionalClose = false
   const token = get(authToken)
   const url = token
     ? `${base}/ws?token=${encodeURIComponent(token)}`
     : `${base}/ws`
 
   socket = new WebSocket(url)
+
+  socket.onopen = () => {
+    // We (re)connected — hide the disconnect banner and show a brief toast
+    if (get(serverDisconnected)) {
+      serverDisconnected.set(false)
+      addToast("Reconnected to server.", "success")
+    }
+  }
 
   socket.onmessage = (e) => {
     const msg = JSON.parse(e.data)
@@ -41,7 +55,19 @@ export function connectWS() {
         // Resolve full track object from local store
         let currentTracks: Track[] = []
         tracks.subscribe(v => { currentTracks = v })()
-        const trackObj = currentTracks.find(t => t.id === msg.payload.track_id) ?? null
+        let trackObj = currentTracks.find(t => t.id === msg.payload.track_id) ?? null
+
+        // If track not in local store (remote-only), fetch metadata from server
+        if (!trackObj && msg.payload.track_id) {
+          fetchRemoteTrack(msg.payload.track_id).then(remote => {
+            if (remote) {
+              playerState.update(s =>
+                s.trackId === remote.id ? { ...s, track: remote } : s
+              )
+            }
+          })
+        }
+
         playerState.update(s => ({
           ...s,
           trackId: msg.payload.track_id ?? s.trackId,
@@ -59,8 +85,20 @@ export function connectWS() {
   }
 
   socket.onclose = () => {
+    if (intentionalClose) return
+
+    // Unexpected disconnect — show banner but let already-buffered audio
+    // continue playing so the user isn't interrupted.
+
+    // Show disconnect banner
+    serverDisconnected.set(true)
+
+    // Attempt WS reconnect if still logically connected
     if (get(connected)) {
       reconnectTimer = setTimeout(() => connectWS(), 3000)
+    } else {
+      // Backend says disconnected — try full re-auth reconnect, then reconnect WS
+      autoReconnect(() => connectWS())
     }
   }
 
@@ -68,6 +106,28 @@ export function connectWS() {
 }
 
 export function disconnectWS() {
+  intentionalClose = true
   if (reconnectTimer) clearTimeout(reconnectTimer)
+  // Hide disconnect banner on intentional disconnect
+  serverDisconnected.set(false)
   socket?.close()
+}
+
+/** Fire-and-forget a message to the server over the open WebSocket. */
+export function wsSend(type: string, payload: object) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type, payload }))
+  }
+}
+
+/* ── Helpers ── */
+
+async function fetchRemoteTrack(trackId: string): Promise<Track | null> {
+  try {
+    const res = await serverFetch(`/api/library/tracks/${trackId}`)
+    if (!res.ok) return null
+    return (await res.json()) as Track
+  } catch {
+    return null
+  }
 }

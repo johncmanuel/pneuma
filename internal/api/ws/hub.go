@@ -14,17 +14,28 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
-// Envelope is the JSON message sent over the WebSocket.
+// Envelope is the JSON message sent over the WebSocket (outbound).
 type Envelope struct {
 	Type    string `json:"type"`
 	Payload any    `json:"payload"`
 }
 
+// InboundMessage is a JSON envelope received from a WebSocket client.
+type InboundMessage struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// InboundHandler is called for every non-empty message received from a client.
+// userID is the authenticated user extracted at connection time.
+type InboundHandler func(userID string, msg InboundMessage)
+
 // Hub manages connected WebSocket clients and broadcasts messages.
 type Hub struct {
-	mu      sync.RWMutex
-	clients map[*client]struct{}
-	log     *slog.Logger
+	mu        sync.RWMutex
+	clients   map[*client]struct{}
+	log       *slog.Logger
+	onMessage InboundHandler
 }
 
 // New creates a Hub. Exported name used by app.go / cmd/server.
@@ -33,6 +44,11 @@ func New() *Hub {
 		clients: make(map[*client]struct{}),
 		log:     slog.Default().With("component", "ws"),
 	}
+}
+
+// SetMessageHandler registers a callback for inbound client messages.
+func (h *Hub) SetMessageHandler(handler InboundHandler) {
+	h.onMessage = handler
 }
 
 // Publish sends an event to every connected client.
@@ -57,17 +73,19 @@ func (h *Hub) ConnectedCount() int {
 	return len(h.clients)
 }
 
-// ServeWS is an HTTP handler that upgrades the connection to WebSocket.
-func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
+// ServeWS upgrades the HTTP connection to WebSocket.
+// userID should be the authenticated user's ID (empty string if unauthenticated).
+func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, userID string) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		h.log.Error("ws upgrade", "err", err)
 		return
 	}
 	c := &client{
-		hub:  h,
-		conn: conn,
-		send: make(chan []byte, 64),
+		hub:    h,
+		conn:   conn,
+		send:   make(chan []byte, 64),
+		userID: userID,
 	}
 	h.register(c)
 	go c.writePump()
@@ -89,9 +107,10 @@ func (h *Hub) unregister(c *client) {
 }
 
 type client struct {
-	hub  *Hub
-	conn *websocket.Conn
-	send chan []byte
+	hub    *Hub
+	conn   *websocket.Conn
+	send   chan []byte
+	userID string
 }
 
 func (c *client) readPump() {
@@ -103,9 +122,15 @@ func (c *client) readPump() {
 		return nil
 	})
 	for {
-		_, _, err := c.conn.ReadMessage()
+		_, data, err := c.conn.ReadMessage()
 		if err != nil {
 			return
+		}
+		if c.hub.onMessage != nil {
+			var msg InboundMessage
+			if json.Unmarshal(data, &msg) == nil && msg.Type != "" {
+				c.hub.onMessage(c.userID, msg)
+			}
 		}
 	}
 }

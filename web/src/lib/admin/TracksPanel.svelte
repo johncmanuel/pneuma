@@ -29,7 +29,17 @@
       )
     : tracks
 
+  import { libraryVersion } from "../ws"
+
   onMount(loadTracks)
+
+  // Re-fetch whenever the server reports any library mutation via WebSocket.
+  let _prevLibVer: number | undefined
+  $: {
+    const v = $libraryVersion
+    if (_prevLibVer !== undefined && v !== _prevLibVer) loadTracks()
+    _prevLibVer = v
+  }
 
   async function loadTracks() {
     loading = true

@@ -3,7 +3,8 @@
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import type { Track } from "../stores/player"
-  import { serverFetch, connected } from "./api"
+  import { connected } from "./api"
+  import { wsSend } from "../stores/ws"
 
   let query = ""
   let debounce: number
@@ -16,22 +17,10 @@
     }, 300)
   }
 
-  async function playTrack(track: Track) {
+  function playTrack(track: Track) {
     if (!$connected) return
-    const res = await serverFetch("/api/playback/desktop/play", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ track_id: track.id, position_ms: 0 }),
-    })
-    if (res.ok) {
-      playerState.update(s => ({
-        ...s,
-        trackId: track.id,
-        track,
-        positionMs: 0,
-        paused: false,
-      }))
-    }
+    playerState.update(s => ({ ...s, trackId: track.id, track, positionMs: 0, paused: false }))
+    wsSend("playback.play", { device_id: "desktop", track_id: track.id, position_ms: 0 })
   }
 
   function addToQueue(track: Track) {

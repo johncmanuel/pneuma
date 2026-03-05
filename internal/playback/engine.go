@@ -2,7 +2,6 @@ package playback
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math/rand"
@@ -31,6 +30,7 @@ type EventBus interface {
 
 // State represents the current playback state of a device.
 type State struct {
+	UserID     string     `json:"-"`
 	Playing    bool       `json:"playing"`
 	TrackID    string     `json:"track_id"`
 	PositionMS int64      `json:"position_ms"`
@@ -72,10 +72,10 @@ func (e *Engine) GetState(deviceID string) (State, error) {
 }
 
 // Play starts or resumes playback.
-func (e *Engine) Play(ctx context.Context, deviceID, trackID string, positionMS int64) error {
+func (e *Engine) Play(ctx context.Context, deviceID, userID, trackID string, positionMS int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	s := e.getOrCreate(deviceID)
+	s := e.getOrCreate(deviceID, userID)
 	s.Playing = true
 	if trackID != "" {
 		s.TrackID = trackID
@@ -87,28 +87,28 @@ func (e *Engine) Play(ctx context.Context, deviceID, trackID string, positionMS 
 }
 
 // Pause sets paused state.
-func (e *Engine) Pause(ctx context.Context, deviceID string, paused bool) error {
+func (e *Engine) Pause(ctx context.Context, deviceID, userID string, paused bool) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	s := e.getOrCreate(deviceID)
+	s := e.getOrCreate(deviceID, userID)
 	s.Playing = !paused
 	return e.persist(ctx, deviceID, s)
 }
 
 // Seek sets the playback position (in milliseconds).
-func (e *Engine) Seek(ctx context.Context, deviceID string, positionMS int64) error {
+func (e *Engine) Seek(ctx context.Context, deviceID, userID string, positionMS int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	s := e.getOrCreate(deviceID)
+	s := e.getOrCreate(deviceID, userID)
 	s.PositionMS = positionMS
 	return e.persist(ctx, deviceID, s)
 }
 
 // SetQueue replaces the playback queue.
-func (e *Engine) SetQueue(ctx context.Context, deviceID string, trackIDs []string, startIndex int) error {
+func (e *Engine) SetQueue(ctx context.Context, deviceID, userID string, trackIDs []string, startIndex int) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	s := e.getOrCreate(deviceID)
+	s := e.getOrCreate(deviceID, userID)
 	s.Queue = trackIDs
 	s.QueueIndex = startIndex
 	if startIndex >= 0 && startIndex < len(trackIDs) {
@@ -119,10 +119,10 @@ func (e *Engine) SetQueue(ctx context.Context, deviceID string, trackIDs []strin
 }
 
 // Next advances to the next track; returns the new track ID and queue index.
-func (e *Engine) Next(ctx context.Context, deviceID string) (string, int, error) {
+func (e *Engine) Next(ctx context.Context, deviceID, userID string) (string, int, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	s := e.getOrCreate(deviceID)
+	s := e.getOrCreate(deviceID, userID)
 	if len(s.Queue) == 0 {
 		return s.TrackID, s.QueueIndex, nil
 	}
@@ -147,10 +147,10 @@ func (e *Engine) Next(ctx context.Context, deviceID string) (string, int, error)
 }
 
 // Prev goes back to the previous track; returns the new track ID and queue index.
-func (e *Engine) Prev(ctx context.Context, deviceID string) (string, int, error) {
+func (e *Engine) Prev(ctx context.Context, deviceID, userID string) (string, int, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	s := e.getOrCreate(deviceID)
+	s := e.getOrCreate(deviceID, userID)
 	if len(s.Queue) == 0 {
 		return s.TrackID, s.QueueIndex, nil
 	}
@@ -166,10 +166,10 @@ func (e *Engine) Prev(ctx context.Context, deviceID string) (string, int, error)
 }
 
 // SetRepeat sets the repeat mode for a device.
-func (e *Engine) SetRepeat(ctx context.Context, deviceID string, mode RepeatMode) error {
+func (e *Engine) SetRepeat(ctx context.Context, deviceID, userID string, mode RepeatMode) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	s := e.getOrCreate(deviceID)
+	s := e.getOrCreate(deviceID, userID)
 	s.Repeat = mode
 	return e.persist(ctx, deviceID, s)
 }
@@ -177,10 +177,10 @@ func (e *Engine) SetRepeat(ctx context.Context, deviceID string, mode RepeatMode
 // SetShuffle toggles shuffle for a device. When enabled, the queue is
 // randomised with the current track pinned to index 0. When disabled, the
 // queue is re-sorted by album name → disc number → track number.
-func (e *Engine) SetShuffle(ctx context.Context, deviceID string, enabled bool) error {
+func (e *Engine) SetShuffle(ctx context.Context, deviceID, userID string, enabled bool) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	s := e.getOrCreate(deviceID)
+	s := e.getOrCreate(deviceID, userID)
 	s.Shuffle = enabled
 	if enabled && len(s.Queue) > 1 {
 		// Build a new queue: current track first, then the rest shuffled.
@@ -247,34 +247,22 @@ func (e *Engine) LoadSession(ctx context.Context, deviceID, userID string) (Stat
 	return *s, nil
 }
 
-func (e *Engine) getOrCreate(deviceID string) *State {
+func (e *Engine) getOrCreate(deviceID, userID string) *State {
 	if s, ok := e.sessions[deviceID]; ok {
+		if userID != "" {
+			s.UserID = userID
+		}
 		return s
 	}
-	s := &State{}
+	s := &State{UserID: userID}
 	e.sessions[deviceID] = s
 	return s
 }
 
-// persist saves the session to the database.
+// persist saves the session to the database and publishes state to WS clients.
 func (e *Engine) persist(ctx context.Context, deviceID string, s *State) error {
-	qj, _ := json.Marshal(s.Queue)
-	sess := &models.PlaybackSession{
-		ID:         deviceID, // use device ID as session ID for simplicity
-		DeviceID:   deviceID,
-		TrackID:    s.TrackID,
-		PositionMS: s.PositionMS,
-		Queue:      s.Queue,
-		UpdatedAt:  time.Now(),
-	}
-	_ = qj // queue is marshalled inside the store layer
-	if err := e.store.UpsertPlaybackSession(ctx, sess); err != nil {
-		e.log.Error("persist session", "device", deviceID, "err", err)
-		return err
-	}
-
-	// Notify all connected clients of the state change.
-	e.bus.Publish("playback.changed", map[string]any{
+	// Always notify connected clients, regardless of DB persistence result.
+	defer e.bus.Publish("playback.changed", map[string]any{
 		"device_id":   deviceID,
 		"track_id":    s.TrackID,
 		"playing":     s.Playing,
@@ -284,5 +272,39 @@ func (e *Engine) persist(ctx context.Context, deviceID string, s *State) error {
 		"repeat":      s.Repeat,
 		"shuffle":     s.Shuffle,
 	})
+
+	// Cannot persist without a valid user — the FK on users(id) requires it.
+	if s.UserID == "" {
+		return nil
+	}
+
+	// Auto-register the device so the FK in playback_sessions is satisfied.
+	now := time.Now()
+	dev := &models.Device{
+		ID:         deviceID,
+		UserID:     s.UserID,
+		Name:       deviceID,
+		LastSeenAt: &now,
+		CreatedAt:  now,
+	}
+	if err := e.store.UpsertDevice(ctx, dev); err != nil {
+		e.log.Warn("upsert device", "device", deviceID, "err", err)
+		return err
+	}
+
+	sess := &models.PlaybackSession{
+		ID:         deviceID,
+		DeviceID:   deviceID,
+		UserID:     s.UserID,
+		TrackID:    s.TrackID,
+		PositionMS: s.PositionMS,
+		Queue:      s.Queue,
+		UpdatedAt:  time.Now(),
+	}
+	if err := e.store.UpsertPlaybackSession(ctx, sess); err != nil {
+		e.log.Error("persist session", "device", deviceID, "err", err)
+		return err
+	}
+
 	return nil
 }

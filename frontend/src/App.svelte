@@ -14,21 +14,29 @@
   import Toasts from "./lib/Toasts.svelte"
   import Downloads from "./lib/Downloads.svelte"
   import Settings from "./lib/Settings.svelte"
+  import DisconnectBanner from "./lib/DisconnectBanner.svelte"
 
   let view = "library"
+  let wasConnected = false
 
   onMount(async () => {
     await initApi()
-    // Only connect to server features when we have a server connection
-    if ($connected) {
-      connectWS()
-      await loadTracks()
-    }
   })
 
   onDestroy(() => {
     disconnectWS()
   })
+
+  // Reactively connect/disconnect WS whenever connected state changes.
+  // This covers: initial connect, autoReconnect success, and manual disconnect.
+  $: if ($connected && !wasConnected) {
+    wasConnected = true
+    connectWS()
+    loadTracks()
+  } else if (!$connected && wasConnected) {
+    wasConnected = false
+    disconnectWS()
+  }
 
   function handleNavigate(e: CustomEvent<string>) {
     view = e.detail
@@ -66,7 +74,10 @@
     </div>
   {/if}
 
-  <Player />
+  <div class="player-wrapper">
+    <DisconnectBanner />
+    <Player />
+  </div>
   <Toasts />
 </div>
 
@@ -83,7 +94,7 @@
   .shell {
     display: grid;
     grid-template-columns: var(--sidebar-w) 1fr;
-    grid-template-rows: 48px 1fr var(--player-h);
+    grid-template-rows: 48px 1fr auto;
     grid-template-areas:
       "sidebar topbar"
       "sidebar content"
@@ -133,5 +144,11 @@
     overflow: hidden;
   }
 
-  :global(.shell > .player) { grid-area: player; }
+  .player-wrapper {
+    grid-area: player;
+    display: flex;
+    flex-direction: column;
+  }
+
+  :global(.player-wrapper > .player) { height: var(--player-h); }
 </style>

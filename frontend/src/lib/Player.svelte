@@ -1,106 +1,128 @@
 <script lang="ts">
   import { playerState, isPlaying, type Track } from "../stores/player"
   import { tracks } from "../stores/library"
+  import { localTracks, type LocalTrack } from "../stores/localLibrary"
   import { activePanel, togglePanel, toggleQueuePanel } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
-  import { serverFetch, streamUrl, artworkUrl, connected } from "./api"
+  import { streamUrl, artworkUrl, connected } from "./api"
+  import { wsSend } from "../stores/ws"
 
   let audio: HTMLAudioElement
   let deviceId = "desktop"
   let volume = 1
   let audioDurationMs = 0  // actual duration from <audio> element
   let seeking = false       // true while user is dragging seekbar
+  let seekSyncTimer: ReturnType<typeof setTimeout> | null = null
 
   $: track = $playerState.track
   $: hasTrack = !!$playerState.trackId
   // Use the audio element's actual duration as primary source, fall back to metadata
   $: durationMs = audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0)
+  // Local tracks use their filesystem path as the ID — don't send WS events for them.
+  $: isLocal = !!($playerState.trackId?.startsWith('/') || /^[a-zA-Z]:[/\\]/.test($playerState.trackId ?? ''))
 
-  function api(method: string, path: string, body?: object) {
-    return serverFetch(`/api/playback/${deviceId}/${path}`, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
-    })
-  }
-
+  /** Resolve a track ID to a Track object (server library OR local files). */
   function findTrackById(id: string): Track | null {
+    // Server tracks
     const all = $tracks as Track[]
-    return all?.find(t => t.id === id) ?? null
+    const found = all?.find(t => t.id === id)
+    if (found) return found
+    // Local tracks — convert LocalTrack shape to Track
+    const lt = $localTracks.find(t => t.path === id)
+    if (lt) {
+      return {
+        id: lt.path,
+        path: lt.path,
+        title: lt.title,
+        artist_id: "",
+        album_id: "",
+        artist_name: lt.artist,
+        album_artist: lt.album_artist,
+        album_name: lt.album,
+        genre: lt.genre,
+        year: lt.year,
+        track_number: lt.track_number,
+        disc_number: lt.disc_number,
+        duration_ms: lt.duration_ms,
+        bitrate_kbps: 0,
+        replay_gain_track: 0,
+        artwork_id: "",
+      } as Track
+    }
+    return null
   }
 
-  async function togglePause() {
+  function togglePause() {
     if (!hasTrack) return
     const newPaused = !$playerState.paused
-    await api("POST", "pause", { paused: newPaused })
     playerState.update(s => ({ ...s, paused: newPaused }))
+    if (!isLocal) wsSend("playback.pause", { device_id: deviceId, paused: newPaused })
   }
 
-  async function skipNext() {
+  function skipNext() {
     if (!hasTrack) return
-    const res = await api("POST", "next")
-    if (!res.ok) return
-    const data = await res.json()
-    const nextTrack = findTrackById(data.track_id)
-    if (data.track_id && data.track_id !== $playerState.trackId) {
-      audioDurationMs = 0
-      playerState.update(s => ({
-        ...s,
-        trackId: data.track_id,
-        track: nextTrack,
-        positionMs: 0,
-        paused: false,
-        queueIndex: data.queue_index ?? s.queueIndex,
-      }))
-    } else if (data.track_id === $playerState.trackId) {
-      // Same track (repeat-one or end of queue) — restart
-      if (audio) { audio.currentTime = 0 }
-      playerState.update(s => ({
-        ...s,
-        positionMs: 0,
-        queueIndex: data.queue_index ?? s.queueIndex,
-      }))
+    const q = $playerState.queue
+    if (q.length === 0) return
+    let nextIdx: number
+    switch ($playerState.repeat) {
+      case 2: // repeat-one — restart same track
+        nextIdx = $playerState.queueIndex
+        break
+      case 1: // repeat-queue — wrap around
+        nextIdx = ($playerState.queueIndex + 1) % q.length
+        break
+      default: // no repeat
+        if ($playerState.queueIndex + 1 >= q.length) {
+          playerState.update(s => ({ ...s, paused: true }))
+          if (!isLocal) wsSend("playback.pause", { device_id: deviceId, paused: true })
+          return
+        }
+        nextIdx = $playerState.queueIndex + 1
     }
+    const nextId = q[nextIdx]
+    const nextTrack = findTrackById(nextId)
+    audioDurationMs = 0
+    playerState.update(s => ({
+      ...s,
+      trackId: nextId,
+      track: nextTrack,
+      queueIndex: nextIdx,
+      positionMs: 0,
+      paused: false,
+    }))
+    if (!isLocal) wsSend("playback.play", { device_id: deviceId, track_id: nextId, position_ms: 0 })
   }
 
-  async function skipPrev() {
+  function skipPrev() {
     if (!hasTrack) return
-    const res = await api("POST", "prev")
-    if (!res.ok) return
-    const data = await res.json()
-    const prevTrack = findTrackById(data.track_id)
-    if (data.track_id && data.track_id !== $playerState.trackId) {
-      audioDurationMs = 0
-      playerState.update(s => ({
-        ...s,
-        trackId: data.track_id,
-        track: prevTrack,
-        positionMs: 0,
-        paused: false,
-        queueIndex: data.queue_index ?? s.queueIndex,
-      }))
-    } else if (data.track_id) {
-      // Same track — restart from beginning
-      if (audio) { audio.currentTime = 0 }
-      playerState.update(s => ({
-        ...s,
-        positionMs: 0,
-        queueIndex: data.queue_index ?? s.queueIndex,
-      }))
-    }
+    const q = $playerState.queue
+    if (q.length === 0) return
+    let prevIdx = $playerState.queueIndex - 1
+    if (prevIdx < 0) prevIdx = q.length - 1
+    const prevId = q[prevIdx]
+    const prevTrack = findTrackById(prevId)
+    audioDurationMs = 0
+    playerState.update(s => ({
+      ...s,
+      trackId: prevId,
+      track: prevTrack,
+      queueIndex: prevIdx,
+      positionMs: 0,
+      paused: false,
+    }))
+    if (!isLocal) wsSend("playback.play", { device_id: deviceId, track_id: prevId, position_ms: 0 })
   }
 
-  async function toggleShuffle() {
+  function toggleShuffle() {
     const enabled = !$playerState.shuffle
-    await api("POST", "shuffle", { enabled })
-    // The backend shuffles the queue and publishes via WS — don't manually update queue here
     playerState.update(s => ({ ...s, shuffle: enabled }))
+    if (!isLocal) wsSend("playback.shuffle", { device_id: deviceId, enabled })
   }
 
-  async function toggleRepeat() {
+  function toggleRepeat() {
     const nextMode = (($playerState.repeat + 1) % 3) as 0 | 1 | 2
-    await api("POST", "repeat", { mode: nextMode })
     playerState.update(s => ({ ...s, repeat: nextMode }))
+    if (!isLocal) wsSend("playback.repeat", { device_id: deviceId, mode: nextMode })
   }
 
   const repeatLabels = ["Off", "All", "One"] as const
@@ -112,12 +134,12 @@
     playerState.update(s => ({ ...s, positionMs: ms }))
   }
 
-  async function onSeekChange(e: Event) {
+  function onSeekChange(e: Event) {
     seeking = false
     const ms = Number((e.target as HTMLInputElement).value)
     if (audio) { audio.currentTime = ms / 1000 }
-    await api("POST", "seek", { position_ms: ms })
     playerState.update(s => ({ ...s, positionMs: ms }))
+    if (!isLocal) wsSend("playback.seek", { device_id: deviceId, position_ms: ms })
   }
 
   function setVolume(e: Event) {
@@ -133,8 +155,8 @@
       audio.src = url
       audio.currentTime = $playerState.positionMs / 1000
     }
-    if (!$playerState.paused) audio.play().catch(() => {})
-    else audio.pause()
+    if (!$playerState.paused && !audio.seeking) audio.play().catch(() => {})
+    else if ($playerState.paused) audio.pause()
   }
 
   function onEnded() {
@@ -144,6 +166,13 @@
   function onTimeUpdate() {
     if (!seeking) {
       playerState.update(s => ({ ...s, positionMs: audio.currentTime * 1000 }))
+    }
+    // Debounced position sync to server (every 5 s) — local tracks don't need this.
+    if (!isLocal && !seekSyncTimer) {
+      seekSyncTimer = setTimeout(() => {
+        seekSyncTimer = null
+        wsSend("playback.seek", { device_id: deviceId, position_ms: audio.currentTime * 1000 })
+      }, 5000)
     }
   }
 
@@ -186,7 +215,7 @@
     <div class="info">
       {#if track}
         <span class="title truncate">{track.title}</span>
-        <span class="artist truncate text-2">{track.album_artist || "Unknown Artist"}</span>
+        <span class="artist truncate text-2">{track.artist_name || track.album_artist || "Unknown Artist"}</span>
       {:else}
         <span class="text-3">No track selected</span>
       {/if}

@@ -315,7 +315,9 @@ func (s *Store) ArtworkByPath(ctx context.Context, path string) (*models.Artwork
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const trackColumns = `id,path,title,
-	COALESCE(artist_id,''),COALESCE(album_id,''),album_artist,album_name,genre,year,
+	COALESCE(artist_id,''),COALESCE(album_id,''),
+	(SELECT COALESCE(name,'') FROM artists WHERE id=tracks.artist_id) AS artist_name,
+	album_artist,album_name,genre,year,
 	track_number,disc_number,duration_ms,bitrate_kbps,sample_rate_hz,
 	codec,file_size_bytes,last_modified,fingerprint,mb_recording_id,
 	replay_gain_track,replay_gain_album,COALESCE(artwork_id,''),
@@ -331,7 +333,7 @@ func scanTrack(row scanner) (*models.Track, error) {
 	var enrichedAt, deletedAt sql.NullString
 	err := row.Scan(
 		&t.ID, &t.Path, &t.Title,
-		&t.ArtistID, &t.AlbumID, &t.AlbumArtist, &t.AlbumName, &t.Genre, &t.Year,
+		&t.ArtistID, &t.AlbumID, &t.ArtistName, &t.AlbumArtist, &t.AlbumName, &t.Genre, &t.Year,
 		&t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.BitrateKbps,
 		&t.SampleRateHz, &t.Codec, &t.FileSizeBytes,
 		(*timeStr)(&t.LastModified), &t.Fingerprint, &t.MBRecordingID,

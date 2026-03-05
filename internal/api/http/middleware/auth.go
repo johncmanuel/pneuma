@@ -15,8 +15,9 @@ const ContextKey = "user_claims"
 // Claims represents the JWT claims embedded in every access token.
 type Claims struct {
 	jwt.RegisteredClaims
-	UserID    string `json:"uid"`
-	IsAdmin   bool   `json:"adm"`
+	UserID    string `json:"user_id"`
+	Username  string `json:"username"`
+	IsAdmin   bool   `json:"is_admin"`
 	CanUpload bool   `json:"can_upload"`
 	CanEdit   bool   `json:"can_edit"`
 	CanDelete bool   `json:"can_delete"`
@@ -32,7 +33,7 @@ const RefreshTokenTTL = 7 * 24 * time.Hour
 const StreamTokenTTL = 60 * time.Second
 
 // GenerateToken creates a signed JWT for the given user.
-func GenerateToken(secret, userID string, isAdmin, canUpload, canEdit, canDelete bool, ttl time.Duration) (string, error) {
+func GenerateToken(secret, userID, username string, isAdmin, canUpload, canEdit, canDelete bool, ttl time.Duration) (string, error) {
 	now := time.Now()
 	claims := Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -40,6 +41,7 @@ func GenerateToken(secret, userID string, isAdmin, canUpload, canEdit, canDelete
 			ExpiresAt: jwt.NewNumericDate(now.Add(ttl)),
 		},
 		UserID:    userID,
+		Username:  username,
 		IsAdmin:   isAdmin,
 		CanUpload: canUpload,
 		CanEdit:   canEdit,
@@ -113,6 +115,22 @@ func GetClaims(c echo.Context) *Claims {
 	return claims
 }
 
+// ParseToken validates a raw JWT string and returns the embedded Claims.
+// Useful outside of Echo handlers (e.g. WebSocket upgrade).
+func ParseToken(secret, tokenStr string) (*Claims, error) {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, echo.ErrUnauthorized
+		}
+		return []byte(secret), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, echo.ErrUnauthorized
+	}
+	return claims, nil
+}
+
 // ─── internal helpers ────────────────────────────────────────────────────────
 
 func extractClaims(c echo.Context, secret string) (*Claims, error) {
@@ -129,18 +147,7 @@ func extractClaims(c echo.Context, secret string) (*Claims, error) {
 	if tokenStr == "" {
 		return nil, echo.ErrUnauthorized
 	}
-
-	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, echo.ErrUnauthorized
-		}
-		return []byte(secret), nil
-	})
-	if err != nil || !token.Valid {
-		return nil, echo.ErrUnauthorized
-	}
-	return claims, nil
+	return ParseToken(secret, tokenStr)
 }
 
 func hasPerm(claims *Claims, perm string) bool {

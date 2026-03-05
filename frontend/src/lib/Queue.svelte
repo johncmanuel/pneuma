@@ -3,7 +3,8 @@
   import { tracks } from "../stores/library"
   import { closePanel } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
-  import { serverFetch, artworkUrl, connected } from "./api"
+  import { artworkUrl, connected } from "./api"
+  import { wsSend } from "../stores/ws"
 
   $: queue = $playerState.queue ?? []
   $: currentIndex = $playerState.queueIndex ?? 0
@@ -20,23 +21,11 @@
     closePanel()
   }
 
-  async function playFromQueue(track: Track, idx: number) {
+  function playFromQueue(track: Track, idx: number) {
     if (!$connected) return
-    const res = await serverFetch("/api/playback/desktop/play", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ track_id: track.id, position_ms: 0 }),
-    })
-    if (res.ok) {
-      playerState.update(s => ({
-        ...s,
-        trackId: track.id,
-        track,
-        queueIndex: currentIndex + 1 + idx,
-        positionMs: 0,
-        paused: false,
-      }))
-    }
+    const newIndex = currentIndex + 1 + idx
+    playerState.update(s => ({ ...s, trackId: track.id, track, queueIndex: newIndex, positionMs: 0, paused: false }))
+    wsSend("playback.play", { device_id: "desktop", track_id: track.id, position_ms: 0 })
   }
 </script>
 
@@ -58,7 +47,7 @@
       </div>
       <div class="track-info">
         <span class="name truncate">{nowPlayingTrack.title}</span>
-        <span class="artist truncate text-3">{nowPlayingTrack.album_artist || "Unknown"}</span>
+        <span class="artist truncate text-3">{nowPlayingTrack.artist_name || nowPlayingTrack.album_artist || "Unknown"}</span>
       </div>
     </div>
   {/if}
@@ -72,7 +61,7 @@
         <button class="queue-item" on:click={() => playFromQueue(track, i)}>
           <div class="track-info">
             <span class="name truncate">{track.title}</span>
-            <span class="artist truncate text-3">{track.album_artist || "Unknown"}</span>
+            <span class="artist truncate text-3">{track.artist_name || track.album_artist || "Unknown"}</span>
           </div>
           <span class="dur text-3">{formatDuration(track.duration_ms)}</span>
         </button>

@@ -49,12 +49,13 @@ type Track struct {
 	Title            string     `json:"title"`
 	ArtistID         string     `json:"artist_id,omitempty"`
 	AlbumID          string     `json:"album_id,omitempty"`
-	AlbumArtist      string     `json:"album_artist,omitempty"`
-	AlbumName        string     `json:"album_name,omitempty"`
-	Genre            string     `json:"genre,omitempty"`
-	Year             int        `json:"year,omitempty"`
-	TrackNumber      int        `json:"track_number,omitempty"`
-	DiscNumber       int        `json:"disc_number,omitempty"`
+	ArtistName       string     `json:"artist_name,omitempty"` // resolved from artists table
+	AlbumArtist      string     `json:"album_artist"`
+	AlbumName        string     `json:"album_name"`
+	Genre            string     `json:"genre"`
+	Year             int        `json:"year"`
+	TrackNumber      int        `json:"track_number"`
+	DiscNumber       int        `json:"disc_number"`
 	DurationMS       int64      `json:"duration_ms"`
 	BitrateKbps      int        `json:"bitrate_kbps,omitempty"`
 	SampleRateHz     int        `json:"sample_rate_hz,omitempty"`

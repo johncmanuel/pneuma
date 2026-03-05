@@ -83,7 +83,8 @@ export async function apiFetch(
   const token = get(authToken)
   const headers = new Headers(init.headers)
   if (token) headers.set("Authorization", `Bearer ${token}`)
-  if (!headers.has("Content-Type") && init.body) {
+  // Don't set Content-Type for FormData — the browser adds the multipart boundary.
+  if (!headers.has("Content-Type") && init.body && !(init.body instanceof FormData)) {
     headers.set("Content-Type", "application/json")
   }
   const res = await fetch(`${apiBase()}${path}`, { ...init, headers })
@@ -128,6 +129,32 @@ export async function register(username: string, password: string): Promise<stri
 
 export function logout() {
   authToken.set("")
+}
+
+/**
+ * Attempt auto-auth for dev: tries to register admin/admin (first user becomes
+ * admin), falling back to login if the account already exists.
+ * Returns null on success, error string on failure.
+ */
+export async function tryAutoAuth(): Promise<string | null> {
+  // If a token is present but missing username (old token format), drop it.
+  const existing = get(authToken)
+  if (existing) {
+    const claims = decodeJWT(existing)
+    if (!claims || !claims.username) {
+      authToken.set("") // force re-auth with new token format
+    } else {
+      return null // valid token with correct fields
+    }
+  }
+
+  // Try register first (first user = admin)
+  let err = await register("admin", "admin")
+  if (!err) return null
+
+  // If user already exists, try login
+  err = await login("admin", "admin")
+  return err
 }
 
 /* ── Stream / artwork URL helpers ───────────────────────────────── */

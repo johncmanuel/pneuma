@@ -1,8 +1,7 @@
 <script lang="ts">
   import { ConnectToServer, DisconnectFromServer } from "../../wailsjs/go/main/App"
-  import { connected, serverURL, authToken, refreshConnection, initApi } from "../lib/api"
+  import { connected, serverURL, authToken, refreshConnection, saveCredentials, clearCredentials, isReconnecting, stopAutoReconnect } from "../lib/api"
   import { loadTracks } from "../stores/library"
-  import { connectWS, disconnectWS } from "../stores/ws"
 
   // Connect form state
   let connectURL = "http://127.0.0.1:8989"
@@ -21,7 +20,8 @@
     try {
       await ConnectToServer(connectURL, connectUser, connectPass)
       await refreshConnection()
-      connectWS()
+      stopAutoReconnect()
+      saveCredentials(connectURL, connectUser, connectPass)
       await loadTracks()
       connectUser = ""
       connectPass = ""
@@ -32,7 +32,8 @@
   }
 
   async function disconnect() {
-    disconnectWS()
+    stopAutoReconnect()
+    clearCredentials()
     await DisconnectFromServer()
     await refreshConnection()
   }
@@ -70,6 +71,11 @@
         ✓ Connected to <code>{$serverURL}</code>
       </p>
       <button class="btn-danger" on:click={disconnect}>Disconnect</button>
+    {:else if $isReconnecting}
+      <p class="text-3 reconnecting-status">
+        ↺ Reconnecting to server…
+      </p>
+      <button class="btn-danger" on:click={() => { stopAutoReconnect(); clearCredentials() }}>Cancel</button>
     {:else}
       <div class="connect-form">
         <input
@@ -152,6 +158,7 @@
   }
 
   .connected-status { display: flex; align-items: center; gap: 6px; }
+  .reconnecting-status { display: flex; align-items: center; gap: 6px; color: var(--accent); }
 
   .btn-danger { color: #ef4444; }
   .btn-danger:hover { background: color-mix(in srgb, #ef4444 15%, transparent); }

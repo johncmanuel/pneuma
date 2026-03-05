@@ -1,13 +1,22 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import { apiFetch, artworkUrl } from "../lib/api"
+  import { apiFetch, artworkUrl, currentUser } from "../lib/api"
   import { webPlayerState } from "../lib/playerStore"
+  import { libraryVersion } from "../lib/ws"
   import TrackRow from "../lib/TrackRow.svelte"
   import type { Track } from "../lib/TrackRow.svelte"
 
   let tracks: Track[] = []
   let loading = false
   let selectedAlbum: string | null = null
+
+  // Upload state
+  let uploading = false
+  let uploadProgress = ""
+  let fileInput: HTMLInputElement
+  let dragOver = false
+
+  $: canUpload = $currentUser?.is_admin || $currentUser?.can_upload
 
   interface AlbumGroup {
     key: string
@@ -61,20 +70,19 @@
   onMount(async () => {
     loading = true
     try {
-      const r = await apiFetch("/api/library/tracks")
-      if (r.ok) {
-        const data: Track[] = await r.json()
-        const seen = new Set<string>()
-        tracks = data.filter((t) => {
-          if (seen.has(t.id)) return false
-          seen.add(t.id)
-          return true
-        })
-      }
+      await reloadTracks()
     } finally {
       loading = false
     }
   })
+
+  // Re-fetch whenever the server reports any library mutation via WebSocket.
+  let _prevLibVer: number | undefined
+  $: {
+    const v = $libraryVersion
+    if (_prevLibVer !== undefined && v !== _prevLibVer) reloadTracks()
+    _prevLibVer = v
+  }
 
   function playTrack(track: Track, albumTracks: Track[]) {
     const idx = albumTracks.findIndex((t) => t.id === track.id)
@@ -88,9 +96,83 @@
       paused: false,
     })
   }
+
+  // ── Upload helpers ────────────────────────────────────────────
+  async function uploadFiles(files: FileList | File[]) {
+    if (!files.length) return
+    uploading = true
+    let done = 0
+    const total = files.length
+    try {
+      for (const file of files) {
+        uploadProgress = `Uploading ${done + 1}/${total}: ${file.name}`
+        const form = new FormData()
+        form.append("file", file)
+        await apiFetch("/api/library/tracks/upload", {
+          method: "POST",
+          body: form,
+        })
+        done++
+      }
+      uploadProgress = `Uploaded ${done} file${done !== 1 ? "s" : ""}`
+      await reloadTracks()
+    } catch (e: any) {
+      uploadProgress = `Upload error: ${e.message ?? e}`
+    } finally {
+      uploading = false
+      if (fileInput) fileInput.value = ""
+      setTimeout(() => { uploadProgress = "" }, 4000)
+    }
+  }
+
+  async function reloadTracks() {
+    const r = await apiFetch("/api/library/tracks")
+    if (r.ok) {
+      const data: Track[] = await r.json()
+      const seen = new Set<string>()
+      tracks = data.filter((t) => {
+        if (seen.has(t.id)) return false
+        seen.add(t.id)
+        return true
+      })
+    }
+  }
+
+  function handleDrop(e: DragEvent) {
+    e.preventDefault()
+    dragOver = false
+    if (!canUpload || !e.dataTransfer?.files?.length) return
+    const audioFiles = Array.from(e.dataTransfer.files).filter((f) =>
+      f.type.startsWith("audio/") || /\.(mp3|flac|ogg|opus|m4a|aac|wav|aiff|wma|ape|wv)$/i.test(f.name),
+    )
+    if (audioFiles.length) uploadFiles(audioFiles)
+  }
+
+  function handleDragOver(e: DragEvent) {
+    e.preventDefault()
+    if (canUpload) dragOver = true
+  }
+
+  function handleDragLeave() {
+    dragOver = false
+  }
+
+  function handleFileInput() {
+    if (fileInput?.files?.length) uploadFiles(Array.from(fileInput.files))
+  }
+
+  function hideImgOnError(e: Event) {
+    const img = e.currentTarget as HTMLImageElement
+    if (img) img.style.display = "none"
+  }
 </script>
 
-<section>
+<section
+  on:drop={handleDrop}
+  on:dragover={handleDragOver}
+  on:dragleave={handleDragLeave}
+  class:drag-over={dragOver}
+>
   {#if currentAlbumGroup}
     <div class="toolbar">
       <button class="back-btn" on:click={() => { selectedAlbum = null }} title="Back to albums">← Back</button>
@@ -114,12 +196,51 @@
   {:else}
     <div class="toolbar">
       <h2>Library</h2>
+      {#if canUpload}
+        <div class="toolbar-actions">
+          <input
+            type="file"
+            accept="audio/*"
+            multiple
+            bind:this={fileInput}
+            on:change={handleFileInput}
+            style="display:none"
+          />
+          <button class="upload-btn" on:click={() => fileInput?.click()} disabled={uploading}>
+            {uploading ? "Uploading…" : "↑ Upload Music"}
+          </button>
+        </div>
+      {/if}
     </div>
+
+    {#if uploadProgress}
+      <p class="upload-status text-2">{uploadProgress}</p>
+    {/if}
+
+    {#if dragOver && canUpload}
+      <div class="drop-overlay">
+        <div class="drop-message">
+          <span class="drop-icon">↓</span>
+          <p>Drop audio files here to upload</p>
+        </div>
+      </div>
+    {/if}
 
     {#if loading}
       <p class="text-3">Loading…</p>
     {:else if albumGroups.length === 0}
-      <p class="text-3">No tracks found. Upload or scan on the server.</p>
+      <div class="empty-state">
+        {#if canUpload}
+          <p class="empty-icon">♫</p>
+          <p>Your library is empty</p>
+          <p class="text-3">Drag and drop audio files here, or click the button below</p>
+          <button class="upload-btn lg" on:click={() => fileInput?.click()} disabled={uploading}>
+            ↑ Upload Music
+          </button>
+        {:else}
+          <p class="text-3">No tracks found.</p>
+        {/if}
+      </div>
     {:else}
       <div class="album-grid">
         {#each albumGroups as album (album.key)}
@@ -133,7 +254,7 @@
                 <img
                   src={artworkUrl(album.firstTrackId)}
                   alt={album.name}
-                  on:error={(e) => { e.currentTarget.style.display = "none" }}
+                  on:error={hideImgOnError}
                 />
               {/if}
               <div class="album-art-placeholder">{album.key === UNORGANIZED_KEY ? "📂" : "♫"}</div>
@@ -148,7 +269,8 @@
 </section>
 
 <style>
-  section { height: 100%; display: flex; flex-direction: column; overflow-y: auto; }
+  section { height: 100%; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
+  section.drag-over { outline: 2px dashed var(--accent); outline-offset: -4px; border-radius: 8px; }
 
   .toolbar {
     display: flex;
@@ -159,7 +281,70 @@
     flex-shrink: 0;
   }
 
+  .toolbar-actions { display: flex; gap: 8px; align-items: center; }
+
   h2 { margin: 0; font-size: 20px; font-weight: 700; }
+
+  .upload-btn {
+    padding: 7px 16px;
+    border-radius: var(--r-md);
+    background: var(--accent);
+    color: #000;
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+  }
+  .upload-btn:hover:not(:disabled) { opacity: 0.9; }
+  .upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .upload-btn.lg { padding: 12px 28px; font-size: 15px; }
+
+  .upload-status {
+    font-size: 13px;
+    margin: -8px 0 12px;
+    color: var(--accent);
+  }
+
+  .drop-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 15, 15, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    border-radius: 8px;
+    pointer-events: none;
+  }
+
+  .drop-message {
+    text-align: center;
+    color: var(--accent);
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .drop-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 40px 0;
+  }
+
+  .empty-icon {
+    font-size: 48px;
+    color: var(--text-3);
+    margin-bottom: 4px;
+  }
 
   .back-btn {
     font-size: 13px;

@@ -29,9 +29,7 @@ import (
 func main() {
 	cfgPath := flag.String("config", config.DefaultPath(), "path to config.toml")
 	flag.Parse()
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	})))
+	slog.SetDefault(slog.New(newConsoleHandler(os.Stdout, slog.LevelInfo)))
 
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {

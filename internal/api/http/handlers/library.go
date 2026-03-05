@@ -23,6 +23,7 @@ import (
 // scanTrigger is satisfied by *scanner.Scheduler.
 type scanTrigger interface {
 	ScanAll()
+	ScanPath(path string)
 }
 
 // eventPublisher is satisfied by *ws.Hub.
@@ -65,7 +66,7 @@ func (h *LibraryHandler) GetTrack(c echo.Context) error {
 	return c.JSON(http.StatusOK, track)
 }
 
-// StreamTrack serves the audio file with Range header support.
+// StreamTrack serves the audio file with HTTP Range (206) support.
 func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 	track, err := h.lib.TrackByID(c.Request().Context(), c.Param("id"))
 	if err != nil {
@@ -86,6 +87,10 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 		return internalErr(err)
 	}
 
+	// Only set Content-Type ourselves; http.ServeContent handles
+	// Accept-Ranges, Content-Length, Content-Range, and 206 status
+	// automatically — pre-setting Content-Length to the full file size
+	// would corrupt partial-content (206) responses.
 	c.Response().Header().Set("Content-Type", mimeFromExt(track.Path))
 	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
 	return nil
@@ -139,7 +144,7 @@ func (h *LibraryHandler) UpdateTrackMeta(c echo.Context) error {
 	var patch struct {
 		Title       *string `json:"title"`
 		Artist      *string `json:"artist"`
-		Album       *string `json:"album"`
+		AlbumName   *string `json:"album_name"`
 		AlbumArtist *string `json:"album_artist"`
 		Genre       *string `json:"genre"`
 		Year        *int    `json:"year"`
@@ -152,6 +157,9 @@ func (h *LibraryHandler) UpdateTrackMeta(c echo.Context) error {
 
 	if patch.Title != nil {
 		track.Title = *patch.Title
+	}
+	if patch.AlbumName != nil {
+		track.AlbumName = *patch.AlbumName
 	}
 	if patch.AlbumArtist != nil {
 		track.AlbumArtist = *patch.AlbumArtist
@@ -301,6 +309,9 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	})
 
 	h.hub.Publish(string(models.EventTrackAdded), t)
+	// Enrich metadata asynchronously (duration, bitrate, tags) using the scanner.
+	// The scanner will publish track.updated when done so all clients refresh.
+	go h.scanner.ScanPath(destPath)
 	return c.JSON(http.StatusCreated, t)
 }
 

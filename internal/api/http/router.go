@@ -1,7 +1,10 @@
 package pneumahttp
 
 import (
+	"context"
+	"encoding/json"
 	"io/fs"
+	"log/slog"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -19,14 +22,17 @@ import (
 
 // Services groups all domain services the API depends on.
 type Services struct {
-	Library    *library.Service
-	User       *user.Service
-	Playback   *playback.Engine
-	Handoff    *playback.Handoff
-	Offline    *offline.Packager
-	Hub        *apws.Hub
-	Store      *sqlite.Store
-	Scanner    interface{ ScanAll() } // *scanner.Scheduler
+	Library  *library.Service
+	User     *user.Service
+	Playback *playback.Engine
+	Handoff  *playback.Handoff
+	Offline  *offline.Packager
+	Hub      *apws.Hub
+	Store    *sqlite.Store
+	Scanner  interface {
+		ScanAll()
+		ScanPath(path string)
+	} // *scanner.Scheduler
 	JWTSecret  string
 	UploadsDir string
 	WebUI      fs.FS // embedded web UI assets (nil = disabled)
@@ -38,7 +44,9 @@ func NewRouter(svc Services) *echo.Echo {
 	e.HideBanner = true
 	e.HidePort = true
 
-	e.Use(echomw.Logger())
+	e.Use(echomw.LoggerWithConfig(echomw.LoggerConfig{
+		Format: "[${time_rfc3339}] [HTTP]: ${method} ${uri}  ${status}  ${latency_human}  ${remote_ip}\n",
+	}))
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORS())
 	e.Use(echomw.RequestID())
@@ -52,9 +60,18 @@ func NewRouter(svc Services) *echo.Echo {
 	uh := handlers.NewUserHandler(svc.User, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Store)
 
-	// WebSocket
+	// Wire inbound WebSocket messages to the playback engine.
+	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
+
+	// WebSocket — validate JWT from ?token= query param for user identity.
 	e.GET("/ws", func(c echo.Context) error {
-		svc.Hub.ServeWS(c.Response(), c.Request())
+		var userID string
+		if tok := c.QueryParam("token"); tok != "" {
+			if claims, err := middleware.ParseToken(secret, tok); err == nil {
+				userID = claims.UserID
+			}
+		}
+		svc.Hub.ServeWS(c.Response(), c.Request(), userID)
 		return nil
 	})
 
@@ -157,4 +174,82 @@ func NewRouter(svc Services) *echo.Echo {
 	}
 
 	return e
+}
+
+// playbackWSDispatch returns a ws.InboundHandler that routes inbound WS
+// messages to the playback engine.  The REST endpoints remain available as
+// a fallback (e.g. for the desktop Wails app).
+func playbackWSDispatch(engine *playback.Engine) apws.InboundHandler {
+	log := slog.Default().With("component", "ws-dispatch")
+	return func(userID string, msg apws.InboundMessage) {
+		ctx := context.Background()
+		switch msg.Type {
+		case "playback.play":
+			var p struct {
+				DeviceID   string `json:"device_id"`
+				TrackID    string `json:"track_id"`
+				PositionMS int64  `json:"position_ms"`
+			}
+			if json.Unmarshal(msg.Payload, &p) == nil {
+				engine.Play(ctx, p.DeviceID, userID, p.TrackID, p.PositionMS)
+			}
+		case "playback.pause":
+			var p struct {
+				DeviceID string `json:"device_id"`
+				Paused   bool   `json:"paused"`
+			}
+			if json.Unmarshal(msg.Payload, &p) == nil {
+				engine.Pause(ctx, p.DeviceID, userID, p.Paused)
+			}
+		case "playback.seek":
+			var p struct {
+				DeviceID   string `json:"device_id"`
+				PositionMS int64  `json:"position_ms"`
+			}
+			if json.Unmarshal(msg.Payload, &p) == nil {
+				engine.Seek(ctx, p.DeviceID, userID, p.PositionMS)
+			}
+		case "playback.next":
+			var p struct {
+				DeviceID string `json:"device_id"`
+			}
+			if json.Unmarshal(msg.Payload, &p) == nil {
+				engine.Next(ctx, p.DeviceID, userID)
+			}
+		case "playback.prev":
+			var p struct {
+				DeviceID string `json:"device_id"`
+			}
+			if json.Unmarshal(msg.Payload, &p) == nil {
+				engine.Prev(ctx, p.DeviceID, userID)
+			}
+		case "playback.queue":
+			var p struct {
+				DeviceID   string   `json:"device_id"`
+				TrackIDs   []string `json:"track_ids"`
+				StartIndex int      `json:"start_index"`
+			}
+			if json.Unmarshal(msg.Payload, &p) == nil {
+				engine.SetQueue(ctx, p.DeviceID, userID, p.TrackIDs, p.StartIndex)
+			}
+		case "playback.repeat":
+			var p struct {
+				DeviceID string              `json:"device_id"`
+				Mode     playback.RepeatMode `json:"mode"`
+			}
+			if json.Unmarshal(msg.Payload, &p) == nil {
+				engine.SetRepeat(ctx, p.DeviceID, userID, p.Mode)
+			}
+		case "playback.shuffle":
+			var p struct {
+				DeviceID string `json:"device_id"`
+				Enabled  bool   `json:"enabled"`
+			}
+			if json.Unmarshal(msg.Payload, &p) == nil {
+				engine.SetShuffle(ctx, p.DeviceID, userID, p.Enabled)
+			}
+		default:
+			log.Debug("unknown ws message type", "type", msg.Type)
+		}
+	}
 }

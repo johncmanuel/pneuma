@@ -78,7 +78,7 @@ func DefaultConfig() *Config {
 			Path: filepath.Join(dataDir, "pneuma.db"),
 		},
 		Library: LibraryConfig{
-			WatchFolders: []string{filepath.Join(home, "Music")},
+			WatchFolders: []string{filepath.Join(dataDir, "music")},
 		},
 		Artwork: ArtworkConfig{
 			CacheDir:  filepath.Join(dataDir, "artwork"),

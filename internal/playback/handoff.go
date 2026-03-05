@@ -59,10 +59,10 @@ func (h *Handoff) Transfer(ctx context.Context, userID, sourceDeviceID, targetDe
 	}
 
 	// Apply source state to target.
-	if err := h.engine.SetQueue(ctx, targetDeviceID, src.Queue, queueIndexOf(src.Queue, src.TrackID)); err != nil {
+	if err := h.engine.SetQueue(ctx, targetDeviceID, userID, src.Queue, queueIndexOf(src.Queue, src.TrackID)); err != nil {
 		return err
 	}
-	if err := h.engine.Seek(ctx, targetDeviceID, src.PositionMS); err != nil {
+	if err := h.engine.Seek(ctx, targetDeviceID, userID, src.PositionMS); err != nil {
 		return err
 	}
 

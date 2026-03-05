@@ -3,7 +3,8 @@
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import type { Track } from "../stores/player"
-  import { serverFetch, connected } from "./api"
+  import { connected } from "./api"
+  import { wsSend } from "../stores/ws"
 
   export let query = ""
   let debounce: number
@@ -21,44 +22,23 @@
     searchResults.set([])
   }
 
-  async function playTrack(track: Track) {
+  function playTrack(track: Track) {
     if (!$connected) return
     const q = $searchResults.map(t => t.id)
     const idx = q.indexOf(track.id)
     const queue = [...q.slice(idx), ...q.slice(0, idx)]
-    await serverFetch("/api/playback/desktop/queue", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ track_ids: queue }),
-    })
-    const res = await serverFetch("/api/playback/desktop/play", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ track_id: track.id, position_ms: 0 }),
-    })
-    if (res.ok) {
-      playerState.update(s => ({
-        ...s,
-        trackId: track.id,
-        track,
-        queue,
-        positionMs: 0,
-        paused: false,
-      }))
-    }
+    playerState.update(s => ({
+      ...s, trackId: track.id, track, queue, queueIndex: 0, positionMs: 0, paused: false,
+    }))
+    wsSend("playback.queue", { device_id: "desktop", track_ids: queue, start_index: 0 })
+    wsSend("playback.play",  { device_id: "desktop", track_id: track.id, position_ms: 0 })
   }
 
   function addToQueue(track: Track) {
     if (!$connected) return
-    playerState.update(s => {
-      const newQueue = [...s.queue, track.id]
-      serverFetch("/api/playback/desktop/queue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ track_ids: newQueue }),
-      })
-      return { ...s, queue: newQueue }
-    })
+    const newQueue = [...$playerState.queue, track.id]
+    playerState.update(s => ({ ...s, queue: newQueue }))
+    wsSend("playback.queue", { device_id: "desktop", track_ids: newQueue, start_index: $playerState.queueIndex })
   }
 
   export const hasResults = () => query.trim().length >= 2
