@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte"
-  import { GetServerPort } from "../wailsjs/go/main/App"
+  import { initApi, connected } from "./lib/api"
   import { connectWS, disconnectWS } from "./stores/ws"
   import { loadTracks } from "./stores/library"
   import { activePanel } from "./stores/ui"
@@ -16,17 +16,14 @@
   import Settings from "./lib/Settings.svelte"
 
   let view = "library"
-  const userId = "default" // TODO: replace after auth flow
 
   onMount(async () => {
-    try {
-      const port = await GetServerPort()
-      ;(window as any).__PNEUMA_PORT__ = port
-    } catch {
-      // running outside Wails (e.g. browser dev), keep fallback
+    await initApi()
+    // Only connect to server features when we have a server connection
+    if ($connected) {
+      connectWS()
+      await loadTracks()
     }
-    connectWS(userId)
-    await loadTracks()
   })
 
   onDestroy(() => {

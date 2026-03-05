@@ -9,6 +9,9 @@ type User struct {
 	Username     string    `json:"username"`
 	PasswordHash string    `json:"-"`
 	IsAdmin      bool      `json:"is_admin"`
+	CanUpload    bool      `json:"can_upload"`
+	CanEdit      bool      `json:"can_edit"`
+	CanDelete    bool      `json:"can_delete"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
@@ -41,31 +44,33 @@ type Album struct {
 }
 
 type Track struct {
-	ID              string     `json:"id"`
-	Path            string     `json:"path"`
-	Title           string     `json:"title"`
-	ArtistID        string     `json:"artist_id,omitempty"`
-	AlbumID         string     `json:"album_id,omitempty"`
-	AlbumArtist     string     `json:"album_artist,omitempty"`
-	AlbumName       string     `json:"album_name,omitempty"`
-	Genre           string     `json:"genre,omitempty"`
-	Year            int        `json:"year,omitempty"`
-	TrackNumber     int        `json:"track_number,omitempty"`
-	DiscNumber      int        `json:"disc_number,omitempty"`
-	DurationMS      int64      `json:"duration_ms"`
-	BitrateKbps     int        `json:"bitrate_kbps,omitempty"`
-	SampleRateHz    int        `json:"sample_rate_hz,omitempty"`
-	Codec           string     `json:"codec,omitempty"`
-	FileSizeBytes   int64      `json:"file_size_bytes"`
-	LastModified    time.Time  `json:"last_modified"`
-	Fingerprint     string     `json:"fingerprint,omitempty"`
-	MBRecordingID   string     `json:"mb_recording_id,omitempty"`
-	ReplayGainTrack float64    `json:"replay_gain_track,omitempty"`
-	ReplayGainAlbum float64    `json:"replay_gain_album,omitempty"`
-	ArtworkID       string     `json:"artwork_id,omitempty"`
-	EnrichedAt      *time.Time `json:"enriched_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	ID               string     `json:"id"`
+	Path             string     `json:"path"`
+	Title            string     `json:"title"`
+	ArtistID         string     `json:"artist_id,omitempty"`
+	AlbumID          string     `json:"album_id,omitempty"`
+	AlbumArtist      string     `json:"album_artist,omitempty"`
+	AlbumName        string     `json:"album_name,omitempty"`
+	Genre            string     `json:"genre,omitempty"`
+	Year             int        `json:"year,omitempty"`
+	TrackNumber      int        `json:"track_number,omitempty"`
+	DiscNumber       int        `json:"disc_number,omitempty"`
+	DurationMS       int64      `json:"duration_ms"`
+	BitrateKbps      int        `json:"bitrate_kbps,omitempty"`
+	SampleRateHz     int        `json:"sample_rate_hz,omitempty"`
+	Codec            string     `json:"codec,omitempty"`
+	FileSizeBytes    int64      `json:"file_size_bytes"`
+	LastModified     time.Time  `json:"last_modified"`
+	Fingerprint      string     `json:"fingerprint,omitempty"`
+	MBRecordingID    string     `json:"mb_recording_id,omitempty"`
+	ReplayGainTrack  float64    `json:"replay_gain_track,omitempty"`
+	ReplayGainAlbum  float64    `json:"replay_gain_album,omitempty"`
+	ArtworkID        string     `json:"artwork_id,omitempty"`
+	UploadedByUserID string     `json:"uploaded_by_user_id,omitempty"`
+	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
+	EnrichedAt       *time.Time `json:"enriched_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type Artwork struct {
@@ -125,6 +130,20 @@ type OfflinePack struct {
 }
 
 // ─── Events ──────────────────────────────────────────────────────────────────
+
+// ─── Audit ───────────────────────────────────────────────────────────────────
+
+type AuditEntry struct {
+	ID         string    `json:"id"`
+	UserID     string    `json:"user_id"`
+	Action     string    `json:"action"`      // e.g. "upload", "edit", "delete"
+	TargetType string    `json:"target_type"` // e.g. "track", "user"
+	TargetID   string    `json:"target_id"`
+	Detail     string    `json:"detail,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// ─── Event Types ─────────────────────────────────────────────────────────────
 
 type EventType string
 

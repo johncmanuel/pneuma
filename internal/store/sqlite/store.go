@@ -54,8 +54,81 @@ func (s *Store) DB() *sql.DB {
 }
 
 func migrate(db *sql.DB) error {
-	_, err := db.Exec(schema)
-	return err
+	// Apply base schema (idempotent CREATE TABLE IF NOT EXISTS).
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+	// Run incremental numbered migrations.
+	return runMigrations(db)
+}
+
+// runMigrations applies migrations sequentially based on a schema_version table.
+func runMigrations(db *sql.DB) error {
+	// Ensure the version table exists.
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`); err != nil {
+		return fmt.Errorf("create schema_version: %w", err)
+	}
+
+	var current int
+	err := db.QueryRow(`SELECT COALESCE(MAX(version), 0) FROM schema_version`).Scan(&current)
+	if err != nil {
+		return fmt.Errorf("read schema_version: %w", err)
+	}
+
+	for _, m := range migrations {
+		if m.version <= current {
+			continue
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("migration %d begin: %w", m.version, err)
+		}
+		for _, stmt := range m.stmts {
+			if _, err := tx.Exec(stmt); err != nil {
+				tx.Rollback()
+				return fmt.Errorf("migration %d exec: %w", m.version, err)
+			}
+		}
+		if _, err := tx.Exec(`INSERT INTO schema_version (version) VALUES (?)`, m.version); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("migration %d version: %w", m.version, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("migration %d commit: %w", m.version, err)
+		}
+	}
+	return nil
+}
+
+type migration struct {
+	version int
+	stmts   []string
+}
+
+// migrations is the ordered list of incremental schema changes.
+var migrations = []migration{
+	{
+		version: 1,
+		stmts: []string{
+			`ALTER TABLE users ADD COLUMN can_upload INTEGER NOT NULL DEFAULT 0`,
+			`ALTER TABLE users ADD COLUMN can_edit INTEGER NOT NULL DEFAULT 0`,
+			`ALTER TABLE users ADD COLUMN can_delete INTEGER NOT NULL DEFAULT 0`,
+			`ALTER TABLE tracks ADD COLUMN uploaded_by_user_id TEXT DEFAULT '' REFERENCES users(id)`,
+			`ALTER TABLE tracks ADD COLUMN deleted_at TEXT`,
+			`CREATE TABLE IF NOT EXISTS audit_log (
+				id TEXT PRIMARY KEY,
+				user_id TEXT NOT NULL,
+				action TEXT NOT NULL,
+				target_type TEXT NOT NULL,
+				target_id TEXT NOT NULL,
+				detail TEXT DEFAULT '',
+				created_at TEXT NOT NULL,
+				FOREIGN KEY (user_id) REFERENCES users(id)
+			)`,
+			`CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id)`,
+			`CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id)`,
+		},
+	},
 }
 
 const schema = `

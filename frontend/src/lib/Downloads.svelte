@@ -1,8 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte"
-
-  const BASE = () => `http://127.0.0.1:${(window as any).__PNEUMA_PORT__ || 8989}`
-  const userId = "default"
+  import { serverFetch, connected } from "./api"
+  import { get } from "svelte/store"
 
   interface Pack {
     track_id: string
@@ -20,14 +19,15 @@
   })
 
   async function loadPacks() {
+    if (!get(connected)) { loading = false; return }
     loading = true
-    const res = await fetch(`${BASE()}/api/offline/${userId}`)
+    const res = await serverFetch("/api/offline")
     if (res.ok) packs = await res.json()
     loading = false
   }
 
   async function removeTrack(trackId: string) {
-    await fetch(`${BASE()}/api/offline/${userId}/tracks/${trackId}`, { method: "DELETE" })
+    await serverFetch(`/api/offline/tracks/${trackId}`, { method: "DELETE" })
     await loadPacks()
   }
 

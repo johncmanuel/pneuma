@@ -45,6 +45,14 @@ type TranscodingConfig struct {
 	FpcalcPath string `toml:"fpcalc_path"`
 }
 
+// UploadConfig holds music upload settings.
+type UploadConfig struct {
+	// Dir is the directory where user-uploaded files are stored.
+	Dir string `toml:"dir"`
+	// MaxSizeMB is the maximum upload size in megabytes.
+	MaxSizeMB int `toml:"max_size_mb"`
+}
+
 // Config is the root application configuration.
 type Config struct {
 	Server      ServerConfig      `toml:"server"`
@@ -52,6 +60,7 @@ type Config struct {
 	Library     LibraryConfig     `toml:"library"`
 	Artwork     ArtworkConfig     `toml:"artwork"`
 	Auth        AuthConfig        `toml:"auth"`
+	Upload      UploadConfig      `toml:"upload"`
 	Transcoding TranscodingConfig `toml:"transcoding"`
 }
 
@@ -77,6 +86,10 @@ func DefaultConfig() *Config {
 		},
 		Auth: AuthConfig{
 			SecretKey: generateKey(),
+		},
+		Upload: UploadConfig{
+			Dir:       filepath.Join(dataDir, "uploads"),
+			MaxSizeMB: 500,
 		},
 		Transcoding: TranscodingConfig{
 			FFmpegPath: "ffmpeg",

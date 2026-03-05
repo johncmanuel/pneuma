@@ -3,7 +3,7 @@
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import type { Track } from "../stores/player"
-  import { apiBase } from "./api"
+  import { serverFetch, connected } from "./api"
 
   export let query = ""
   let debounce: number
@@ -22,15 +22,16 @@
   }
 
   async function playTrack(track: Track) {
+    if (!$connected) return
     const q = $searchResults.map(t => t.id)
     const idx = q.indexOf(track.id)
     const queue = [...q.slice(idx), ...q.slice(0, idx)]
-    await fetch(`${apiBase()}/api/playback/desktop/queue`, {
+    await serverFetch("/api/playback/desktop/queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ track_ids: queue }),
     })
-    const res = await fetch(`${apiBase()}/api/playback/desktop/play`, {
+    const res = await serverFetch("/api/playback/desktop/play", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ track_id: track.id, position_ms: 0 }),
@@ -48,9 +49,10 @@
   }
 
   function addToQueue(track: Track) {
+    if (!$connected) return
     playerState.update(s => {
       const newQueue = [...s.queue, track.id]
-      fetch(`${apiBase()}/api/playback/desktop/queue`, {
+      serverFetch("/api/playback/desktop/queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ track_ids: newQueue }),

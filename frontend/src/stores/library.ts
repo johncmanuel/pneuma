@@ -1,6 +1,7 @@
 import { writable } from "svelte/store"
 import type { Track } from "./player"
-import { apiBase } from "../lib/api"
+import { serverFetch, connected } from "../lib/api"
+import { get } from "svelte/store"
 
 export interface Album {
   id: string; title: string; artist_id: string
@@ -14,12 +15,13 @@ export const loading  = writable(false)
 export const searchResults = writable<Track[]>([])
 
 export async function loadTracks() {
+  if (!get(connected)) return
   // Only show loading spinner on initial fetch (empty store).
   let isEmpty = true
   tracks.subscribe(v => { isEmpty = v.length === 0 })()
   if (isEmpty) loading.set(true)
   try {
-    const r = await fetch(`${apiBase()}/api/library/tracks`)
+    const r = await serverFetch("/api/library/tracks")
     const data: Track[] = await r.json()
     // Deduplicate by track ID (guards against scanner/watcher race)
     const seen = new Set<string>()
@@ -32,16 +34,19 @@ export async function loadTracks() {
 }
 
 export async function loadAlbums() {
-  const r = await fetch(`${apiBase()}/api/library/albums`)
+  if (!get(connected)) return
+  const r = await serverFetch("/api/library/albums")
   albums.set(await r.json())
 }
 
 export async function searchTracks(q: string) {
-  const r = await fetch(`${apiBase()}/api/library/search?q=${encodeURIComponent(q)}`)
+  if (!get(connected)) return
+  const r = await serverFetch(`/api/library/search?q=${encodeURIComponent(q)}`)
   const results = await r.json()
   searchResults.set(results ?? [])
 }
 
 export async function triggerScan() {
-  await fetch(`${apiBase()}/api/library/scan`, { method: "POST" })
+  if (!get(connected)) return
+  await serverFetch("/api/library/scan", { method: "POST" })
 }

@@ -3,7 +3,7 @@
   import { tracks } from "../stores/library"
   import { closePanel } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
-  import { apiBase } from "./api"
+  import { serverFetch, artworkUrl, connected } from "./api"
 
   $: queue = $playerState.queue ?? []
   $: currentIndex = $playerState.queueIndex ?? 0
@@ -21,7 +21,8 @@
   }
 
   async function playFromQueue(track: Track, idx: number) {
-    const res = await fetch(`${apiBase()}/api/playback/desktop/play`, {
+    if (!$connected) return
+    const res = await serverFetch("/api/playback/desktop/play", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ track_id: track.id, position_ms: 0 }),
@@ -50,7 +51,7 @@
     <div class="now-playing-item">
       <div class="art-sm">
         <img
-          src="{apiBase()}/api/library/tracks/{nowPlayingTrack.id}/art"
+          src="{artworkUrl(nowPlayingTrack.id)}"
           alt=""
           on:error={(e) => { e.currentTarget.style.display = 'none' }}
         />

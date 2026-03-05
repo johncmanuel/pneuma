@@ -3,7 +3,7 @@
   import { playerState, type Track } from "../stores/player"
   import { tracks } from "../stores/library"
   import { closePanel } from "../stores/ui"
-  import { apiBase } from "./api"
+  import { serverFetch, connected } from "./api"
 
   interface Session {
     id: string
@@ -18,7 +18,6 @@
   let sessions: Session[] = []
   let loading = true
   let transferring: string | null = null
-  const userId = "default"
   const currentDevice = "desktop"
 
   $: trackMap = new Map(($tracks as Track[]).map(t => [t.id, t]))
@@ -28,9 +27,10 @@
   })
 
   async function fetchSessions() {
+    if (!$connected) { loading = false; return }
     loading = true
     try {
-      const res = await fetch(`${apiBase()}/api/sessions/${userId}`)
+      const res = await serverFetch("/api/sessions")
       if (res.ok) {
         sessions = (await res.json()) ?? []
       }
@@ -41,13 +41,13 @@
   }
 
   async function transferTo(deviceId: string) {
+    if (!$connected) return
     transferring = deviceId
     try {
-      await fetch(`${apiBase()}/api/handoff`, {
+      await serverFetch("/api/handoff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: userId,
           source_device_id: currentDevice,
           target_device_id: deviceId,
         }),

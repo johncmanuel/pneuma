@@ -18,9 +18,9 @@ func (s *Store) UpsertTrack(ctx context.Context, t *models.Track) error {
 		id, path, title, artist_id, album_id, album_artist, album_name, genre, year,
 		track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
 		codec, file_size_bytes, last_modified, fingerprint, mb_recording_id,
-		replay_gain_track, replay_gain_album, artwork_id, enriched_at,
-		created_at, updated_at
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		replay_gain_track, replay_gain_album, artwork_id, uploaded_by_user_id,
+		enriched_at, created_at, updated_at
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 	ON CONFLICT(path) DO UPDATE SET
 		title=excluded.title,
 		artist_id=excluded.artist_id, album_id=excluded.album_id,
@@ -34,10 +34,12 @@ func (s *Store) UpsertTrack(ctx context.Context, t *models.Track) error {
 		mb_recording_id=excluded.mb_recording_id,
 		replay_gain_track=excluded.replay_gain_track,
 		replay_gain_album=excluded.replay_gain_album,
-		artwork_id=excluded.artwork_id, enriched_at=excluded.enriched_at,
+		artwork_id=excluded.artwork_id,
+		uploaded_by_user_id=excluded.uploaded_by_user_id,
+		enriched_at=excluded.enriched_at,
 		updated_at=excluded.updated_at`
-	// Note: id and created_at are intentionally NOT updated — they are stable
-	// identity fields that must not change once a track is first inserted.
+	// Note: id, created_at, and deleted_at are intentionally NOT updated —
+	// they are stable identity fields that must not change once a track is first inserted.
 
 	var enrichedAt *string
 	if t.EnrichedAt != nil {
@@ -51,7 +53,8 @@ func (s *Store) UpsertTrack(ctx context.Context, t *models.Track) error {
 		t.FileSizeBytes, t.LastModified.UTC().Format(time.RFC3339),
 		t.Fingerprint, t.MBRecordingID,
 		t.ReplayGainTrack, t.ReplayGainAlbum,
-		nullStr(t.ArtworkID), enrichedAt,
+		nullStr(t.ArtworkID), nullStr(t.UploadedByUserID),
+		enrichedAt,
 		t.CreatedAt.UTC().Format(time.RFC3339),
 		t.UpdatedAt.UTC().Format(time.RFC3339),
 	)
@@ -72,9 +75,9 @@ func (s *Store) TrackByID(ctx context.Context, id string) (*models.Track, error)
 	return scanTrack(row)
 }
 
-// ListTracks returns all tracks ordered by artist/album/track_number.
+// ListTracks returns all non-deleted tracks ordered by title.
 func (s *Store) ListTracks(ctx context.Context) ([]*models.Track, error) {
-	const q = `SELECT ` + trackColumns + ` FROM tracks ORDER BY title COLLATE NOCASE`
+	const q = `SELECT ` + trackColumns + ` FROM tracks WHERE deleted_at IS NULL ORDER BY title COLLATE NOCASE`
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, err
@@ -83,13 +86,16 @@ func (s *Store) ListTracks(ctx context.Context) ([]*models.Track, error) {
 	return collectTracks(rows)
 }
 
-// SearchTracks performs a case-insensitive substring search on title, genre.
+// SearchTracks performs a case-insensitive substring search on title, genre, artist name, album title.
 func (s *Store) SearchTracks(ctx context.Context, query string) ([]*models.Track, error) {
 	q := `SELECT ` + trackColumns + ` FROM tracks
-		WHERE title LIKE ? OR genre LIKE ?
-		ORDER BY title COLLATE NOCASE LIMIT 200`
+		LEFT JOIN artists ON artists.id = tracks.artist_id
+		LEFT JOIN albums ON albums.id = tracks.album_id
+		WHERE tracks.deleted_at IS NULL
+		  AND (tracks.title LIKE ? OR tracks.genre LIKE ? OR artists.name LIKE ? OR albums.title LIKE ?)
+		ORDER BY tracks.title COLLATE NOCASE LIMIT 200`
 	like := "%" + query + "%"
-	rows, err := s.db.QueryContext(ctx, q, like, like)
+	rows, err := s.db.QueryContext(ctx, q, like, like, like, like)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +137,27 @@ func (s *Store) TracksByIDs(ctx context.Context, ids []string) ([]*models.Track,
 // DeleteTrackByPath removes a track record by path.
 func (s *Store) DeleteTrackByPath(ctx context.Context, path string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM tracks WHERE path=?`, path)
+	return err
+}
+
+// SoftDeleteTrack sets the deleted_at timestamp on a track (soft-delete).
+func (s *Store) SoftDeleteTrack(ctx context.Context, trackID string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE tracks SET deleted_at=?,updated_at=? WHERE id=?`,
+		time.Now().UTC().Format(time.RFC3339),
+		time.Now().UTC().Format(time.RFC3339),
+		trackID,
+	)
+	return err
+}
+
+// RestoreTrack clears the deleted_at timestamp on a track.
+func (s *Store) RestoreTrack(ctx context.Context, trackID string) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE tracks SET deleted_at=NULL,updated_at=? WHERE id=?`,
+		time.Now().UTC().Format(time.RFC3339),
+		trackID,
+	)
 	return err
 }
 
@@ -292,6 +319,7 @@ const trackColumns = `id,path,title,
 	track_number,disc_number,duration_ms,bitrate_kbps,sample_rate_hz,
 	codec,file_size_bytes,last_modified,fingerprint,mb_recording_id,
 	replay_gain_track,replay_gain_album,COALESCE(artwork_id,''),
+	COALESCE(uploaded_by_user_id,''),deleted_at,
 	enriched_at,created_at,updated_at`
 
 type scanner interface {
@@ -300,7 +328,7 @@ type scanner interface {
 
 func scanTrack(row scanner) (*models.Track, error) {
 	var t models.Track
-	var enrichedAt sql.NullString
+	var enrichedAt, deletedAt sql.NullString
 	err := row.Scan(
 		&t.ID, &t.Path, &t.Title,
 		&t.ArtistID, &t.AlbumID, &t.AlbumArtist, &t.AlbumName, &t.Genre, &t.Year,
@@ -308,6 +336,7 @@ func scanTrack(row scanner) (*models.Track, error) {
 		&t.SampleRateHz, &t.Codec, &t.FileSizeBytes,
 		(*timeStr)(&t.LastModified), &t.Fingerprint, &t.MBRecordingID,
 		&t.ReplayGainTrack, &t.ReplayGainAlbum, &t.ArtworkID,
+		&t.UploadedByUserID, &deletedAt,
 		&enrichedAt,
 		(*timeStr)(&t.CreatedAt), (*timeStr)(&t.UpdatedAt),
 	)
@@ -320,6 +349,10 @@ func scanTrack(row scanner) (*models.Track, error) {
 	if enrichedAt.Valid {
 		ts, _ := time.Parse(time.RFC3339, enrichedAt.String)
 		t.EnrichedAt = &ts
+	}
+	if deletedAt.Valid {
+		ts, _ := time.Parse(time.RFC3339, deletedAt.String)
+		t.DeletedAt = &ts
 	}
 	return &t, nil
 }

@@ -1,14 +1,24 @@
 import { playerState } from "./player"
 import type { Track } from "./player"
 import { loadTracks, tracks } from "./library"
-import { wsBase } from "../lib/api"
+import { wsBase, authToken, connected } from "../lib/api"
 import { addToast } from "./toasts"
+import { get } from "svelte/store"
 
 let socket: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-export function connectWS(userId: string) {
-  socket = new WebSocket(`${wsBase()}/ws?user_id=${userId}`)
+export function connectWS() {
+  if (!get(connected)) return
+  const base = wsBase()
+  if (!base) return
+
+  const token = get(authToken)
+  const url = token
+    ? `${base}/ws?token=${encodeURIComponent(token)}`
+    : `${base}/ws`
+
+  socket = new WebSocket(url)
 
   socket.onmessage = (e) => {
     const msg = JSON.parse(e.data)
@@ -49,7 +59,9 @@ export function connectWS(userId: string) {
   }
 
   socket.onclose = () => {
-    reconnectTimer = setTimeout(() => connectWS(userId), 3000)
+    if (get(connected)) {
+      reconnectTimer = setTimeout(() => connectWS(), 3000)
+    }
   }
 
   socket.onerror = () => socket?.close()

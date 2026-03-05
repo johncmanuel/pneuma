@@ -12,10 +12,11 @@ import (
 
 // CreateUser inserts a new user record. Returns an error if the username exists.
 func (s *Store) CreateUser(ctx context.Context, u *models.User) error {
-	const q = `INSERT INTO users (id,username,password_hash,is_admin,created_at,updated_at)
-			   VALUES (?,?,?,?,?,?)`
+	const q = `INSERT INTO users (id,username,password_hash,is_admin,can_upload,can_edit,can_delete,created_at,updated_at)
+			   VALUES (?,?,?,?,?,?,?,?,?)`
 	_, err := s.db.ExecContext(ctx, q,
-		u.ID, u.Username, u.PasswordHash, boolInt(u.IsAdmin),
+		u.ID, u.Username, u.PasswordHash,
+		boolInt(u.IsAdmin), boolInt(u.CanUpload), boolInt(u.CanEdit), boolInt(u.CanDelete),
 		u.CreatedAt.UTC().Format(time.RFC3339),
 		u.UpdatedAt.UTC().Format(time.RFC3339),
 	)
@@ -31,16 +32,52 @@ func (s *Store) UpdateUserPassword(ctx context.Context, userID, hash string) err
 	return err
 }
 
+// UpdateUserPermissions sets the permission flags for a user.
+func (s *Store) UpdateUserPermissions(ctx context.Context, userID string, canUpload, canEdit, canDelete bool) error {
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE users SET can_upload=?,can_edit=?,can_delete=?,updated_at=? WHERE id=?`,
+		boolInt(canUpload), boolInt(canEdit), boolInt(canDelete),
+		time.Now().UTC().Format(time.RFC3339), userID,
+	)
+	return err
+}
+
+// DeleteUser removes a user by ID.
+func (s *Store) DeleteUser(ctx context.Context, userID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM users WHERE id=?`, userID)
+	return err
+}
+
+// ListUsers returns all registered users.
+func (s *Store) ListUsers(ctx context.Context) ([]*models.User, error) {
+	const q = `SELECT id,username,password_hash,is_admin,can_upload,can_edit,can_delete,created_at,updated_at
+			   FROM users ORDER BY created_at`
+	rows, err := s.db.QueryContext(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*models.User
+	for rows.Next() {
+		u, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
 // UserByUsername returns a user by their username, or nil if not found.
 func (s *Store) UserByUsername(ctx context.Context, username string) (*models.User, error) {
-	const q = `SELECT id,username,password_hash,is_admin,created_at,updated_at FROM users WHERE username=? LIMIT 1`
+	const q = `SELECT id,username,password_hash,is_admin,can_upload,can_edit,can_delete,created_at,updated_at FROM users WHERE username=? LIMIT 1`
 	row := s.db.QueryRowContext(ctx, q, username)
 	return scanUser(row)
 }
 
 // UserByID returns a user by ID.
 func (s *Store) UserByID(ctx context.Context, id string) (*models.User, error) {
-	const q = `SELECT id,username,password_hash,is_admin,created_at,updated_at FROM users WHERE id=? LIMIT 1`
+	const q = `SELECT id,username,password_hash,is_admin,can_upload,can_edit,can_delete,created_at,updated_at FROM users WHERE id=? LIMIT 1`
 	row := s.db.QueryRowContext(ctx, q, id)
 	return scanUser(row)
 }
@@ -102,9 +139,10 @@ func (s *Store) TouchDevice(ctx context.Context, deviceID string) error {
 
 func scanUser(row scanner) (*models.User, error) {
 	var u models.User
-	var isAdmin int
+	var isAdmin, canUpload, canEdit, canDelete int
 	if err := row.Scan(
-		&u.ID, &u.Username, &u.PasswordHash, &isAdmin,
+		&u.ID, &u.Username, &u.PasswordHash,
+		&isAdmin, &canUpload, &canEdit, &canDelete,
 		(*timeStr)(&u.CreatedAt), (*timeStr)(&u.UpdatedAt),
 	); err != nil {
 		if err == sql.ErrNoRows {
@@ -113,6 +151,9 @@ func scanUser(row scanner) (*models.User, error) {
 		return nil, err
 	}
 	u.IsAdmin = isAdmin != 0
+	u.CanUpload = canUpload != 0
+	u.CanEdit = canEdit != 0
+	u.CanDelete = canDelete != 0
 	return &u, nil
 }
 
@@ -134,4 +175,43 @@ func boolInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+// InsertAuditEntry records an action in the audit log.
+func (s *Store) InsertAuditEntry(ctx context.Context, e *models.AuditEntry) error {
+	const q = `INSERT INTO audit_log (id,user_id,action,target_type,target_id,detail,created_at)
+			   VALUES (?,?,?,?,?,?,?)`
+	_, err := s.db.ExecContext(ctx, q,
+		e.ID, e.UserID, e.Action, e.TargetType, e.TargetID, e.Detail,
+		e.CreatedAt.UTC().Format(time.RFC3339),
+	)
+	return err
+}
+
+// ListAuditEntries returns audit log entries ordered by most recent first.
+func (s *Store) ListAuditEntries(ctx context.Context, limit int) ([]models.AuditEntry, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	const q = `SELECT id, user_id, action, target_type, target_id, detail, created_at
+			   FROM audit_log ORDER BY created_at DESC LIMIT ?`
+	rows, err := s.db.QueryContext(ctx, q, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []models.AuditEntry
+	for rows.Next() {
+		var e models.AuditEntry
+		var createdAt string
+		if err := rows.Scan(&e.ID, &e.UserID, &e.Action, &e.TargetType, &e.TargetID, &e.Detail, &createdAt); err != nil {
+			return nil, err
+		}
+		e.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+		entries = append(entries, e)
+	}
+	return entries, rows.Err()
 }

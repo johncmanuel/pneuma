@@ -1,14 +1,18 @@
 <script lang="ts">
   import { tracks, loading } from "../stores/library"
+  import { localTracks, localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders } from "../stores/localLibrary"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import type { Track } from "../stores/player"
-  import { apiBase } from "./api"
+  import { serverFetch, artworkUrl, connected, localBase } from "./api"
+  import { onMount } from "svelte"
+
+  type LibTab = "library" | "local"
+  let activeTab: LibTab = "library"
 
   let selectedAlbum: string | null = null  // album_name to filter by
 
-  // Derive unique albums from tracks (grouped by album_name + album_artist)
-  $: albumGroups = buildAlbumGroups($tracks)
+  // ─── Shared album grouping logic ────────────────────────────────────────────
 
   interface AlbumGroup {
     key: string
@@ -16,6 +20,8 @@
     artist: string
     tracks: Track[]
     firstTrackId: string  // for album art
+    isLocal?: boolean
+    firstLocalPath?: string // for local art
   }
 
   const UNORGANIZED_KEY = "__unorganized__"
@@ -52,21 +58,95 @@
     return groups
   }
 
+  function buildLocalAlbumGroups(localTracks: import("../stores/localLibrary").LocalTrack[]): AlbumGroup[] {
+    const map = new Map<string, AlbumGroup>()
+    for (const t of localTracks) {
+      const hasAlbum = (t.album ?? "").trim() !== ""
+      const name = hasAlbum ? t.album : "Unorganized"
+      const artist = hasAlbum ? (t.album_artist || t.artist || "Unknown Artist") : "Various"
+      const key = hasAlbum ? `${name}|||${artist}` : UNORGANIZED_KEY
+      let g = map.get(key)
+      if (!g) {
+        g = { key, name, artist, tracks: [], firstTrackId: "", isLocal: true, firstLocalPath: t.path }
+        map.set(key, g)
+      }
+      // Convert LocalTrack to Track shape for TrackRow
+      g.tracks.push({
+        id: t.path, // use path as ID for local tracks
+        path: t.path,
+        title: t.title,
+        artist_id: "",
+        album_id: "",
+        album_artist: t.album_artist || t.artist,
+        album_name: t.album,
+        genre: t.genre,
+        year: t.year,
+        track_number: t.track_number,
+        disc_number: t.disc_number,
+        duration_ms: t.duration_ms,
+        bitrate_kbps: 0,
+        replay_gain_track: 0,
+        artwork_id: "",
+      })
+    }
+    const unorg = map.get(UNORGANIZED_KEY)
+    map.delete(UNORGANIZED_KEY)
+    const groups = Array.from(map.values())
+    groups.sort((a, b) => a.name.localeCompare(b.name))
+    for (const g of groups) {
+      g.tracks.sort((a, b) => (a.disc_number ?? 0) - (b.disc_number ?? 0) || (a.track_number ?? 0) - (b.track_number ?? 0))
+    }
+    if (unorg) {
+      unorg.tracks.sort((a, b) => (a.title || "").localeCompare(b.title || ""))
+      groups.push(unorg)
+    }
+    return groups
+  }
+
+  // ─── Reactive derivations ──────────────────────────────────────────────────
+
+  $: albumGroups = activeTab === "library" ? buildAlbumGroups($tracks) : buildLocalAlbumGroups($localTracks)
+  $: isLoading = activeTab === "library" ? $loading : $localLoading
+
   $: currentAlbumGroup = selectedAlbum
     ? albumGroups.find(g => g.key === selectedAlbum) ?? null
     : null
+
+  // On mount, do an initial scan of saved folders
+  onMount(() => {
+    if ($localFolders.length > 0) {
+      scanLocalFolders()
+    }
+  })
+
+  // ─── Playback ──────────────────────────────────────────────────────────────
 
   async function playTrack(track: Track, albumTracks: Track[]) {
     const idx = albumTracks.findIndex(t => t.id === track.id)
     const queueIds = albumTracks.map(t => t.id)
 
-    await fetch(`${apiBase()}/api/playback/desktop/queue`, {
+    if (activeTab === "local") {
+      // Local playback — just set state (Player.svelte handles audio)
+      playerState.update(s => ({
+        ...s,
+        trackId: track.id,
+        track,
+        queue: queueIds,
+        queueIndex: idx >= 0 ? idx : 0,
+        positionMs: 0,
+        paused: false,
+      }))
+      return
+    }
+
+    if (!$connected) return
+    await serverFetch("/api/playback/desktop/queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ track_ids: queueIds, start_index: idx >= 0 ? idx : 0 }),
     })
 
-    const res = await fetch(`${apiBase()}/api/playback/desktop/play`, {
+    const res = await serverFetch("/api/playback/desktop/play", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ track_id: track.id, position_ms: 0 }),
@@ -85,8 +165,15 @@
   }
 
   function addToQueue(track: Track) {
+    if (activeTab === "local") {
+      // For local tracks, just append to queue
+      const newQueue = [...$playerState.queue, track.id]
+      playerState.update(s => ({ ...s, queue: newQueue }))
+      return
+    }
+    if (!$connected) return
     const newQueue = [...$playerState.queue, track.id]
-    fetch(`${apiBase()}/api/playback/desktop/queue`, {
+    serverFetch("/api/playback/desktop/queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ track_ids: newQueue, start_index: $playerState.queueIndex }),
@@ -98,15 +185,63 @@
   }
 
   async function scanLibrary() {
-    await fetch(`${apiBase()}/api/library/scan`, { method: "POST" })
+    if (!$connected) return
+    await serverFetch("/api/library/scan", { method: "POST" })
   }
 
   function goBack() {
     selectedAlbum = null
   }
+
+  function switchTab(tab: LibTab) {
+    activeTab = tab
+    selectedAlbum = null
+  }
+
+  function localArtUrl(track: Track): string {
+    const base = localBase()
+    if (!base) return ""
+    return `${base}/local/art?path=${encodeURIComponent(track.path)}`
+  }
+
+  function getArtUrl(album: AlbumGroup): string {
+    if (album.isLocal && album.firstLocalPath) {
+      return localArtUrl({ path: album.firstLocalPath } as Track)
+    }
+    return artworkUrl(album.firstTrackId)
+  }
+
+  function getTrackArtUrl(track: Track): string {
+    if (activeTab === "local") {
+      return localArtUrl(track)
+    }
+    return artworkUrl(track.id)
+  }
+
+  async function handleAddFolder() {
+    await addLocalFolder()
+  }
 </script>
 
 <section>
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button
+      class="lib-tab"
+      class:active={activeTab === "library"}
+      on:click={() => switchTab("library")}
+    >
+      Library
+    </button>
+    <button
+      class="lib-tab"
+      class:active={activeTab === "local"}
+      on:click={() => switchTab("local")}
+    >
+      Local Files
+    </button>
+  </div>
+
   {#if currentAlbumGroup}
     <!-- Album detail view -->
     <div class="toolbar">
@@ -132,14 +267,38 @@
   {:else}
     <!-- Album grid view -->
     <div class="toolbar">
-      <h2>Library</h2>
-      <button on:click={scanLibrary} title="Rescan watch folders">↺ Scan</button>
+      <h2>{activeTab === "library" ? "Library" : "Local Files"}</h2>
+      <div class="toolbar-actions">
+        {#if activeTab === "library"}
+          <button on:click={scanLibrary} title="Rescan watch folders">↺ Scan</button>
+        {:else}
+          <button on:click={handleAddFolder} title="Add a local music folder">+ Add Folder</button>
+          {#if $localFolders.length > 0}
+            <button on:click={() => scanLocalFolders()} title="Rescan local folders">↺ Rescan</button>
+          {/if}
+        {/if}
+      </div>
     </div>
 
-    {#if $loading}
+    {#if activeTab === "local" && $localFolders.length > 0}
+      <div class="folder-chips">
+        {#each $localFolders as dir}
+          <span class="folder-chip">
+            {dir.split("/").pop() || dir}
+            <button class="chip-remove" on:click={() => removeLocalFolder(dir)} title="Remove folder">×</button>
+          </span>
+        {/each}
+      </div>
+    {/if}
+
+    {#if isLoading}
       <p class="text-3">Loading…</p>
     {:else if albumGroups.length === 0}
-      <p class="text-3">No tracks found. Add a watch folder in Settings and scan.</p>
+      {#if activeTab === "local"}
+        <p class="text-3">No local music. Click "Add Folder" to add a music directory.</p>
+      {:else}
+        <p class="text-3">No tracks found. Add a watch folder in Settings and scan.</p>
+      {/if}
     {:else}
       <div class="album-grid">
         {#each albumGroups as album (album.key)}
@@ -151,7 +310,7 @@
             <div class="album-art" class:unorg-art={album.key === UNORGANIZED_KEY}>
               {#if album.key !== UNORGANIZED_KEY}
                 <img
-                  src="{apiBase()}/api/library/tracks/{album.firstTrackId}/art"
+                  src="{getArtUrl(album)}"
                   alt={album.name}
                   on:error={(e) => { e.currentTarget.style.display = 'none' }}
                 />
@@ -170,6 +329,28 @@
 <style>
   section { height: 100%; display: flex; flex-direction: column; overflow-y: auto; }
 
+  /* Tab bar */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+    flex-shrink: 0;
+  }
+
+  .lib-tab {
+    padding: 8px 20px;
+    font-size: 14px;
+    color: var(--text-2);
+    border-bottom: 2px solid transparent;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .lib-tab:hover { color: var(--text-1); }
+  .lib-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
   .toolbar {
     display: flex;
     align-items: center;
@@ -177,6 +358,12 @@
     margin-bottom: 16px;
     gap: 12px;
     flex-shrink: 0;
+  }
+
+  .toolbar-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
   }
 
   h2 { margin: 0; font-size: 20px; font-weight: 700; }
@@ -193,6 +380,34 @@
     font-size: 13px;
     margin: -8px 0 16px;
   }
+
+  /* Folder chips */
+  .folder-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .folder-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
+  .chip-remove {
+    font-size: 14px;
+    color: var(--text-3);
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .chip-remove:hover { color: var(--danger); }
 
   /* Album grid */
   .album-grid {

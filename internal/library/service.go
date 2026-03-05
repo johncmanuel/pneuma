@@ -68,6 +68,16 @@ func (s *Service) RemoveByPath(ctx context.Context, path string) error {
 	return s.store.DeleteTrackByPath(ctx, path)
 }
 
+// SoftDeleteTrack marks a track as deleted without removing it from the DB.
+func (s *Service) SoftDeleteTrack(ctx context.Context, trackID string) error {
+	return s.store.SoftDeleteTrack(ctx, trackID)
+}
+
+// RestoreTrack clears the soft-delete marker on a track.
+func (s *Service) RestoreTrack(ctx context.Context, trackID string) error {
+	return s.store.RestoreTrack(ctx, trackID)
+}
+
 // DeduplicateFingerprints removes duplicate tracks that share the same
 // acoustic fingerprint, keeping only the earliest-created per fingerprint.
 func (s *Service) DeduplicateFingerprints(ctx context.Context) (int, error) {

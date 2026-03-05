@@ -15,6 +15,8 @@ import (
 var (
 	ErrUserExists    = errors.New("username already taken")
 	ErrWrongPassword = errors.New("invalid credentials")
+	ErrNotFound      = errors.New("user not found")
+	ErrSelfDelete    = errors.New("cannot delete yourself")
 )
 
 // Service manages user accounts and devices.
@@ -115,4 +117,37 @@ func (s *Service) TouchDevice(ctx context.Context, deviceID string) error {
 // Devices returns all devices for a user.
 func (s *Service) Devices(ctx context.Context, userID string) ([]*models.Device, error) {
 	return s.store.DevicesByUser(ctx, userID)
+}
+
+// ListUsers returns all registered users.
+func (s *Service) ListUsers(ctx context.Context) ([]*models.User, error) {
+	return s.store.ListUsers(ctx)
+}
+
+// UpdatePermissions sets the permission flags for a user.
+func (s *Service) UpdatePermissions(ctx context.Context, userID string, canUpload, canEdit, canDelete bool) error {
+	u, err := s.store.UserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if u == nil {
+		return ErrNotFound
+	}
+	return s.store.UpdateUserPermissions(ctx, userID, canUpload, canEdit, canDelete)
+}
+
+// DeleteUser removes a user. callerID is the user performing the action —
+// a user cannot delete themselves.
+func (s *Service) DeleteUser(ctx context.Context, callerID, targetID string) error {
+	if callerID == targetID {
+		return ErrSelfDelete
+	}
+	u, err := s.store.UserByID(ctx, targetID)
+	if err != nil {
+		return err
+	}
+	if u == nil {
+		return ErrNotFound
+	}
+	return s.store.DeleteUser(ctx, targetID)
 }

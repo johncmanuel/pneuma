@@ -23,6 +23,7 @@ import (
 	"pneuma/internal/scanner"
 	"pneuma/internal/store/sqlite"
 	"pneuma/internal/user"
+	"pneuma/web"
 )
 
 func main() {
@@ -71,13 +72,17 @@ func main() {
 	sched := scanner.NewScheduler(libSvc, metaParser, fpcalcSvc, hub, cfg.Library.WatchFolders, 15*time.Minute)
 
 	router := api.NewRouter(api.Services{
-		Library:  libSvc,
-		User:     userSvc,
-		Playback: playEngine,
-		Handoff:  handoffSvc,
-		Offline:  offlinePkg,
-		Hub:      hub,
-		Scanner:  sched,
+		Library:    libSvc,
+		User:       userSvc,
+		Playback:   playEngine,
+		Handoff:    handoffSvc,
+		Offline:    offlinePkg,
+		Hub:        hub,
+		Store:      store,
+		Scanner:    sched,
+		JWTSecret:  cfg.Auth.SecretKey,
+		UploadsDir: cfg.Upload.Dir,
+		WebUI:      web.FS(),
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

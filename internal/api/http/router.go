@@ -1,28 +1,35 @@
 package pneumahttp
 
 import (
+	"io/fs"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
+	echomw "github.com/labstack/echo/v4/middleware"
 
 	"pneuma/internal/api/http/handlers"
+	"pneuma/internal/api/http/middleware"
 	apws "pneuma/internal/api/ws"
 	"pneuma/internal/library"
 	"pneuma/internal/offline"
 	"pneuma/internal/playback"
+	"pneuma/internal/store/sqlite"
 	"pneuma/internal/user"
 )
 
 // Services groups all domain services the API depends on.
 type Services struct {
-	Library  *library.Service
-	User     *user.Service
-	Playback *playback.Engine
-	Handoff  *playback.Handoff
-	Offline  *offline.Packager
-	Hub      *apws.Hub
-	Scanner  interface{ ScanAll() } // *scanner.Scheduler
+	Library    *library.Service
+	User       *user.Service
+	Playback   *playback.Engine
+	Handoff    *playback.Handoff
+	Offline    *offline.Packager
+	Hub        *apws.Hub
+	Store      *sqlite.Store
+	Scanner    interface{ ScanAll() } // *scanner.Scheduler
+	JWTSecret  string
+	UploadsDir string
+	WebUI      fs.FS // embedded web UI assets (nil = disabled)
 }
 
 // NewRouter builds and returns the configured Echo router.
@@ -31,14 +38,19 @@ func NewRouter(svc Services) *echo.Echo {
 	e.HideBanner = true
 	e.HidePort = true
 
-	e.Use(middleware.Logger())
-	e.Use(middleware.Recover())
-	e.Use(middleware.CORS())
-	e.Use(middleware.RequestID())
+	e.Use(echomw.Logger())
+	e.Use(echomw.Recover())
+	e.Use(echomw.CORS())
+	e.Use(echomw.RequestID())
 
-	lh := handlers.NewLibraryHandler(svc.Library, svc.Scanner)
+	secret := svc.JWTSecret
+	authMW := middleware.RequireAuth(secret)
+	adminMW := middleware.RequireAdmin(secret)
+
+	lh := handlers.NewLibraryHandler(svc.Library, svc.Store, svc.Scanner, svc.Hub, svc.UploadsDir)
 	ph := handlers.NewPlaybackHandler(svc.Playback, svc.Handoff)
-	uh := handlers.NewUserHandler(svc.User)
+	uh := handlers.NewUserHandler(svc.User, secret)
+	ah := handlers.NewAdminHandler(svc.User, svc.Store)
 
 	// WebSocket
 	e.GET("/ws", func(c echo.Context) error {
@@ -46,25 +58,41 @@ func NewRouter(svc Services) *echo.Echo {
 		return nil
 	})
 
-	// Auth
+	// ── Auth (public) ─────────────────────────────────────────────────────────
 	auth := e.Group("/api/auth")
 	auth.POST("/register", uh.Register)
 	auth.POST("/login", uh.Login)
-	auth.POST("/password", uh.ChangePassword)
+	auth.POST("/password", uh.ChangePassword, authMW)
+	auth.POST("/refresh", uh.Refresh, authMW)
+	auth.GET("/stream-token", uh.StreamToken, authMW)
 
-	// Library
-	lib := e.Group("/api/library")
+	// ── Admin (admin-only) ────────────────────────────────────────────────────
+	admin := e.Group("/api/admin", adminMW)
+	admin.GET("/users", ah.ListUsers)
+	admin.PUT("/users/:id/permissions", ah.UpdatePermissions)
+	admin.DELETE("/users/:id", ah.DeleteUser)
+	admin.GET("/audit", ah.ListAudit)
+
+	// ── Library (authenticated, some with permission guards) ──────────────────
+	lib := e.Group("/api/library", authMW)
 	lib.GET("/tracks", lh.ListTracks)
 	lib.GET("/tracks/:id", lh.GetTrack)
 	lib.GET("/tracks/:id/stream", lh.StreamTrack)
 	lib.GET("/tracks/:id/art", lh.ServeTrackArt)
-	lib.PATCH("/tracks/:id", lh.UpdateTrackMeta)
+	lib.PATCH("/tracks/:id", lh.UpdateTrackMeta, middleware.RequirePerm(secret, "can_edit"))
+	lib.POST("/tracks/upload", lh.UploadTrack, middleware.RequirePerm(secret, "can_upload"))
+	lib.DELETE("/tracks/:id", lh.DeleteTrack, middleware.RequirePerm(secret, "can_delete"))
 	lib.GET("/albums", lh.ListAlbums)
 	lib.GET("/search", lh.Search)
-	lib.POST("/scan", lh.TriggerScan)
+	lib.POST("/scan", lh.TriggerScan, adminMW)
 
-	// Playback
-	play := e.Group("/api/playback")
+	// ── Stream (supports query-param token for <audio> elements) ──────────────
+	// This is an alternative stream endpoint that accepts ?token= for clients
+	// that cannot set Authorization headers (e.g., <audio src="">).
+	e.GET("/api/stream/tracks/:id", lh.StreamTrack, middleware.RequireAuth(secret))
+
+	// ── Playback (authenticated) ──────────────────────────────────────────────
+	play := e.Group("/api/playback", authMW)
 	play.GET("/:device_id", ph.GetState)
 	play.POST("/:device_id/play", ph.Play)
 	play.POST("/:device_id/pause", ph.Pause)
@@ -75,11 +103,11 @@ func NewRouter(svc Services) *echo.Echo {
 	play.POST("/:device_id/repeat", ph.SetRepeat)
 	play.POST("/:device_id/shuffle", ph.SetShuffle)
 
-	e.POST("/api/handoff", ph.Transfer)
-	e.GET("/api/sessions/:user_id", ph.Sessions)
+	e.POST("/api/handoff", ph.Transfer, authMW)
+	e.GET("/api/sessions/:user_id", ph.Sessions, authMW)
 
-	// Offline
-	off := e.Group("/api/offline")
+	// ── Offline (authenticated) ───────────────────────────────────────────────
+	off := e.Group("/api/offline", authMW)
 	off.GET("/:user_id", func(c echo.Context) error {
 		packs, err := svc.Offline.ListPacks(c.Request().Context(), c.Param("user_id"))
 		if err != nil {
@@ -101,6 +129,32 @@ func NewRouter(svc Services) *echo.Echo {
 		}
 		return c.NoContent(http.StatusNoContent)
 	})
+
+	// ── Web UI (SPA fallback) ────────────────────────────────────────────────
+	if svc.WebUI != nil {
+		// Serve static assets directly; anything that doesn't match a file
+		// falls back to index.html (SPA routing).
+		fileServer := http.FileServer(http.FS(svc.WebUI))
+		spaHandler := echo.WrapHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Try to serve the file as-is first.
+			path := r.URL.Path
+			if path == "/" {
+				path = "index.html"
+			} else if len(path) > 0 && path[0] == '/' {
+				path = path[1:]
+			}
+			if f, err := svc.WebUI.Open(path); err == nil {
+				f.Close()
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+			// Fallback to index.html for SPA client-side routing.
+			r.URL.Path = "/"
+			fileServer.ServeHTTP(w, r)
+		}))
+		e.GET("/", spaHandler)
+		e.GET("/*", spaHandler)
+	}
 
 	return e
 }

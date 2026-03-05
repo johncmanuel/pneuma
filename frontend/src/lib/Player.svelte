@@ -3,7 +3,7 @@
   import { tracks } from "../stores/library"
   import { activePanel, togglePanel, toggleQueuePanel } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
-  import { apiBase } from "./api"
+  import { serverFetch, streamUrl, artworkUrl, connected } from "./api"
 
   let audio: HTMLAudioElement
   let deviceId = "desktop"
@@ -17,8 +17,9 @@
   $: durationMs = audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0)
 
   function api(method: string, path: string, body?: object) {
-    return fetch(`${apiBase()}/api/playback/${deviceId}/${path}`, {
-      method, headers: { "Content-Type": "application/json" },
+    return serverFetch(`/api/playback/${deviceId}/${path}`, {
+      method,
+      headers: { "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
     })
   }
@@ -127,8 +128,8 @@
 
   // Sync HTML audio element when track changes
   $: if (audio && $playerState.trackId) {
-    const url = `${apiBase()}/api/library/tracks/${$playerState.trackId}/stream`
-    if (audio.src !== url) {
+    const url = streamUrl($playerState.trackId, $playerState.track?.path)
+    if (audio.src !== url && url) {
       audio.src = url
       audio.currentTime = $playerState.positionMs / 1000
     }
@@ -173,7 +174,7 @@
     <div class="art">
       {#if track}
         <img
-          src="{apiBase()}/api/library/tracks/{track.id}/art"
+          src="{artworkUrl(track.id)}"
           alt=""
           on:error={(e) => { e.currentTarget.style.display = 'none' }}
         />

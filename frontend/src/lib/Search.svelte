@@ -3,8 +3,7 @@
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import type { Track } from "../stores/player"
-
-  const BASE = () => `http://127.0.0.1:${(window as any).__PNEUMA_PORT__ || 8989}`
+  import { serverFetch, connected } from "./api"
 
   let query = ""
   let debounce: number
@@ -18,7 +17,8 @@
   }
 
   async function playTrack(track: Track) {
-    const res = await fetch(`${BASE()}/api/playback/desktop/play`, {
+    if (!$connected) return
+    const res = await serverFetch("/api/playback/desktop/play", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ track_id: track.id, position_ms: 0 }),

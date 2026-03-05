@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -8,9 +11,13 @@ import (
 	"time"
 
 	"github.com/dhowden/tag"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"pneuma/internal/api/http/middleware"
 	"pneuma/internal/library"
+	"pneuma/internal/models"
+	"pneuma/internal/store/sqlite"
 )
 
 // scanTrigger is satisfied by *scanner.Scheduler.
@@ -18,15 +25,23 @@ type scanTrigger interface {
 	ScanAll()
 }
 
+// eventPublisher is satisfied by *ws.Hub.
+type eventPublisher interface {
+	Publish(eventType string, payload any)
+}
+
 // LibraryHandler serves library-related API routes.
 type LibraryHandler struct {
-	lib     *library.Service
-	scanner scanTrigger
+	lib        *library.Service
+	store      *sqlite.Store
+	scanner    scanTrigger
+	hub        eventPublisher
+	uploadsDir string
 }
 
 // NewLibraryHandler creates a LibraryHandler.
-func NewLibraryHandler(lib *library.Service, sc scanTrigger) *LibraryHandler {
-	return &LibraryHandler{lib: lib, scanner: sc}
+func NewLibraryHandler(lib *library.Service, store *sqlite.Store, sc scanTrigger, hub eventPublisher, uploadsDir string) *LibraryHandler {
+	return &LibraryHandler{lib: lib, store: store, scanner: sc, hub: hub, uploadsDir: uploadsDir}
 }
 
 // ListTracks returns all tracks.
@@ -189,6 +204,146 @@ func (h *LibraryHandler) TriggerScan(c echo.Context) error {
 	return c.JSON(http.StatusAccepted, map[string]string{"status": "scan started"})
 }
 
+// UploadTrack POST /api/library/tracks/upload — accepts a multipart audio file.
+func (h *LibraryHandler) UploadTrack(c echo.Context) error {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "missing token")
+	}
+	ctx := c.Request().Context()
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "file field required")
+	}
+
+	// Validate extension.
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if !isAudioExt(ext) {
+		return echo.NewHTTPError(http.StatusBadRequest, "unsupported audio format: "+ext)
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return internalErr(err)
+	}
+	defer src.Close()
+
+	// Hash the file contents for dedup.
+	hasher := sha256.New()
+	buf, err := io.ReadAll(src)
+	if err != nil {
+		return internalErr(err)
+	}
+	hasher.Write(buf)
+	hash := hex.EncodeToString(hasher.Sum(nil))
+
+	// Check if a track with this fingerprint already exists.
+	existing, err := h.lib.TrackByFingerprint(ctx, hash)
+	if err != nil {
+		return internalErr(err)
+	}
+	if existing != nil && existing.DeletedAt == nil {
+		return c.JSON(http.StatusConflict, map[string]any{
+			"error": "duplicate file",
+			"track": existing,
+		})
+	}
+
+	// Write file to uploads dir.
+	if err := os.MkdirAll(h.uploadsDir, 0o755); err != nil {
+		return internalErr(err)
+	}
+	destPath := filepath.Join(h.uploadsDir, hash+ext)
+	if err := os.WriteFile(destPath, buf, 0o644); err != nil {
+		return internalErr(err)
+	}
+
+	// If previously soft-deleted, restore it.
+	if existing != nil && existing.DeletedAt != nil {
+		if err := h.lib.RestoreTrack(ctx, existing.ID); err != nil {
+			return internalErr(err)
+		}
+		h.hub.Publish(string(models.EventTrackAdded), existing)
+		return c.JSON(http.StatusOK, existing)
+	}
+
+	// Build the track record from the filename metadata for now.
+	// The scanner will pick it up and enrich it later, but we create
+	// a basic record immediately so the upload response is useful.
+	now := time.Now()
+	info, _ := os.Stat(destPath)
+	t := &models.Track{
+		ID:               uuid.NewString(),
+		Path:             destPath,
+		Title:            strings.TrimSuffix(file.Filename, ext),
+		Fingerprint:      hash,
+		FileSizeBytes:    info.Size(),
+		LastModified:     info.ModTime(),
+		UploadedByUserID: claims.UserID,
+		CreatedAt:        now,
+		UpdatedAt:        now,
+	}
+
+	if err := h.lib.UpsertTrack(ctx, t); err != nil {
+		return internalErr(err)
+	}
+
+	// Audit log.
+	_ = h.store.InsertAuditEntry(ctx, &models.AuditEntry{
+		ID:         uuid.NewString(),
+		UserID:     claims.UserID,
+		Action:     "upload",
+		TargetType: "track",
+		TargetID:   t.ID,
+		Detail:     file.Filename,
+		CreatedAt:  now,
+	})
+
+	h.hub.Publish(string(models.EventTrackAdded), t)
+	return c.JSON(http.StatusCreated, t)
+}
+
+// DeleteTrack DELETE /api/library/tracks/:id — soft-deletes a track.
+func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "missing token")
+	}
+	ctx := c.Request().Context()
+
+	track, err := h.lib.TrackByID(ctx, c.Param("id"))
+	if err != nil {
+		return internalErr(err)
+	}
+	if track == nil || track.DeletedAt != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "not found")
+	}
+
+	if err := h.lib.SoftDeleteTrack(ctx, track.ID); err != nil {
+		return internalErr(err)
+	}
+
+	// If it was a user-uploaded file, remove from disk.
+	if track.UploadedByUserID != "" {
+		_ = os.Remove(track.Path)
+	}
+
+	// Audit log.
+	_ = h.store.InsertAuditEntry(ctx, &models.AuditEntry{
+		ID:         uuid.NewString(),
+		UserID:     claims.UserID,
+		Action:     "delete",
+		TargetType: "track",
+		TargetID:   track.ID,
+		Detail:     track.Title,
+		CreatedAt:  time.Now(),
+	})
+
+	h.hub.Publish(string(models.EventTrackRemoved), track)
+	return c.NoContent(http.StatusNoContent)
+}
+
 // ─── shared helpers (also used by handlers/playback.go) ──────────────────────
 
 func internalErr(err error) *echo.HTTPError {
@@ -215,4 +370,14 @@ func mimeFromExt(path string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+var allowedAudioExts = map[string]bool{
+	".mp3": true, ".flac": true, ".ogg": true, ".opus": true,
+	".m4a": true, ".aac": true, ".wav": true, ".aiff": true,
+	".wma": true, ".alac": true, ".ape": true, ".wv": true,
+}
+
+func isAudioExt(ext string) bool {
+	return allowedAudioExts[ext]
 }
