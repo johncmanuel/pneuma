@@ -132,29 +132,36 @@ export function logout() {
 }
 
 /**
- * Attempt auto-auth for dev: tries to register admin/admin (first user becomes
- * admin), falling back to login if the account already exists.
- * Returns null on success, error string on failure.
+ * On startup, validate any stored token against the server by calling the
+ * refresh endpoint. If valid the server returns a new token (extending the
+ * session); if invalid (401) the token is cleared so the login screen shows.
+ * This means users stay logged in across browser sessions and server restarts
+ * (provided the server's JWT secret is stable, which it is after first run).
  */
-export async function tryAutoAuth(): Promise<string | null> {
-  // If a token is present but missing username (old token format), drop it.
+export async function tryAutoAuth(): Promise<void> {
   const existing = get(authToken)
-  if (existing) {
-    const claims = decodeJWT(existing)
-    if (!claims || !claims.username) {
-      authToken.set("") // force re-auth with new token format
-    } else {
-      return null // valid token with correct fields
-    }
+  if (!existing) return // no stored token — show login form
+
+  // Quick local sanity-check: drop obviously wrong tokens.
+  const claims = decodeJWT(existing)
+  if (!claims || !claims.username) {
+    authToken.set("")
+    return
   }
 
-  // Try register first (first user = admin)
-  let err = await register("admin", "admin")
-  if (!err) return null
-
-  // If user already exists, try login
-  err = await login("admin", "admin")
-  return err
+  // Probe the server. apiFetch auto-clears the token on 401, so on failure
+  // the user will see the login form. On success store the refreshed token.
+  try {
+    const res = await apiFetch("/api/auth/refresh", { method: "POST" })
+    if (res.ok) {
+      const data = await res.json()
+      if (data.token) authToken.set(data.token)
+    }
+    // 401 case: apiFetch already called authToken.set("") above.
+  } catch {
+    // Network error — keep the existing token; the app will surface 401s
+    // naturally when it starts making library/WS calls.
+  }
 }
 
 /* ── Stream / artwork URL helpers ───────────────────────────────── */

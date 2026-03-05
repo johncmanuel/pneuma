@@ -316,7 +316,7 @@ func (s *Store) ArtworkByPath(ctx context.Context, path string) (*models.Artwork
 
 const trackColumns = `id,path,title,
 	COALESCE(artist_id,''),COALESCE(album_id,''),
-	(SELECT COALESCE(name,'') FROM artists WHERE id=tracks.artist_id) AS artist_name,
+	COALESCE((SELECT name FROM artists WHERE id=tracks.artist_id),'') AS artist_name,
 	album_artist,album_name,genre,year,
 	track_number,disc_number,duration_ms,bitrate_kbps,sample_rate_hz,
 	codec,file_size_bytes,last_modified,fingerprint,mb_recording_id,

@@ -86,12 +86,16 @@ func (e *Engine) Play(ctx context.Context, deviceID, userID, trackID string, pos
 	return e.persist(ctx, deviceID, s)
 }
 
-// Pause sets paused state.
-func (e *Engine) Pause(ctx context.Context, deviceID, userID string, paused bool) error {
+// Pause sets paused state. If positionMS > 0 the stored position is updated
+// to the caller's current playhead so the echoed state is accurate.
+func (e *Engine) Pause(ctx context.Context, deviceID, userID string, paused bool, positionMS int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	s := e.getOrCreate(deviceID, userID)
 	s.Playing = !paused
+	if positionMS > 0 {
+		s.PositionMS = positionMS
+	}
 	return e.persist(ctx, deviceID, s)
 }
 

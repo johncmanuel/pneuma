@@ -78,7 +78,11 @@
     if (!hasTrack) return
     const newPaused = !$webPlayerState.paused
     webPlayerState.update((s) => ({ ...s, paused: newPaused }))
-    wsSend("playback.pause", { device_id: deviceId, paused: newPaused })
+    wsSend("playback.pause", {
+      device_id: deviceId,
+      paused: newPaused,
+      position_ms: audio ? Math.round(audio.currentTime * 1000) : $webPlayerState.positionMs,
+    })
   }
 
   function onSeekInput(e: Event) {

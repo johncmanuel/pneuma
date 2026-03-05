@@ -49,15 +49,16 @@ func (h *PlaybackHandler) Play(c echo.Context) error {
 	return h.engine.Play(c.Request().Context(), c.Param("device_id"), claimsUserID(c), body.TrackID, body.PositionMS)
 }
 
-// Pause POST /api/playback/:device_id/pause  body: {paused}
+// Pause POST /api/playback/:device_id/pause  body: {paused, position_ms?}
 func (h *PlaybackHandler) Pause(c echo.Context) error {
 	var body struct {
-		Paused bool `json:"paused"`
+		Paused     bool  `json:"paused"`
+		PositionMS int64 `json:"position_ms"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
-	return h.engine.Pause(c.Request().Context(), c.Param("device_id"), claimsUserID(c), body.Paused)
+	return h.engine.Pause(c.Request().Context(), c.Param("device_id"), claimsUserID(c), body.Paused, body.PositionMS)
 }
 
 // Seek POST /api/playback/:device_id/seek  body: {position_ms}

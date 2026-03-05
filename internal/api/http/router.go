@@ -195,11 +195,12 @@ func playbackWSDispatch(engine *playback.Engine) apws.InboundHandler {
 			}
 		case "playback.pause":
 			var p struct {
-				DeviceID string `json:"device_id"`
-				Paused   bool   `json:"paused"`
+				DeviceID   string `json:"device_id"`
+				Paused     bool   `json:"paused"`
+				PositionMS int64  `json:"position_ms"`
 			}
 			if json.Unmarshal(msg.Payload, &p) == nil {
-				engine.Pause(ctx, p.DeviceID, userID, p.Paused)
+				engine.Pause(ctx, p.DeviceID, userID, p.Paused, p.PositionMS)
 			}
 		case "playback.seek":
 			var p struct {

@@ -62,7 +62,13 @@
     if (!hasTrack) return
     const newPaused = !$playerState.paused
     playerState.update(s => ({ ...s, paused: newPaused }))
-    if (!isLocal) wsSend("playback.pause", { device_id: deviceId, paused: newPaused })
+    if (!isLocal) wsSend("playback.pause", {
+      device_id: deviceId,
+      paused: newPaused,
+      // Include current playhead so the server stores the accurate position
+      // and echoes it back in playback.changed (prevents seek-point regression).
+      position_ms: audio ? Math.round(audio.currentTime * 1000) : $playerState.positionMs,
+    })
   }
 
   function skipNext() {

@@ -99,19 +99,24 @@ func DefaultConfig() *Config {
 }
 
 // Load reads the TOML config file at path and overlays it onto DefaultConfig.
-// If the file does not exist, defaults are returned without error.
+// The resulting config is always written back to disk so that any
+// auto-generated values (especially the JWT secret) are persisted on the very
+// first run and on upgrades where new fields are added.
 func Load(path string) (*Config, error) {
 	cfg := DefaultConfig()
 	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		return cfg, nil
-	}
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	if err := toml.Unmarshal(data, cfg); err != nil {
-		return nil, err
+	if err == nil {
+		// File exists — overlay its values onto the defaults.
+		if err := toml.Unmarshal(data, cfg); err != nil {
+			return nil, err
+		}
 	}
+	// Always save back so auto-generated fields (like SecretKey) are persisted
+	// even when the file pre-existed without them.
+	_ = Save(path, cfg)
 	return cfg, nil
 }
 
