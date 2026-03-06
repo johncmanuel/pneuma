@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte"
   import { cachedArtUrl } from "../stores/artCache"
 
   /** Stable cache key (trackId for remote, file path for local). */

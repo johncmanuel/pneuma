@@ -1,6 +1,6 @@
 <script lang="ts">
   import { albums, loading } from "../stores/library"
-  import { apiBase, connected } from "./api"
+  import { apiBase } from "./api"
 
   function artUrl(artworkId: string | null): string {
     if (!artworkId) return ""

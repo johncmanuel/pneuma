@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { playerState, isPlaying, type Track } from "../stores/player"
+  import { playerState, type Track } from "../stores/player"
   import { tracks } from "../stores/library"
-  import { localTracks, type LocalTrack } from "../stores/localLibrary"
+  import { localTracks } from "../stores/localLibrary"
   import { activePanel, togglePanel, toggleQueuePanel, currentView, pushNav } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
-  import { streamUrl, artworkUrl, connected } from "./api"
+  import { streamUrl, artworkUrl } from "./api"
   import { wsSend } from "../stores/ws"
 
   let audio: HTMLAudioElement

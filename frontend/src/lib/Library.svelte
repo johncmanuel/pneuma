@@ -8,7 +8,7 @@
   import { serverFetch, artworkUrl, connected, isReconnecting, localBase } from "./api"
   import { wsSend } from "../stores/ws"
   import { onMount } from "svelte"
-  import { activeTab, localSubTab, selectedAlbum, pushNav, type LibTab, type LocalSubTab } from "../stores/ui"
+  import { activeTab, localSubTab, selectedAlbum, pushNav, type LibTab } from "../stores/ui"
   import { get } from "svelte/store"
   import { recordRecentAlbum } from "../stores/recentAlbums"
   import { cachedArtUrl } from "../stores/artCache"

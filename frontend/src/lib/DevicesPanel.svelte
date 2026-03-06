@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import { playerState, type Track } from "../stores/player"
+  import { type Track } from "../stores/player"
   import { tracks } from "../stores/library"
   import { closePanel } from "../stores/ui"
   import { serverFetch, connected } from "./api"
