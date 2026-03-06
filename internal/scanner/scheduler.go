@@ -88,6 +88,11 @@ func (sc *Scheduler) ScanPath(path string) {
 		track.ID = existing.ID
 		track.CreatedAt = existing.CreatedAt
 		track.UploadedByUserID = existing.UploadedByUserID
+		// ParseFile doesn't compute content hashes — preserve the existing
+		// fingerprint so we don't clobber upload-time SHA-256 values.
+		if track.Fingerprint == "" && existing.Fingerprint != "" {
+			track.Fingerprint = existing.Fingerprint
+		}
 	}
 
 	if err := sc.lib.UpsertTrack(ctx, track); err != nil {

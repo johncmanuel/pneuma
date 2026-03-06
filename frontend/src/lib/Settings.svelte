@@ -2,6 +2,7 @@
   import { ConnectToServer, DisconnectFromServer } from "../../wailsjs/go/main/App"
   import { connected, serverURL, authToken, refreshConnection, saveCredentials, clearCredentials, isReconnecting, stopAutoReconnect } from "../lib/api"
   import { loadTracks } from "../stores/library"
+  import { autoDupeCheck } from "../stores/localLibrary"
 
   // Connect form state
   let connectURL = "http://127.0.0.1:8989"
@@ -122,6 +123,16 @@
     {/if}
   </div>
 
+  <!-- ── Local files ── -->
+  <div class="group">
+    <h3>Local Files</h3>
+    <label class="toggle-row">
+      <input type="checkbox" bind:checked={$autoDupeCheck} />
+      <span>Auto-check for duplicates on startup</span>
+    </label>
+    <p class="text-3 muted">When disabled, use the "Check Now" button in Library → Local Files → Duplicates.</p>
+  </div>
+
   <div class="group">
     <h3>About</h3>
     <p class="text-3">pneuma — open-source, self-hosted music server</p>
@@ -166,6 +177,20 @@
   .msg { font-size: 13px; margin: 0; color: var(--accent); }
   .msg.error { color: #ef4444; }
   .muted { opacity: 0.5; }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .toggle-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--accent);
+  }
 
   code {
     background: var(--surface);

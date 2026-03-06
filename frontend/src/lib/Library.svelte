@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tracks, loading } from "../stores/library"
-  import { localTracks, localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, localDuplicates, scanningDuplicates } from "../stores/localLibrary"
+  import { localTracks, localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, localDuplicates, scanningDuplicates, autoDupeCheck } from "../stores/localLibrary"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import Duplicates from "./Duplicates.svelte"
@@ -119,9 +119,9 @@
     ? albumGroups.find(g => g.key === selectedAlbum) ?? null
     : null
 
-  // On mount, do an initial scan of saved folders
+  // On mount, do an initial scan of saved folders (respects auto-check pref)
   onMount(() => {
-    if ($localFolders.length > 0) {
+    if ($localFolders.length > 0 && $autoDupeCheck) {
       scanLocalFolders()
     }
   })

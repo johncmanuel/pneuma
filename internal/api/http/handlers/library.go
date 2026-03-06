@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -267,24 +268,65 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		return internalErr(err)
 	}
 
-	// If previously soft-deleted, restore it.
+	// If previously soft-deleted, restore and re-enrich it.
 	if existing != nil && existing.DeletedAt != nil {
 		if err := h.lib.RestoreTrack(ctx, existing.ID); err != nil {
 			return internalErr(err)
+		}
+		// Re-read tags in case the file has changed since the original upload.
+		if m, tagErr := tag.ReadFrom(bytes.NewReader(buf)); tagErr == nil {
+			if m.Title() != "" {
+				existing.Title = m.Title()
+			}
+			existing.AlbumArtist = m.AlbumArtist()
+			if existing.AlbumArtist == "" {
+				existing.AlbumArtist = m.Artist()
+			}
+			existing.AlbumName = m.Album()
+			existing.Genre = m.Genre()
+			existing.Year = m.Year()
+			existing.TrackNumber, _ = m.Track()
+			existing.DiscNumber, _ = m.Disc()
+			existing.UpdatedAt = time.Now()
+			_ = h.lib.UpsertTrack(ctx, existing)
 		}
 		h.hub.Publish(string(models.EventTrackAdded), existing)
 		return c.JSON(http.StatusOK, existing)
 	}
 
-	// Build the track record from the filename metadata for now.
-	// The scanner will pick it up and enrich it later, but we create
-	// a basic record immediately so the upload response is useful.
+	// Read embedded metadata (tags) from the uploaded file so the initial
+	// record is fully populated — no need to wait for async enrichment.
 	now := time.Now()
 	info, _ := os.Stat(destPath)
+
+	title := strings.TrimSuffix(file.Filename, ext)
+	var albumArtist, albumName, genre string
+	var year, trackNumber, discNumber int
+	if m, tagErr := tag.ReadFrom(bytes.NewReader(buf)); tagErr == nil {
+		if m.Title() != "" {
+			title = m.Title()
+		}
+		albumArtist = m.AlbumArtist()
+		if albumArtist == "" {
+			albumArtist = m.Artist()
+		}
+		albumName = m.Album()
+		genre = m.Genre()
+		year = m.Year()
+		trackNumber, _ = m.Track()
+		discNumber, _ = m.Disc()
+	}
+
 	t := &models.Track{
 		ID:               uuid.NewString(),
 		Path:             destPath,
-		Title:            strings.TrimSuffix(file.Filename, ext),
+		Title:            title,
+		AlbumArtist:      albumArtist,
+		AlbumName:        albumName,
+		Genre:            genre,
+		Year:             year,
+		TrackNumber:      trackNumber,
+		DiscNumber:       discNumber,
 		Fingerprint:      hash,
 		FileSizeBytes:    info.Size(),
 		LastModified:     info.ModTime(),

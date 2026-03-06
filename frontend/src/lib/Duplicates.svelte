@@ -5,6 +5,8 @@
     restoreDuplicate,
     dismissedDuplicates,
     scanningDuplicates,
+    scanLocalFolders,
+    cancelDuplicateScan,
   } from "../stores/localLibrary"
   import { formatDuration } from "./TrackRow.svelte"
 
@@ -31,6 +33,11 @@
     <div class="scan-banner">
       <span class="spinner" aria-hidden="true"></span>
       <span>Scanning for duplicates — comparing content &amp; acoustic fingerprints…</span>
+      <button class="cancel-btn" on:click={cancelDuplicateScan}>Cancel</button>
+    </div>
+  {:else}
+    <div class="controls">
+      <button class="check-btn" on:click={() => scanLocalFolders()}>↺ Check Now</button>
     </div>
   {/if}
 
@@ -124,6 +131,41 @@
 
   @keyframes spin {
     to { transform: rotate(360deg); }
+  }
+
+  .cancel-btn {
+    margin-left: auto;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: var(--r-sm);
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .cancel-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .check-btn {
+    font-size: 13px;
+    padding: 6px 14px;
+    border-radius: var(--r-sm);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.12s;
+  }
+  .check-btn:hover {
+    background: rgba(var(--accent-rgb, 99, 102, 241), 0.1);
   }
 
   .subtitle {

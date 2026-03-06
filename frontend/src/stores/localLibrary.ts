@@ -106,6 +106,33 @@ export const localDuplicates = writable<DuplicateGroup[]>((() => {
  * Unlike localLoading, this is always set even when cache exists. */
 export const scanningDuplicates = writable(false)
 
+/** User preference: auto-run duplicate checks on startup. */
+const AUTO_DUPE_KEY = "pneuma_auto_dupe_check"
+const loadAutoDupe = (): boolean => {
+  try {
+    const raw = localStorage.getItem(AUTO_DUPE_KEY)
+    return raw === null ? true : raw === "true"
+  } catch { return true }
+}
+export const autoDupeCheck = writable<boolean>(loadAutoDupe())
+autoDupeCheck.subscribe((v) => {
+  try { localStorage.setItem(AUTO_DUPE_KEY, String(v)) } catch { /* ignore */ }
+})
+
+/** Monotonically-increasing scan generation counter.
+ * Each new scan increments this; any in-flight scan that sees a mismatch
+ * on return knows it has been superseded (or cancelled) and discards results. */
+let scanGeneration = 0
+
+/** Cancel an in-progress duplicate/folder scan.
+ * Immediately hides the spinner; any still-running Go work is discarded
+ * when it eventually completes. */
+export function cancelDuplicateScan() {
+  scanGeneration++ // invalidate the current generation
+  scanningDuplicates.set(false)
+  localLoading.set(false)
+}
+
 /* ── Actions ────────────────────────────────────────────────────── */
 
 /** Add a new local folder via native directory picker. */
@@ -140,6 +167,9 @@ export async function scanLocalFolders() {
     return
   }
 
+  // Capture generation at start — if cancelled, the counter will have advanced.
+  const myGen = ++scanGeneration
+
   // Restore cached results immediately so the UI is instant on startup.
   // The background scan below will refresh and overwrite the cache.
   let hasCache = false
@@ -167,13 +197,18 @@ export async function scanLocalFolders() {
 
     const results: LocalTrack[] = []
     for (const dir of effectiveDirs) {
+      if (scanGeneration !== myGen) return // cancelled or superseded
       try {
         const tracks = await ScanLocalFolder(dir)
+        if (scanGeneration !== myGen) return // cancelled while Go was running
         if (tracks) results.push(...tracks)
       } catch (e) {
         console.warn("Failed to scan folder:", dir, e)
       }
     }
+
+    // One final check before committing results.
+    if (scanGeneration !== myGen) return
 
     // Deduplicate by path
     const seen = new Set<string>()
