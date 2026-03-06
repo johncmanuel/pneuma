@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,13 +28,23 @@ import (
 // ffprobePath is resolved once at init; empty means unavailable.
 var ffprobePath string
 
+// fpcalcPath is resolved once at init; empty means unavailable.
+var fpcalcPath string
+
 // durationCache avoids re-running ffprobe for files that haven't changed.
 // Key: "path|size|mtime_unix"  Value: duration in milliseconds.
 var durationCache sync.Map
 
+// fingerprintCache avoids re-hashing unchanged files.
+// Key: "path|size|mtime_unix"  Value: [2]string{sha256Hex, acousticFP}
+var fingerprintCache sync.Map
+
 func init() {
 	if p, err := exec.LookPath("ffprobe"); err == nil {
 		ffprobePath = p
+	}
+	if p, err := exec.LookPath("fpcalc"); err == nil {
+		fpcalcPath = p
 	}
 }
 
@@ -155,17 +167,19 @@ func (a *App) OpenLocalFolder() ([]string, error) {
 
 // LocalTrack holds metadata read from a local audio file via embedded tags.
 type LocalTrack struct {
-	Path        string `json:"path"`
-	Title       string `json:"title"`
-	Artist      string `json:"artist"`
-	Album       string `json:"album"`
-	AlbumArtist string `json:"album_artist"`
-	Genre       string `json:"genre"`
-	Year        int    `json:"year"`
-	TrackNumber int    `json:"track_number"`
-	DiscNumber  int    `json:"disc_number"`
-	DurationMs  int64  `json:"duration_ms"` // 0 if unavailable from tags
-	HasArtwork  bool   `json:"has_artwork"`
+	Path                string `json:"path"`
+	Title               string `json:"title"`
+	Artist              string `json:"artist"`
+	Album               string `json:"album"`
+	AlbumArtist         string `json:"album_artist"`
+	Genre               string `json:"genre"`
+	Year                int    `json:"year"`
+	TrackNumber         int    `json:"track_number"`
+	DiscNumber          int    `json:"disc_number"`
+	DurationMs          int64  `json:"duration_ms"` // 0 if unavailable from tags
+	HasArtwork          bool   `json:"has_artwork"`
+	Fingerprint         string `json:"fingerprint"`          // SHA-256 content hash ("sha256:<hex>")
+	AcousticFingerprint string `json:"acoustic_fingerprint"` // Chromaprint fpcalc output (empty if unavailable)
 }
 
 // ScanLocalFolder recursively scans a directory for audio files and reads
@@ -218,6 +232,9 @@ func (a *App) ScanLocalFolder(dir string) ([]LocalTrack, error) {
 		if lt.DurationMs == 0 {
 			parseDurationFallbackLocal(path, info, &lt)
 		}
+
+		// Compute content hash + acoustic fingerprint for duplicate detection.
+		computeLocalFingerprints(path, info, &lt)
 
 		tracks = append(tracks, lt)
 		return nil
@@ -342,6 +359,43 @@ func (a *App) ChooseLocalFolder() (string, error) {
 		return "", err
 	}
 	return dir, nil
+}
+
+// computeLocalFingerprints computes the SHA-256 content hash and (if available)
+// the Chromaprint acoustic fingerprint for a local track.  Results are cached
+// by path+size+mtime so only new / modified files pay the I/O cost.
+func computeLocalFingerprints(path string, fi os.FileInfo, lt *LocalTrack) {
+	key := durationCacheKey(path, fi)
+
+	// Check cache first.
+	if v, ok := fingerprintCache.Load(key); ok {
+		pair := v.([2]string)
+		lt.Fingerprint = pair[0]
+		lt.AcousticFingerprint = pair[1]
+		return
+	}
+
+	// SHA-256 content hash.
+	if f, err := os.Open(path); err == nil {
+		h := sha256.New()
+		if _, err := io.Copy(h, f); err == nil {
+			lt.Fingerprint = "sha256:" + hex.EncodeToString(h.Sum(nil))
+		}
+		f.Close()
+	}
+
+	// Chromaprint acoustic fingerprint (best-effort).
+	if fpcalcPath != "" {
+		cmd := exec.Command(fpcalcPath, "-plain", path)
+		if out, err := cmd.Output(); err == nil {
+			lines := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)
+			if len(lines) >= 2 && lines[1] != "" {
+				lt.AcousticFingerprint = lines[1]
+			}
+		}
+	}
+
+	fingerprintCache.Store(key, [2]string{lt.Fingerprint, lt.AcousticFingerprint})
 }
 
 // ─── Server Connection ───────────────────────────────────────────────────────

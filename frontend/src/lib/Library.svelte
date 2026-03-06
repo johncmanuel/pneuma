@@ -1,8 +1,9 @@
 <script lang="ts">
   import { tracks, loading } from "../stores/library"
-  import { localTracks, localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders } from "../stores/localLibrary"
+  import { localTracks, localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, localDuplicates, scanningDuplicates } from "../stores/localLibrary"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
+  import Duplicates from "./Duplicates.svelte"
   import type { Track } from "../stores/player"
   import { serverFetch, artworkUrl, connected, isReconnecting, localBase } from "./api"
   import { wsSend } from "../stores/ws"
@@ -10,6 +11,9 @@
 
   type LibTab = "library" | "local"
   let activeTab: LibTab = "library"
+
+  type LocalSubTab = "albums" | "duplicates"
+  let localSubTab: LocalSubTab = "albums"
 
   let selectedAlbum: string | null = null  // album_name to filter by
 
@@ -109,6 +113,7 @@
 
   $: albumGroups = activeTab === "library" ? buildAlbumGroups($tracks) : buildLocalAlbumGroups($localTracks)
   $: isLoading = activeTab === "library" ? $loading : $localLoading
+  $: localDupeCount = $localDuplicates.length
 
   $: currentAlbumGroup = selectedAlbum
     ? albumGroups.find(g => g.key === selectedAlbum) ?? null
@@ -184,6 +189,7 @@
   function switchTab(tab: LibTab) {
     activeTab = tab
     selectedAlbum = null
+    localSubTab = "albums"
   }
 
   function localArtUrl(track: Track): string {
@@ -217,7 +223,7 @@
 </script>
 
 <section>
-  <!-- Tab bar -->
+  <!-- Main tab bar -->
   <div class="tab-bar">
     <button
       class="lib-tab"
@@ -235,23 +241,49 @@
     </button>
   </div>
 
-  {#if currentAlbumGroup}
-    <!-- Album detail view -->
-    <div class="toolbar">
-      <button class="back-btn" on:click={goBack} title="Back to albums">← Back</button>
-      <h2>{currentAlbumGroup.name}</h2>
+  <!-- Sub-tab bar (Local Files only) — always visible, never scrolls away -->
+  {#if activeTab === "local"}
+    <div class="subtab-bar">
+      <button
+        class="subtab"
+        class:active={localSubTab === "albums"}
+        on:click={() => { localSubTab = "albums"; selectedAlbum = null }}
+      >Albums</button>
+      <button
+        class="subtab"
+        class:active={localSubTab === "duplicates"}
+        on:click={() => localSubTab = "duplicates"}
+      >
+        Duplicates
+        {#if localDupeCount > 0}<span class="dupe-badge">{localDupeCount}</span>{/if}
+        {#if $scanningDuplicates}<span class="scan-dot" title="Scanning…"></span>{/if}
+      </button>
     </div>
-    <p class="album-meta text-2">{currentAlbumGroup.artist} · {currentAlbumGroup.tracks.length} tracks</p>
+  {/if}
 
-    <div class="track-list">
-      <div class="track-header">
-        <span>#</span><span>Title</span><span>Artist</span><span>Album</span><span>Duration</span>
+  <!-- Scrollable body -->
+  <div class="scroll-body">
+
+    {#if activeTab === "local" && localSubTab === "duplicates"}
+      <Duplicates />
+
+    {:else if currentAlbumGroup}
+      <!-- Album detail view -->
+      <div class="toolbar">
+        <button class="back-btn" on:click={goBack} title="Back to albums">← Back</button>
+        <h2>{currentAlbumGroup.name}</h2>
       </div>
-      {#each currentAlbumGroup.tracks as track (track.id)}
-        <TrackRow
-          {track}
-          active={$playerState.trackId === track.id}
-          on:play={() => playTrack(track, currentAlbumGroup.tracks)}
+      <p class="album-meta text-2">{currentAlbumGroup.artist} · {currentAlbumGroup.tracks.length} tracks</p>
+
+      <div class="track-list">
+        <div class="track-header">
+          <span>#</span><span>Title</span><span>Artist</span><span>Album</span><span>Duration</span>
+        </div>
+        {#each currentAlbumGroup.tracks as track (track.id)}
+          <TrackRow
+            {track}
+            active={$playerState.trackId === track.id}
+            on:play={() => playTrack(track, currentAlbumGroup.tracks)}
           on:select={() => {}}
           on:addToQueue={() => addToQueue(track)}
         />
@@ -323,17 +355,23 @@
       </div>
     {/if}
   {/if}
+
+  </div> <!-- /.scroll-body -->
 </section>
 
 <style>
-  section { display: flex; flex-direction: column; }
+  section {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+  }
 
-  /* Tab bar */
+  /* Main tab bar */
   .tab-bar {
     display: flex;
     gap: 0;
     border-bottom: 1px solid var(--border);
-    margin-bottom: 16px;
     flex-shrink: 0;
   }
 
@@ -348,6 +386,63 @@
   .lib-tab.active {
     color: var(--accent);
     border-bottom-color: var(--accent);
+  }
+
+  /* Sub-tab bar (Local Files) */
+  .subtab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    padding: 0 4px;
+  }
+
+  .subtab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--text-2);
+    border-bottom: 2px solid transparent;
+    transition: color 0.1s, border-color 0.1s;
+  }
+  .subtab:hover { color: var(--text-1); }
+  .subtab.active { color: var(--text-1); border-bottom-color: var(--accent); }
+
+  .dupe-badge {
+    display: inline-block;
+    min-width: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    border-radius: 8px;
+    background: var(--danger);
+    color: #fff;
+  }
+
+  .scan-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* Scrollable body — owns all vertical scroll */
+  .scroll-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 0 0;
   }
 
   .toolbar {
@@ -476,8 +571,6 @@
   .offline-sub { margin: 0; font-size: 13px; color: var(--text-3); }
 
   /* Track list within album detail */
-  .track-list { }
-
   .track-header {
     display: grid;
     grid-template-columns: 32px 2fr 1fr 1fr 56px;

@@ -6,9 +6,9 @@
   const dispatch = createEventDispatcher()
 
   const navItems = [
-    { id: "library",   label: "Library"  },
-    { id: "downloads", label: "Downloads"},
-    { id: "settings",  label: "Settings" },
+    { id: "library",    label: "Library"    },
+    { id: "downloads",  label: "Downloads"  },
+    { id: "settings",   label: "Settings"   },
   ]
 </script>
 

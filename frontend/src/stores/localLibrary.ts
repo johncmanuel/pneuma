@@ -1,4 +1,4 @@
-import { writable, get } from "svelte/store"
+import { writable, derived, get } from "svelte/store"
 import { ScanLocalFolder, ChooseLocalFolder } from "../../wailsjs/go/main/App"
 
 /* ── Types ──────────────────────────────────────────────────────── */
@@ -15,6 +15,14 @@ export interface LocalTrack {
   disc_number: number
   duration_ms: number
   has_artwork: boolean
+  fingerprint: string          // SHA-256 content hash
+  acoustic_fingerprint: string // Chromaprint acoustic fingerprint
+}
+
+export interface DuplicateGroup {
+  fingerprint: string       // shared fingerprint value
+  kind: "exact" | "acoustic" // which method matched
+  tracks: LocalTrack[]      // 2+ copies
 }
 
 /* ── Stores ─────────────────────────────────────────────────────── */
@@ -46,6 +54,57 @@ export const localLoading = writable(false)
 
 /** localStorage key for caching scan results between sessions. */
 const TRACK_CACHE_KEY = "pneuma_local_tracks_cache"
+
+/** localStorage key for caching computed duplicate groups between sessions. */
+const DUPES_CACHE_KEY = "pneuma_local_dupes_cache"
+
+/** localStorage key for user-dismissed duplicate paths. */
+const DISMISSED_DUPES_KEY = "pneuma_dismissed_duplicates"
+
+/** Paths the user has dismissed from the duplicates view. */
+const loadDismissed = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(DISMISSED_DUPES_KEY)
+    return raw ? new Set(JSON.parse(raw)) : new Set()
+  } catch { return new Set() }
+}
+export const dismissedDuplicates = writable<Set<string>>(loadDismissed())
+dismissedDuplicates.subscribe((v) => {
+  try {
+    localStorage.setItem(DISMISSED_DUPES_KEY, JSON.stringify([...v]))
+  } catch { /* ignore */ }
+})
+
+/** Dismiss a duplicate path — hides it from the track list. */
+export function dismissDuplicate(path: string) {
+  dismissedDuplicates.update((s) => new Set([...s, path]))
+  // Also remove it from the live track list immediately.
+  localTracks.update((tracks) => tracks.filter((t) => t.path !== path))
+}
+
+/** Restore a previously dismissed path (make it visible again). */
+export function restoreDuplicate(path: string) {
+  dismissedDuplicates.update((s) => {
+    const next = new Set(s)
+    next.delete(path)
+    return next
+  })
+  // The track will reappear on next scan.
+}
+
+/** Detected duplicate groups, computed after each scan. */
+export const localDuplicates = writable<DuplicateGroup[]>((() => {
+  // Restore cached groups immediately so the Duplicates view is populated
+  // on startup without waiting for the background scan to finish.
+  try {
+    const raw = localStorage.getItem(DUPES_CACHE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch { return [] }
+})())
+
+/** True while a folder scan (including fingerprinting) is in progress.
+ * Unlike localLoading, this is always set even when cache exists. */
+export const scanningDuplicates = writable(false)
 
 /* ── Actions ────────────────────────────────────────────────────── */
 
@@ -95,6 +154,9 @@ export async function scanLocalFolders() {
   // Only show the loading spinner if we have no cached data to display.
   if (!hasCache) localLoading.set(true)
 
+  // Always signal the duplicates view that a scan is running.
+  scanningDuplicates.set(true)
+
   try {
     // Remove folders that are subdirectories of another listed folder —
     // the parent's recursive walk already covers them.
@@ -121,7 +183,53 @@ export async function scanLocalFolders() {
       return true
     })
 
-    localTracks.set(deduped)
+    // Build duplicate groups from fingerprints.
+    const groups: DuplicateGroup[] = []
+    const exactMap = new Map<string, LocalTrack[]>()
+    const acousticMap = new Map<string, LocalTrack[]>()
+    const inExactGroup = new Set<string>() // paths already in an exact group
+
+    for (const t of deduped) {
+      if (t.fingerprint) {
+        const arr = exactMap.get(t.fingerprint) || []
+        arr.push(t)
+        exactMap.set(t.fingerprint, arr)
+      }
+      if (t.acoustic_fingerprint) {
+        const arr = acousticMap.get(t.acoustic_fingerprint) || []
+        arr.push(t)
+        acousticMap.set(t.acoustic_fingerprint, arr)
+      }
+    }
+
+    for (const [fp, tracks] of exactMap) {
+      if (tracks.length >= 2) {
+        groups.push({ fingerprint: fp, kind: "exact", tracks })
+        tracks.forEach((t) => inExactGroup.add(t.path))
+      }
+    }
+    for (const [fp, tracks] of acousticMap) {
+      // Skip if all members are already covered by an exact-match group.
+      const uncovered = tracks.filter((t) => !inExactGroup.has(t.path))
+      if (tracks.length >= 2 && uncovered.length > 0) {
+        groups.push({ fingerprint: fp, kind: "acoustic", tracks })
+      }
+    }
+
+    localDuplicates.set(groups)
+
+    // Persist duplicate groups for instant restore on next launch.
+    try {
+      localStorage.setItem(DUPES_CACHE_KEY, JSON.stringify(groups))
+    } catch { /* non-fatal */ }
+
+    // Filter out dismissed paths from the visible track list.
+    const dismissed = get(dismissedDuplicates)
+    const visible = dismissed.size > 0
+      ? deduped.filter((t) => !dismissed.has(t.path))
+      : deduped
+
+    localTracks.set(visible)
 
     // Persist for instant restore on next launch.
     try {
@@ -129,5 +237,6 @@ export async function scanLocalFolders() {
     } catch { /* quota exceeded — non-fatal */ }
   } finally {
     localLoading.set(false)
+    scanningDuplicates.set(false)
   }
 }

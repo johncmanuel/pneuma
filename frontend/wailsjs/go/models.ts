@@ -26,6 +26,8 @@ export namespace main {
 	    disc_number: number;
 	    duration_ms: number;
 	    has_artwork: boolean;
+	    fingerprint: string;
+	    acoustic_fingerprint: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new LocalTrack(source);
@@ -44,6 +46,8 @@ export namespace main {
 	        this.disc_number = source["disc_number"];
 	        this.duration_ms = source["duration_ms"];
 	        this.has_artwork = source["has_artwork"];
+	        this.fingerprint = source["fingerprint"];
+	        this.acoustic_fingerprint = source["acoustic_fingerprint"];
 	    }
 	}
 
