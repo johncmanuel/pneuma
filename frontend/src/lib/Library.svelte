@@ -175,10 +175,13 @@
     return getArtUrl(currentAlbumGroup)
   })()
 
-  // On mount, do an initial scan of saved folders (respects auto-check pref)
+  // On mount, always load local tracks if the user has saved folders.
+  // scanLocalFolders() restores from localStorage cache immediately (fast path)
+  // and then kicks off a background rescan.
+  // The duplicate check (fingerprinting) is gated on the autoDupeCheck preference.
   onMount(() => {
-    if ($localFolders.length > 0 && $autoDupeCheck) {
-      scanLocalFolders()
+    if ($localFolders.length > 0) {
+      scanLocalFolders({ checkDuplicates: $autoDupeCheck })
     }
   })
 
@@ -206,6 +209,7 @@
         trackId: track.id,
         track,
         queue: queueIds,
+        baseQueue: queueIds,
         queueIndex: idx >= 0 ? idx : 0,
         positionMs: 0,
         paused: false,
@@ -221,6 +225,7 @@
       trackId: track.id,
       track,
       queue: queueIds,
+      baseQueue: queueIds,
       queueIndex: idx >= 0 ? idx : 0,
       positionMs: 0,
       paused: false,
@@ -232,16 +237,18 @@
   }
 
   function addToQueue(track: Track) {
-    if (get(activeTab) === "local") {
-      // For local tracks, just append to queue
-      const newQueue = [...$playerState.queue, track.id]
-      playerState.update(s => ({ ...s, queue: newQueue }))
-      return
-    }
-    if (!$connected) return
-    const newQueue = [...$playerState.queue, track.id]
-    wsSend("playback.queue", { device_id: "desktop", track_ids: newQueue, start_index: $playerState.queueIndex })
-    playerState.update(s => ({ ...s, queue: newQueue }))
+    // Insert directly after the currently playing track (Spotify-style),
+    // not at the end. Do NOT send playback.queue to the server because
+    // SetQueue resets PositionMS=0, which would interrupt playback.
+    playerState.update(s => {
+      const insertAt = s.queueIndex + 1
+      const newQueue = [
+        ...s.queue.slice(0, insertAt),
+        track.id,
+        ...s.queue.slice(insertAt),
+      ]
+      return { ...s, queue: newQueue }
+    })
   }
 
   async function scanLibrary() {

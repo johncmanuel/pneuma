@@ -25,6 +25,9 @@ export interface PlayerState {
   trackId: string
   track: Track | null
   queue: string[]
+  /** The original album/context order — restored when the queue wraps. Never
+   *  contains tracks inserted via "Add to queue". */
+  baseQueue: string[]
   queueIndex: number
   positionMs: number
   paused: boolean
@@ -33,7 +36,7 @@ export interface PlayerState {
 }
 
 const initial: PlayerState = {
-  trackId: "", track: null, queue: [],
+  trackId: "", track: null, queue: [], baseQueue: [],
   queueIndex: 0, positionMs: 0,
   paused: true, repeat: 0, shuffle: false,
 }

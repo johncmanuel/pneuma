@@ -1,6 +1,7 @@
 <script lang="ts">
   import { playerState, type Track } from "../stores/player"
   import { tracks } from "../stores/library"
+  import { localTracks } from "../stores/localLibrary"
   import { closePanel } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
   import { artworkUrl, connected } from "./api"
@@ -10,8 +11,31 @@
   $: currentIndex = $playerState.queueIndex ?? 0
   $: nowPlayingTrack = $playerState.track
 
-  // Resolve track IDs to full Track objects
-  $: trackMap = new Map(($tracks as Track[]).map(t => [t.id, t]))
+  // Resolve track IDs to full Track objects — includes both server and local tracks
+  $: trackMap = (() => {
+    const map = new Map<string, Track>(($tracks as Track[]).map(t => [t.id, t]))
+    for (const lt of $localTracks) {
+      map.set(lt.path, {
+        id: lt.path,
+        path: lt.path,
+        title: lt.title,
+        artist_id: "",
+        album_id: "",
+        artist_name: lt.artist,
+        album_artist: lt.album_artist,
+        album_name: lt.album,
+        genre: lt.genre,
+        year: lt.year,
+        track_number: lt.track_number,
+        disc_number: lt.disc_number,
+        duration_ms: lt.duration_ms,
+        bitrate_kbps: 0,
+        replay_gain_track: 0,
+        artwork_id: "",
+      } as Track)
+    }
+    return map
+  })()
   $: upNext = queue
     .slice(currentIndex + 1)
     .map(id => trackMap.get(id))

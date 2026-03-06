@@ -90,34 +90,42 @@
     if (!hasTrack) return
     const q = $playerState.queue
     if (q.length === 0) return
-    let nextIdx: number
-    switch ($playerState.repeat) {
-      case 2: // repeat-one — restart same track
-        nextIdx = $playerState.queueIndex
-        break
-      case 1: // repeat-queue — wrap around
-        nextIdx = ($playerState.queueIndex + 1) % q.length
-        break
-      default: // no repeat
-        if ($playerState.queueIndex + 1 >= q.length) {
-          playerState.update(s => ({ ...s, paused: true }))
-          if (!isLocal) wsSend("playback.pause", { device_id: deviceId, paused: true })
-          return
-        }
-        nextIdx = $playerState.queueIndex + 1
+    const isLocalPath = (id: string) => id.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(id)
+
+    if ($playerState.repeat === 2) {
+      // Repeat-one: restart the current track in-place
+      const id = q[$playerState.queueIndex]
+      const nextTrack = findTrackById(id)
+      audioDurationMs = 0
+      playerState.update(s => ({ ...s, track: nextTrack, positionMs: 0, paused: false }))
+      if (!isLocalPath(id)) wsSend("playback.play", { device_id: deviceId, track_id: id, position_ms: 0 })
+      return
     }
-    const nextId = q[nextIdx]
+
+    // For both repeat-off and repeat-queue: advance to next track. When the
+    // queue is exhausted, restore the base queue (original album order) so
+    // manually-inserted tracks don't become part of the permanent loop.
+    let nextIdx = $playerState.queueIndex + 1
+    let nextQueue = q
+    if (nextIdx >= q.length) {
+      // End of queue — restart from the base queue
+      const base = $playerState.baseQueue.length > 0 ? $playerState.baseQueue : q
+      nextQueue = base
+      nextIdx = 0
+    }
+    const nextId = nextQueue[nextIdx]
     const nextTrack = findTrackById(nextId)
     audioDurationMs = 0
     playerState.update(s => ({
       ...s,
       trackId: nextId,
       track: nextTrack,
+      queue: nextQueue,
       queueIndex: nextIdx,
       positionMs: 0,
       paused: false,
     }))
-    if (!isLocal) wsSend("playback.play", { device_id: deviceId, track_id: nextId, position_ms: 0 })
+    if (!isLocalPath(nextId)) wsSend("playback.play", { device_id: deviceId, track_id: nextId, position_ms: 0 })
   }
 
   function skipPrev() {
@@ -128,6 +136,8 @@
     if (prevIdx < 0) prevIdx = q.length - 1
     const prevId = q[prevIdx]
     const prevTrack = findTrackById(prevId)
+    const isLocalPath = (id: string) => id.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(id)
+    const prevIsLocal = isLocalPath(prevId)
     audioDurationMs = 0
     playerState.update(s => ({
       ...s,
@@ -137,13 +147,30 @@
       positionMs: 0,
       paused: false,
     }))
-    if (!isLocal) wsSend("playback.play", { device_id: deviceId, track_id: prevId, position_ms: 0 })
+    if (!prevIsLocal) wsSend("playback.play", { device_id: deviceId, track_id: prevId, position_ms: 0 })
   }
 
   function toggleShuffle() {
     const enabled = !$playerState.shuffle
+    if (isLocal) {
+      // Local tracks: shuffle/unshuffle queue client-side (no server involved)
+      playerState.update(s => {
+        if (enabled && s.queue.length > 1) {
+          // Pin current track at index 0, Fisher-Yates shuffle the rest
+          const current = s.queue[s.queueIndex]
+          const rest = s.queue.filter((_, i) => i !== s.queueIndex)
+          for (let i = rest.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [rest[i], rest[j]] = [rest[j], rest[i]]
+          }
+          return { ...s, shuffle: true, queue: [current, ...rest], queueIndex: 0 }
+        }
+        return { ...s, shuffle: enabled }
+      })
+      return
+    }
     playerState.update(s => ({ ...s, shuffle: enabled }))
-    if (!isLocal) wsSend("playback.shuffle", { device_id: deviceId, enabled })
+    wsSend("playback.shuffle", { device_id: deviceId, enabled })
   }
 
   function toggleRepeat() {

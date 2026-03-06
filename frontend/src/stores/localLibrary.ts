@@ -158,8 +158,14 @@ export function removeLocalFolder(dir: string) {
   scanLocalFolders()
 }
 
-/** Scan all registered local folders and merge results. */
-export async function scanLocalFolders() {
+/** Scan all registered local folders and merge results.
+ *
+ * @param checkDuplicates - When false, track files are scanned and the
+ *   track list is updated, but the expensive duplicate-group computation
+ *   is skipped.  Defaults to true (full scan).  Pass `get(autoDupeCheck)`
+ *   from call-sites that respect the user preference.
+ */
+export async function scanLocalFolders({ checkDuplicates = true }: { checkDuplicates?: boolean } = {}) {
   const dirs = get(localFolders)
   if (dirs.length === 0) {
     localTracks.set([])
@@ -184,8 +190,8 @@ export async function scanLocalFolders() {
   // Only show the loading spinner if we have no cached data to display.
   if (!hasCache) localLoading.set(true)
 
-  // Always signal the duplicates view that a scan is running.
-  scanningDuplicates.set(true)
+  // Only signal the duplicates spinner when we're actually going to check.
+  if (checkDuplicates) scanningDuplicates.set(true)
 
   try {
     // Remove folders that are subdirectories of another listed folder —
@@ -218,45 +224,47 @@ export async function scanLocalFolders() {
       return true
     })
 
-    // Build duplicate groups from fingerprints.
-    const groups: DuplicateGroup[] = []
-    const exactMap = new Map<string, LocalTrack[]>()
-    const acousticMap = new Map<string, LocalTrack[]>()
-    const inExactGroup = new Set<string>() // paths already in an exact group
+    // Build duplicate groups from fingerprints (only when requested).
+    if (checkDuplicates) {
+      const groups: DuplicateGroup[] = []
+      const exactMap = new Map<string, LocalTrack[]>()
+      const acousticMap = new Map<string, LocalTrack[]>()
+      const inExactGroup = new Set<string>() // paths already in an exact group
 
-    for (const t of deduped) {
-      if (t.fingerprint) {
-        const arr = exactMap.get(t.fingerprint) || []
-        arr.push(t)
-        exactMap.set(t.fingerprint, arr)
+      for (const t of deduped) {
+        if (t.fingerprint) {
+          const arr = exactMap.get(t.fingerprint) || []
+          arr.push(t)
+          exactMap.set(t.fingerprint, arr)
+        }
+        if (t.acoustic_fingerprint) {
+          const arr = acousticMap.get(t.acoustic_fingerprint) || []
+          arr.push(t)
+          acousticMap.set(t.acoustic_fingerprint, arr)
+        }
       }
-      if (t.acoustic_fingerprint) {
-        const arr = acousticMap.get(t.acoustic_fingerprint) || []
-        arr.push(t)
-        acousticMap.set(t.acoustic_fingerprint, arr)
+
+      for (const [fp, tracks] of exactMap) {
+        if (tracks.length >= 2) {
+          groups.push({ fingerprint: fp, kind: "exact", tracks })
+          tracks.forEach((t) => inExactGroup.add(t.path))
+        }
       }
+      for (const [fp, tracks] of acousticMap) {
+        // Skip if all members are already covered by an exact-match group.
+        const uncovered = tracks.filter((t) => !inExactGroup.has(t.path))
+        if (tracks.length >= 2 && uncovered.length > 0) {
+          groups.push({ fingerprint: fp, kind: "acoustic", tracks })
+        }
+      }
+
+      localDuplicates.set(groups)
+
+      // Persist duplicate groups for instant restore on next launch.
+      try {
+        localStorage.setItem(DUPES_CACHE_KEY, JSON.stringify(groups))
+      } catch { /* non-fatal */ }
     }
-
-    for (const [fp, tracks] of exactMap) {
-      if (tracks.length >= 2) {
-        groups.push({ fingerprint: fp, kind: "exact", tracks })
-        tracks.forEach((t) => inExactGroup.add(t.path))
-      }
-    }
-    for (const [fp, tracks] of acousticMap) {
-      // Skip if all members are already covered by an exact-match group.
-      const uncovered = tracks.filter((t) => !inExactGroup.has(t.path))
-      if (tracks.length >= 2 && uncovered.length > 0) {
-        groups.push({ fingerprint: fp, kind: "acoustic", tracks })
-      }
-    }
-
-    localDuplicates.set(groups)
-
-    // Persist duplicate groups for instant restore on next launch.
-    try {
-      localStorage.setItem(DUPES_CACHE_KEY, JSON.stringify(groups))
-    } catch { /* non-fatal */ }
 
     // Filter out dismissed paths from the visible track list.
     const dismissed = get(dismissedDuplicates)
@@ -272,6 +280,6 @@ export async function scanLocalFolders() {
     } catch { /* quota exceeded — non-fatal */ }
   } finally {
     localLoading.set(false)
-    scanningDuplicates.set(false)
+    if (checkDuplicates) scanningDuplicates.set(false)
   }
 }

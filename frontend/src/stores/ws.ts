@@ -68,17 +68,25 @@ export function connectWS() {
           })
         }
 
-        playerState.update(s => ({
-          ...s,
-          trackId: msg.payload.track_id ?? s.trackId,
-          track: trackObj ?? s.track,
-          queue: msg.payload.queue ?? s.queue,
-          queueIndex: msg.payload.queue_index ?? s.queueIndex,
-          positionMs: msg.payload.position_ms ?? s.positionMs,
-          paused: msg.payload.playing != null ? !msg.payload.playing : s.paused,
-          shuffle: msg.payload.shuffle ?? s.shuffle,
-          repeat: msg.payload.repeat ?? s.repeat,
-        }))
+        playerState.update(s => {
+          // If the client queue contains local file paths the server can't know
+          // about, don't let the server overwrite it — the desktop is the
+          // authority for mixed local+remote queues.
+          const isLocalId = (id: string) => id.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(id)
+          const queueHasLocalTracks = s.queue.some(isLocalId)
+
+          return {
+            ...s,
+            trackId: msg.payload.track_id ?? s.trackId,
+            track: trackObj ?? s.track,
+            queue: (msg.payload.queue != null && !queueHasLocalTracks) ? msg.payload.queue : s.queue,
+            queueIndex: (msg.payload.queue_index != null && !queueHasLocalTracks) ? msg.payload.queue_index : s.queueIndex,
+            positionMs: msg.payload.position_ms ?? s.positionMs,
+            paused: msg.payload.playing != null ? !msg.payload.playing : s.paused,
+            shuffle: msg.payload.shuffle ?? s.shuffle,
+            repeat: msg.payload.repeat ?? s.repeat,
+          }
+        })
         break
       }
     }

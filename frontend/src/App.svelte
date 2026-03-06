@@ -130,6 +130,9 @@
     padding: 0 24px;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
+    /* Ensure the search-results dropdown renders above the content area */
+    position: relative;
+    z-index: 10;
   }
 
   .nav-history {

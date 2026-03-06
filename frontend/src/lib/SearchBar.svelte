@@ -75,7 +75,7 @@
       const idx = q.indexOf(track.id)
       const queue = [...q.slice(idx), ...q.slice(0, idx)]
       playerState.update(s => ({
-        ...s, trackId: track.id, track, queue, queueIndex: 0, positionMs: 0, paused: false,
+        ...s, trackId: track.id, track, queue, baseQueue: queue, queueIndex: 0, positionMs: 0, paused: false,
       }))
       return
     }
@@ -84,18 +84,24 @@
     const idx = q.indexOf(track.id)
     const queue = [...q.slice(idx), ...q.slice(0, idx)]
     playerState.update(s => ({
-      ...s, trackId: track.id, track, queue, queueIndex: 0, positionMs: 0, paused: false,
+      ...s, trackId: track.id, track, queue, baseQueue: queue, queueIndex: 0, positionMs: 0, paused: false,
     }))
     wsSend("playback.queue", { device_id: "desktop", track_ids: queue, start_index: 0 })
     wsSend("playback.play",  { device_id: "desktop", track_id: track.id, position_ms: 0 })
   }
 
   function addToQueue(track: TaggedTrack) {
-    const newQueue = [...$playerState.queue, track.id]
-    playerState.update(s => ({ ...s, queue: newQueue }))
-    if (track._source === "remote" && $connected) {
-      wsSend("playback.queue", { device_id: "desktop", track_ids: newQueue, start_index: $playerState.queueIndex })
-    }
+    // Insert directly after the currently playing track (Spotify-style).
+    // Do NOT send playback.queue to the server — SetQueue resets PositionMS=0.
+    playerState.update(s => {
+      const insertAt = s.queueIndex + 1
+      const newQueue = [
+        ...s.queue.slice(0, insertAt),
+        track.id,
+        ...s.queue.slice(insertAt),
+      ]
+      return { ...s, queue: newQueue }
+    })
   }
 
   export const hasResults = () => query.trim().length >= 2
