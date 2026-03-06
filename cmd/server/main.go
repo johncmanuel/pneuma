@@ -13,7 +13,7 @@ import (
 
 	api "pneuma/internal/api/http"
 	apws "pneuma/internal/api/ws"
-	"pneuma/internal/artwork"
+
 	"pneuma/internal/config"
 	"pneuma/internal/fingerprint/chromaprint"
 	"pneuma/internal/library"
@@ -47,15 +47,11 @@ func main() {
 	hub := apws.New()
 	libSvc := library.New(store)
 	userSvc := user.New(store)
-	artworkFetcher := artwork.NewFetcher(cfg.Artwork.CacheDir, store)
-	artworkCache := artwork.NewCache(cfg.Artwork.CacheDir, cfg.Artwork.MaxSizeMB)
 	metaParser := parser.New(cfg.Transcoding.FFmpegPath)
 	fpcalcSvc := chromaprint.New(cfg.Transcoding.FpcalcPath)
 	playEngine := playback.New(store, hub, libSvc)
 	handoffSvc := playback.NewHandoff(store, playEngine)
 	offlinePkg := offline.New(offlineDir(cfg), store, hub)
-	_ = artworkFetcher
-	_ = artworkCache
 
 	watcher, err := scanner.NewWatcher(libSvc, metaParser, fpcalcSvc, hub)
 	if err != nil {
