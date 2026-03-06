@@ -32,6 +32,16 @@ type Result struct {
 	Fingerprint string
 }
 
+// FingerprintString runs fpcalc on the given audio file and returns only the
+// raw fingerprint string. It satisfies the handlers.acousticFingerprinter interface.
+func (s *Service) FingerprintString(ctx context.Context, path string) (string, error) {
+	res, err := s.Fingerprint(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	return res.Fingerprint, nil
+}
+
 // Fingerprint runs fpcalc on the given audio file and returns the duration
 // and raw fingerprint string.
 func (s *Service) Fingerprint(ctx context.Context, path string) (*Result, error) {

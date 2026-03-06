@@ -1,8 +1,8 @@
 <script lang="ts">
   import { ConnectToServer, DisconnectFromServer } from "../../wailsjs/go/main/App"
-  import { connected, serverURL, authToken, refreshConnection, saveCredentials, clearCredentials, isReconnecting, stopAutoReconnect } from "../lib/api"
+  import { connected, serverURL, authToken, refreshConnection, saveSession, clearSession, isReconnecting, stopAutoReconnect } from "../lib/api"
   import { loadTracks } from "../stores/library"
-  import { autoDupeCheck } from "../stores/localLibrary"
+  import { autoDupeCheck, scanProgress, localLoading } from "../stores/localLibrary"
 
   // Connect form state
   let connectURL = "http://127.0.0.1:8989"
@@ -22,7 +22,8 @@
       await ConnectToServer(connectURL, connectUser, connectPass)
       await refreshConnection()
       stopAutoReconnect()
-      saveCredentials(connectURL, connectUser, connectPass)
+      // Persist the URL + fresh token — never the password.
+      saveSession(connectURL, $authToken)
       await loadTracks()
       connectUser = ""
       connectPass = ""
@@ -34,7 +35,7 @@
 
   async function disconnect() {
     stopAutoReconnect()
-    clearCredentials()
+    clearSession()
     await DisconnectFromServer()
     await refreshConnection()
   }
@@ -76,7 +77,7 @@
       <p class="text-3 reconnecting-status">
         ↺ Reconnecting to server…
       </p>
-      <button class="btn-danger" on:click={() => { stopAutoReconnect(); clearCredentials() }}>Cancel</button>
+      <button class="btn-danger" on:click={() => { stopAutoReconnect() }}>Cancel</button>
     {:else}
       <div class="connect-form">
         <input
@@ -126,6 +127,16 @@
   <!-- ── Local files ── -->
   <div class="group">
     <h3>Local Files</h3>
+    {#if $scanProgress}
+      <p class="text-3 scan-progress">
+        Scanning <code>{$scanProgress.folder.split('/').pop()}</code> — {$scanProgress.done} / {$scanProgress.total} songs
+      </p>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: {($scanProgress.total > 0 ? ($scanProgress.done / $scanProgress.total) * 100 : 0)}%"></div>
+      </div>
+    {:else if $localLoading}
+      <p class="text-3 muted">Loading local library…</p>
+    {/if}
     <label class="toggle-row">
       <input type="checkbox" bind:checked={$autoDupeCheck} />
       <span>Auto-check for duplicates on startup</span>
@@ -197,5 +208,28 @@
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
+  }
+
+  .scan-progress {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+  }
+
+  .progress-bar {
+    width: 100%;
+    max-width: 320px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.15s ease-out;
   }
 </style>

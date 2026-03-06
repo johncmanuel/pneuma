@@ -1,6 +1,6 @@
 <script lang="ts">
   import { tracks, loading } from "../stores/library"
-  import { localTracks, localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, localDuplicates, scanningDuplicates, autoDupeCheck } from "../stores/localLibrary"
+  import { localTracks, localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, checkLocalDuplicates, localDuplicates, scanningDuplicates, autoDupeCheck } from "../stores/localLibrary"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import Duplicates from "./Duplicates.svelte"
@@ -178,10 +178,11 @@
   // On mount, always load local tracks if the user has saved folders.
   // scanLocalFolders() restores from localStorage cache immediately (fast path)
   // and then kicks off a background rescan.
-  // The duplicate check (fingerprinting) is gated on the autoDupeCheck preference.
+  // The duplicate check is gated on the autoDupeCheck preference.
   onMount(() => {
     if ($localFolders.length > 0) {
-      scanLocalFolders({ checkDuplicates: $autoDupeCheck })
+      scanLocalFolders()
+      if ($autoDupeCheck) checkLocalDuplicates()
     }
   })
 

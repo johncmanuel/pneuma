@@ -44,34 +44,35 @@ type Album struct {
 }
 
 type Track struct {
-	ID               string     `json:"id"`
-	Path             string     `json:"path"`
-	Title            string     `json:"title"`
-	ArtistID         string     `json:"artist_id,omitempty"`
-	AlbumID          string     `json:"album_id,omitempty"`
-	ArtistName       string     `json:"artist_name,omitempty"` // resolved from artists table
-	AlbumArtist      string     `json:"album_artist"`
-	AlbumName        string     `json:"album_name"`
-	Genre            string     `json:"genre"`
-	Year             int        `json:"year"`
-	TrackNumber      int        `json:"track_number"`
-	DiscNumber       int        `json:"disc_number"`
-	DurationMS       int64      `json:"duration_ms"`
-	BitrateKbps      int        `json:"bitrate_kbps,omitempty"`
-	SampleRateHz     int        `json:"sample_rate_hz,omitempty"`
-	Codec            string     `json:"codec,omitempty"`
-	FileSizeBytes    int64      `json:"file_size_bytes"`
-	LastModified     time.Time  `json:"last_modified"`
-	Fingerprint      string     `json:"fingerprint,omitempty"`
-	MBRecordingID    string     `json:"mb_recording_id,omitempty"`
-	ReplayGainTrack  float64    `json:"replay_gain_track,omitempty"`
-	ReplayGainAlbum  float64    `json:"replay_gain_album,omitempty"`
-	ArtworkID        string     `json:"artwork_id,omitempty"`
-	UploadedByUserID string     `json:"uploaded_by_user_id,omitempty"`
-	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
-	EnrichedAt       *time.Time `json:"enriched_at,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID                  string     `json:"id"`
+	Path                string     `json:"path"`
+	Title               string     `json:"title"`
+	ArtistID            string     `json:"artist_id,omitempty"`
+	AlbumID             string     `json:"album_id,omitempty"`
+	ArtistName          string     `json:"artist_name,omitempty"` // resolved from artists table
+	AlbumArtist         string     `json:"album_artist"`
+	AlbumName           string     `json:"album_name"`
+	Genre               string     `json:"genre"`
+	Year                int        `json:"year"`
+	TrackNumber         int        `json:"track_number"`
+	DiscNumber          int        `json:"disc_number"`
+	DurationMS          int64      `json:"duration_ms"`
+	BitrateKbps         int        `json:"bitrate_kbps,omitempty"`
+	SampleRateHz        int        `json:"sample_rate_hz,omitempty"`
+	Codec               string     `json:"codec,omitempty"`
+	FileSizeBytes       int64      `json:"file_size_bytes"`
+	LastModified        time.Time  `json:"last_modified"`
+	Fingerprint         string     `json:"fingerprint,omitempty"`
+	AcousticFingerprint string     `json:"acoustic_fingerprint,omitempty"`
+	MBRecordingID       string     `json:"mb_recording_id,omitempty"`
+	ReplayGainTrack     float64    `json:"replay_gain_track,omitempty"`
+	ReplayGainAlbum     float64    `json:"replay_gain_album,omitempty"`
+	ArtworkID           string     `json:"artwork_id,omitempty"`
+	UploadedByUserID    string     `json:"uploaded_by_user_id,omitempty"`
+	DeletedAt           *time.Time `json:"deleted_at,omitempty"`
+	EnrichedAt          *time.Time `json:"enriched_at,omitempty"`
+	CreatedAt           time.Time  `json:"created_at"`
+	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
 type Artwork struct {

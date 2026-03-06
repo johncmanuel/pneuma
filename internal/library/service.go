@@ -84,6 +84,19 @@ func (s *Service) DeduplicateFingerprints(ctx context.Context) (int, error) {
 	return s.store.DeleteDuplicateFingerprints(ctx)
 }
 
+// TrackByAcousticFingerprint returns a non-deleted track matching the given
+// Chromaprint acoustic fingerprint, or nil if none exists.
+func (s *Service) TrackByAcousticFingerprint(ctx context.Context, fp string) (*models.Track, error) {
+	return s.store.TrackByAcousticFingerprint(ctx, fp)
+}
+
+// DuplicateByMeta returns a track that is a metadata-based duplicate of the
+// given fields (same title, albumArtist, albumName, and duration ±2 s) at a
+// different path, or nil if no duplicate exists.
+func (s *Service) DuplicateByMeta(ctx context.Context, title, albumArtist, albumName string, durationMS int64, excludePath string) (*models.Track, error) {
+	return s.store.TrackDuplicateByMeta(ctx, title, albumArtist, albumName, durationMS, excludePath)
+}
+
 // EnsureArtist looks up an artist by name, creating if necessary.
 func (s *Service) EnsureArtist(ctx context.Context, name string) (*models.Artist, error) {
 	a, err := s.store.ArtistByName(ctx, name)

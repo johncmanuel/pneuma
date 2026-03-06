@@ -6,11 +6,9 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
-	"pneuma/internal/fingerprint/chromaprint"
 	"pneuma/internal/library"
 	"pneuma/internal/metadata/parser"
 )
@@ -21,7 +19,6 @@ import (
 type Scheduler struct {
 	lib      *library.Service
 	parser   *parser.Parser
-	fpcalc   *chromaprint.Service
 	bus      EventBus
 	dirs     []string
 	interval time.Duration
@@ -29,11 +26,10 @@ type Scheduler struct {
 }
 
 // NewScheduler creates a Scheduler that will scan dirs every interval.
-func NewScheduler(lib *library.Service, p *parser.Parser, fp *chromaprint.Service, bus EventBus, dirs []string, interval time.Duration) *Scheduler {
+func NewScheduler(lib *library.Service, p *parser.Parser, bus EventBus, dirs []string, interval time.Duration) *Scheduler {
 	return &Scheduler{
 		lib:      lib,
 		parser:   p,
-		fpcalc:   fp,
 		bus:      bus,
 		dirs:     dirs,
 		interval: interval,
@@ -144,17 +140,7 @@ func (sc *Scheduler) scan(ctx context.Context) {
 				return nil
 			}
 
-			// Open the file once: stream through a SHA-256 hasher (full read),
-			// seek back to zero, then parse tags — one open, one full pass.
-			cacheKey := path + "|" + strconv.FormatInt(info.Size(), 10) + "|" + strconv.FormatInt(info.ModTime().Unix(), 10)
-			f, err := os.Open(path)
-			if err != nil {
-				sc.log.Error("open error in scan", "path", path, "err", err)
-				return nil
-			}
-			hash, hashErr := contentHashFile(f, cacheKey)
-			track, err := sc.parser.ParseFrom(ctx, path, f)
-			f.Close()
+			track, err := sc.parser.ParseFile(ctx, path)
 			if err != nil {
 				sc.log.Error("parse error in scan", "path", path, "err", err)
 				return nil
@@ -167,23 +153,10 @@ func (sc *Scheduler) scan(ctx context.Context) {
 				track.CreatedAt = existing.CreatedAt
 			}
 
-			// ── Dedup: SHA-256 content hash (exact copies across folders) ────────
-			if hashErr == nil {
-				track.Fingerprint = hash
-				if dup, _ := sc.lib.TrackByFingerprint(ctx, hash); dup != nil && dup.Path != path {
-					sc.log.Info("skipping duplicate (content hash match)", "path", path, "existing", dup.Path)
-					return nil
-				}
-			}
-
-			// ── Dedup: acoustic fingerprint (perceptually-same songs) ────────────
-			if sc.fpcalc != nil && sc.fpcalc.Available() {
-				if res, fpErr := sc.fpcalc.Fingerprint(ctx, path); fpErr == nil && res.Fingerprint != "" {
-					if dup, _ := sc.lib.TrackByFingerprint(ctx, res.Fingerprint); dup != nil && dup.Path != path {
-						sc.log.Info("skipping duplicate (acoustic match)", "path", path, "existing", dup.Path)
-						return nil
-					}
-				}
+			// ── Dedup: metadata match (title + artist + album + duration ±2 s) ────
+			if dup, _ := sc.lib.DuplicateByMeta(ctx, track.Title, track.AlbumArtist, track.AlbumName, track.DurationMS, path); dup != nil {
+				sc.log.Info("skipping duplicate (metadata match)", "path", path, "existing", dup.Path)
+				return nil
 			}
 
 			if err := sc.lib.UpsertTrack(ctx, track); err != nil {
@@ -203,15 +176,6 @@ func (sc *Scheduler) scan(ctx context.Context) {
 		if err != nil {
 			sc.log.Error("walk error", "dir", dir, "err", err)
 		}
-	}
-
-	// Deduplicate tracks sharing a content hash or acoustic fingerprint.
-	if n, err := sc.lib.DeduplicateFingerprints(ctx); err != nil {
-		sc.log.Error("fingerprint dedup failed", "err", err)
-	} else if n > 0 {
-		removed += n
-		sc.log.Info("removed fingerprint duplicates", "count", n)
-		sc.bus.Publish("library.deduped", map[string]int{"removed": n})
 	}
 
 	sc.log.Info("scan complete",

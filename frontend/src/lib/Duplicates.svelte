@@ -5,15 +5,10 @@
     restoreDuplicate,
     dismissedDuplicates,
     scanningDuplicates,
-    scanLocalFolders,
+    checkLocalDuplicates,
     cancelDuplicateScan,
   } from "../stores/localLibrary"
   import { formatDuration } from "./TrackRow.svelte"
-
-  function fmtPath(p: string): string {
-    const parts = p.split("/")
-    return parts.length > 2 ? "…/" + parts.slice(-2).join("/") : p
-  }
 
   $: groups = $localDuplicates
   $: dismissed = $dismissedDuplicates
@@ -32,12 +27,12 @@
   {#if scanning}
     <div class="scan-banner">
       <span class="spinner" aria-hidden="true"></span>
-      <span>Scanning for duplicates — comparing content &amp; acoustic fingerprints…</span>
+      <span>Scanning for duplicates — checking metadata…</span>
       <button class="cancel-btn" on:click={cancelDuplicateScan}>Cancel</button>
     </div>
   {:else}
     <div class="controls">
-      <button class="check-btn" on:click={() => scanLocalFolders()}>↺ Check Now</button>
+      <button class="check-btn" on:click={() => checkLocalDuplicates()}>↺ Check Now</button>
     </div>
   {/if}
 
@@ -52,7 +47,7 @@
     </p>
 
     <div class="groups">
-      {#each groups as group, idx (group.fingerprint)}
+      {#each groups as group, idx (group.key)}
         {@const primary = group.tracks[0]}
         <div class="group">
           <button class="group-header" on:click={() => toggle(idx)}>
@@ -60,9 +55,6 @@
             <span class="group-title truncate">
               {primary.title}
               <span class="text-2">— {primary.artist || primary.album_artist || "Unknown"}</span>
-            </span>
-            <span class="badge" class:exact={group.kind === "exact"} class:acoustic={group.kind === "acoustic"}>
-              {group.kind === "exact" ? "Exact copy" : "Acoustic match"}
             </span>
             <span class="count text-3">{group.tracks.length} copies</span>
           </button>
@@ -217,21 +209,6 @@
   .group-title {
     flex: 1;
     min-width: 0;
-  }
-
-  .badge {
-    font-size: 11px;
-    padding: 2px 6px;
-    border-radius: var(--r-sm);
-    white-space: nowrap;
-  }
-  .badge.exact {
-    background: rgba(248, 113, 113, 0.15);
-    color: var(--danger);
-  }
-  .badge.acoustic {
-    background: rgba(250, 204, 21, 0.15);
-    color: #facc15;
   }
 
   .count {

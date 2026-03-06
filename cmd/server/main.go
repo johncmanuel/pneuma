@@ -53,7 +53,7 @@ func main() {
 	handoffSvc := playback.NewHandoff(store, playEngine)
 	offlinePkg := offline.New(offlineDir(cfg), store, hub)
 
-	watcher, err := scanner.NewWatcher(libSvc, metaParser, fpcalcSvc, hub)
+	watcher, err := scanner.NewWatcher(libSvc, metaParser, hub)
 	if err != nil {
 		slog.Error("watcher init failed", "err", err)
 		os.Exit(1)
@@ -63,20 +63,21 @@ func main() {
 			slog.Warn("watch folder unavailable", "dir", dir, "err", err)
 		}
 	}
-	sched := scanner.NewScheduler(libSvc, metaParser, fpcalcSvc, hub, cfg.Library.WatchFolders, 15*time.Minute)
+	sched := scanner.NewScheduler(libSvc, metaParser, hub, cfg.Library.WatchFolders, 15*time.Minute)
 
 	router := api.NewRouter(api.Services{
-		Library:    libSvc,
-		User:       userSvc,
-		Playback:   playEngine,
-		Handoff:    handoffSvc,
-		Offline:    offlinePkg,
-		Hub:        hub,
-		Store:      store,
-		Scanner:    sched,
-		JWTSecret:  cfg.Auth.SecretKey,
-		UploadsDir: cfg.Upload.Dir,
-		WebUI:      web.FS(),
+		Library:       libSvc,
+		User:          userSvc,
+		Playback:      playEngine,
+		Handoff:       handoffSvc,
+		Offline:       offlinePkg,
+		Hub:           hub,
+		Store:         store,
+		Scanner:       sched,
+		Fingerprinter: fpcalcSvc,
+		JWTSecret:     cfg.Auth.SecretKey,
+		UploadsDir:    cfg.Upload.Dir,
+		WebUI:         web.FS(),
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

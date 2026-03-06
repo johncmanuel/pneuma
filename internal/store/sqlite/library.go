@@ -17,10 +17,10 @@ func (s *Store) UpsertTrack(ctx context.Context, t *models.Track) error {
 	INSERT INTO tracks (
 		id, path, title, artist_id, album_id, album_artist, album_name, genre, year,
 		track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-		codec, file_size_bytes, last_modified, fingerprint, mb_recording_id,
+		codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
 		replay_gain_track, replay_gain_album, artwork_id, uploaded_by_user_id,
 		enriched_at, created_at, updated_at
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 	ON CONFLICT(path) DO UPDATE SET
 		title=excluded.title,
 		artist_id=excluded.artist_id, album_id=excluded.album_id,
@@ -31,6 +31,7 @@ func (s *Store) UpsertTrack(ctx context.Context, t *models.Track) error {
 		bitrate_kbps=excluded.bitrate_kbps, sample_rate_hz=excluded.sample_rate_hz,
 		codec=excluded.codec, file_size_bytes=excluded.file_size_bytes,
 		last_modified=excluded.last_modified, fingerprint=excluded.fingerprint,
+		acoustic_fingerprint=excluded.acoustic_fingerprint,
 		mb_recording_id=excluded.mb_recording_id,
 		replay_gain_track=excluded.replay_gain_track,
 		replay_gain_album=excluded.replay_gain_album,
@@ -51,7 +52,7 @@ func (s *Store) UpsertTrack(ctx context.Context, t *models.Track) error {
 		t.AlbumArtist, t.AlbumName, t.Genre, t.Year, t.TrackNumber, t.DiscNumber,
 		t.DurationMS, t.BitrateKbps, t.SampleRateHz, t.Codec,
 		t.FileSizeBytes, t.LastModified.UTC().Format(time.RFC3339),
-		t.Fingerprint, t.MBRecordingID,
+		t.Fingerprint, t.AcousticFingerprint, t.MBRecordingID,
 		t.ReplayGainTrack, t.ReplayGainAlbum,
 		nullStr(t.ArtworkID), nullStr(t.UploadedByUserID),
 		enrichedAt,
@@ -111,6 +112,39 @@ func (s *Store) TrackByFingerprint(ctx context.Context, fp string) (*models.Trac
 	}
 	const q = `SELECT ` + trackColumns + ` FROM tracks WHERE fingerprint=? AND fingerprint!='' LIMIT 1`
 	row := s.db.QueryRowContext(ctx, q, fp)
+	return scanTrack(row)
+}
+
+// TrackByAcousticFingerprint returns the first non-deleted track matching the
+// given Chromaprint acoustic fingerprint, or nil if none exists.
+func (s *Store) TrackByAcousticFingerprint(ctx context.Context, fp string) (*models.Track, error) {
+	if fp == "" {
+		return nil, nil
+	}
+	const q = `SELECT ` + trackColumns + ` FROM tracks
+			WHERE acoustic_fingerprint=? AND acoustic_fingerprint!='' AND deleted_at IS NULL
+			LIMIT 1`
+	row := s.db.QueryRowContext(ctx, q, fp)
+	return scanTrack(row)
+}
+
+// TrackDuplicateByMeta returns the first non-deleted track (at a different path)
+// whose title, album_artist, and album_name all match case-insensitively and
+// whose duration is within 2 seconds of durationMS. Returns nil when no
+// duplicate exists or when title is empty (to avoid spurious matches).
+func (s *Store) TrackDuplicateByMeta(ctx context.Context, title, albumArtist, albumName string, durationMS int64, excludePath string) (*models.Track, error) {
+	if title == "" {
+		return nil, nil
+	}
+	const q = `SELECT ` + trackColumns + ` FROM tracks
+			WHERE deleted_at IS NULL
+			  AND LOWER(title)        = LOWER(?)
+			  AND LOWER(album_artist) = LOWER(?)
+			  AND LOWER(album_name)   = LOWER(?)
+			  AND ABS(duration_ms - ?) <= 2000
+			  AND path != ?
+			LIMIT 1`
+	row := s.db.QueryRowContext(ctx, q, title, albumArtist, albumName, durationMS, excludePath)
 	return scanTrack(row)
 }
 
@@ -319,7 +353,7 @@ const trackColumns = `id,path,title,
 	COALESCE((SELECT name FROM artists WHERE id=tracks.artist_id),'') AS artist_name,
 	album_artist,album_name,genre,year,
 	track_number,disc_number,duration_ms,bitrate_kbps,sample_rate_hz,
-	codec,file_size_bytes,last_modified,fingerprint,mb_recording_id,
+	codec,file_size_bytes,last_modified,fingerprint,acoustic_fingerprint,mb_recording_id,
 	replay_gain_track,replay_gain_album,COALESCE(artwork_id,''),
 	COALESCE(uploaded_by_user_id,''),deleted_at,
 	enriched_at,created_at,updated_at`
@@ -336,7 +370,7 @@ func scanTrack(row scanner) (*models.Track, error) {
 		&t.ArtistID, &t.AlbumID, &t.ArtistName, &t.AlbumArtist, &t.AlbumName, &t.Genre, &t.Year,
 		&t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.BitrateKbps,
 		&t.SampleRateHz, &t.Codec, &t.FileSizeBytes,
-		(*timeStr)(&t.LastModified), &t.Fingerprint, &t.MBRecordingID,
+		(*timeStr)(&t.LastModified), &t.Fingerprint, &t.AcousticFingerprint, &t.MBRecordingID,
 		&t.ReplayGainTrack, &t.ReplayGainAlbum, &t.ArtworkID,
 		&t.UploadedByUserID, &deletedAt,
 		&enrichedAt,

@@ -33,6 +33,10 @@ type Services struct {
 		ScanAll()
 		ScanPath(path string)
 	} // *scanner.Scheduler
+	Fingerprinter interface {
+		Available() bool
+		FingerprintString(ctx context.Context, path string) (string, error)
+	} // *chromaprint.Service; nil disables acoustic dedup on upload
 	JWTSecret  string
 	UploadsDir string
 	WebUI      fs.FS // embedded web UI assets (nil = disabled)
@@ -55,7 +59,7 @@ func NewRouter(svc Services) *echo.Echo {
 	authMW := middleware.RequireAuth(secret)
 	adminMW := middleware.RequireAdmin(secret)
 
-	lh := handlers.NewLibraryHandler(svc.Library, svc.Store, svc.Scanner, svc.Hub, svc.UploadsDir)
+	lh := handlers.NewLibraryHandler(svc.Library, svc.Store, svc.Scanner, svc.Hub, svc.UploadsDir, svc.Fingerprinter)
 	ph := handlers.NewPlaybackHandler(svc.Playback, svc.Handoff)
 	uh := handlers.NewUserHandler(svc.User, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Store)

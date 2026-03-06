@@ -10,7 +10,6 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"pneuma/internal/fingerprint/chromaprint"
 	"pneuma/internal/library"
 	"pneuma/internal/metadata/parser"
 )
@@ -31,7 +30,6 @@ type EventBus interface {
 type Watcher struct {
 	lib     *library.Service
 	parser  *parser.Parser
-	fpcalc  *chromaprint.Service
 	bus     EventBus
 	watcher *fsnotify.Watcher
 	mu      sync.Mutex
@@ -40,7 +38,7 @@ type Watcher struct {
 }
 
 // NewWatcher creates a Watcher.
-func NewWatcher(lib *library.Service, p *parser.Parser, fp *chromaprint.Service, bus EventBus) (*Watcher, error) {
+func NewWatcher(lib *library.Service, p *parser.Parser, bus EventBus) (*Watcher, error) {
 	fw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -48,7 +46,6 @@ func NewWatcher(lib *library.Service, p *parser.Parser, fp *chromaprint.Service,
 	return &Watcher{
 		lib:     lib,
 		parser:  p,
-		fpcalc:  fp,
 		bus:     bus,
 		watcher: fw,
 		pending: make(map[string]time.Time),
@@ -145,23 +142,10 @@ func (w *Watcher) ingestFile(ctx context.Context, path string) {
 		track.CreatedAt = existing.CreatedAt
 	}
 
-	// ── Dedup: SHA-256 content hash (exact copies across folders) ────────────
-	if hash, hashErr := contentHash(path); hashErr == nil {
-		track.Fingerprint = hash
-		if dup, _ := w.lib.TrackByFingerprint(ctx, hash); dup != nil && dup.Path != path {
-			w.log.Info("skipping duplicate (content hash match)", "path", path, "existing", dup.Path)
-			return
-		}
-	}
-
-	// ── Dedup: acoustic fingerprint (perceptually-same songs) ─────────────────
-	if w.fpcalc != nil && w.fpcalc.Available() {
-		if res, fpErr := w.fpcalc.Fingerprint(ctx, path); fpErr == nil && res.Fingerprint != "" {
-			if dup, _ := w.lib.TrackByFingerprint(ctx, res.Fingerprint); dup != nil && dup.Path != path {
-				w.log.Info("skipping duplicate (acoustic match)", "path", path, "existing", dup.Path)
-				return
-			}
-		}
+	// ── Dedup: metadata match (title + artist + album + duration ±2 s) ─────────
+	if dup, _ := w.lib.DuplicateByMeta(ctx, track.Title, track.AlbumArtist, track.AlbumName, track.DurationMS, path); dup != nil {
+		w.log.Info("skipping duplicate (metadata match)", "path", path, "existing", dup.Path)
+		return
 	}
 
 	if err := w.lib.UpsertTrack(ctx, track); err != nil {

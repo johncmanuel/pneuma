@@ -3,9 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
+	"database/sql"
 	"encoding/binary"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,23 +27,13 @@ import (
 // ffprobePath is resolved once at init; empty means unavailable.
 var ffprobePath string
 
-// fpcalcPath is resolved once at init; empty means unavailable.
-var fpcalcPath string
-
 // durationCache avoids re-running ffprobe for files that haven't changed.
 // Key: "path|size|mtime_unix"  Value: duration in milliseconds.
 var durationCache sync.Map
 
-// fingerprintCache avoids re-hashing unchanged files.
-// Key: "path|size|mtime_unix"  Value: [2]string{sha256Hex, acousticFP}
-var fingerprintCache sync.Map
-
 func init() {
 	if p, err := exec.LookPath("ffprobe"); err == nil {
 		ffprobePath = p
-	}
-	if p, err := exec.LookPath("fpcalc"); err == nil {
-		fpcalcPath = p
 	}
 }
 
@@ -59,6 +48,9 @@ var audioExts = map[string]bool{
 // local file playback is always available; server connectivity is optional.
 type App struct {
 	ctx context.Context
+
+	// App-local SQLite database for persisting desktop client state.
+	appDB *sql.DB
 
 	// Local stream server (serves local audio files to the <audio> element).
 	localPort int
@@ -80,6 +72,12 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
+	// Open the app-local SQLite KV store for persisting desktop client state.
+	if db, err := openAppDB(); err != nil {
+		slog.Warn("app db open failed — local state will not be persisted", "err", err)
+	} else {
+		a.appDB = db
+	}
 	// Start a local-only HTTP server on a random port for streaming local files.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -111,6 +109,7 @@ func (a *App) shutdown(ctx context.Context) {
 	if a.localSrv != nil {
 		a.localSrv.Close() //nolint:errcheck
 	}
+	a.closeAppDB()
 }
 
 // ─── Wails-bound methods (callable from Svelte) ──────────────────────────────
@@ -167,30 +166,51 @@ func (a *App) OpenLocalFolder() ([]string, error) {
 
 // LocalTrack holds metadata read from a local audio file via embedded tags.
 type LocalTrack struct {
-	Path                string `json:"path"`
-	Title               string `json:"title"`
-	Artist              string `json:"artist"`
-	Album               string `json:"album"`
-	AlbumArtist         string `json:"album_artist"`
-	Genre               string `json:"genre"`
-	Year                int    `json:"year"`
-	TrackNumber         int    `json:"track_number"`
-	DiscNumber          int    `json:"disc_number"`
-	DurationMs          int64  `json:"duration_ms"` // 0 if unavailable from tags
-	HasArtwork          bool   `json:"has_artwork"`
-	Fingerprint         string `json:"fingerprint"`          // SHA-256 content hash ("sha256:<hex>")
-	AcousticFingerprint string `json:"acoustic_fingerprint"` // Chromaprint fpcalc output (empty if unavailable)
+	Path        string `json:"path"`
+	Title       string `json:"title"`
+	Artist      string `json:"artist"`
+	Album       string `json:"album"`
+	AlbumArtist string `json:"album_artist"`
+	Genre       string `json:"genre"`
+	Year        int    `json:"year"`
+	TrackNumber int    `json:"track_number"`
+	DiscNumber  int    `json:"disc_number"`
+	DurationMs  int64  `json:"duration_ms"` // 0 if unavailable from tags
+	HasArtwork  bool   `json:"has_artwork"`
 }
 
-// ScanLocalFolder recursively scans a directory for audio files and reads
-// their embedded tags. Returns a list of LocalTrack entries.
-func (a *App) ScanLocalFolder(dir string) ([]LocalTrack, error) {
-	var tracks []LocalTrack
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
+// ScanLocalFolderStream recursively scans a directory for audio files,
+// reading embedded tags and persisting each track to the local SQLite DB.
+// Instead of returning the full list, progress is streamed to the frontend
+// via Wails events so the UI can show "42 / 200 songs scanned":
+//
+//	"local:scan:start"   → { folder string, total int }
+//	"local:track:scanned" → { folder string, done int, total int, track LocalTrack }
+//	"local:scan:done"    → { folder string, count int }
+//
+// The method itself returns nil on success or an error.
+func (a *App) ScanLocalFolderStream(dir string) error {
+	// ── Pass 1: count audio files so we know the total ──
+	var total int
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
 			return nil
 		}
-		if info.IsDir() {
+		if audioExts[strings.ToLower(filepath.Ext(path))] {
+			total++
+		}
+		return nil
+	})
+
+	wailsruntime.EventsEmit(a.ctx, "local:scan:start", map[string]any{
+		"folder": dir,
+		"total":  total,
+	})
+
+	// ── Pass 2: read metadata, upsert to DB, emit per-file progress ──
+	done := 0
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
 			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(path))
@@ -202,44 +222,70 @@ func (a *App) ScanLocalFolder(dir string) ([]LocalTrack, error) {
 
 		f, err := os.Open(path)
 		if err != nil {
-			tracks = append(tracks, lt)
-			return nil
-		}
-		defer f.Close()
-
-		m, err := tag.ReadFrom(f)
-		if err != nil {
-			tracks = append(tracks, lt)
+			done++
+			_ = a.upsertLocalTrack(lt, dir)
+			wailsruntime.EventsEmit(a.ctx, "local:track:scanned", map[string]any{
+				"folder": dir, "done": done, "total": total, "track": lt,
+			})
 			return nil
 		}
 
-		if m.Title() != "" {
-			lt.Title = m.Title()
-		}
-		lt.Artist = m.Artist()
-		lt.Album = m.Album()
-		lt.AlbumArtist = m.AlbumArtist()
-		lt.Genre = m.Genre()
-		lt.Year = m.Year()
-		tn, _ := m.Track()
-		lt.TrackNumber = tn
-		dn, _ := m.Disc()
-		lt.DiscNumber = dn
-		lt.HasArtwork = m.Picture() != nil
+		m, tagErr := tag.ReadFrom(f)
+		f.Close()
 
-		// Read duration via ffprobe (best-effort), then pure-Go fallback.
+		if tagErr == nil {
+			if m.Title() != "" {
+				lt.Title = m.Title()
+			}
+			lt.Artist = m.Artist()
+			lt.Album = m.Album()
+			lt.AlbumArtist = m.AlbumArtist()
+			lt.Genre = m.Genre()
+			lt.Year = m.Year()
+			tn, _ := m.Track()
+			lt.TrackNumber = tn
+			dn, _ := m.Disc()
+			lt.DiscNumber = dn
+			lt.HasArtwork = m.Picture() != nil
+		}
+
 		probeLocalDuration(path, info, &lt)
 		if lt.DurationMs == 0 {
 			parseDurationFallbackLocal(path, info, &lt)
 		}
 
-		// Compute content hash + acoustic fingerprint for duplicate detection.
-		computeLocalFingerprints(path, info, &lt)
+		_ = a.upsertLocalTrack(lt, dir)
 
-		tracks = append(tracks, lt)
+		done++
+		wailsruntime.EventsEmit(a.ctx, "local:track:scanned", map[string]any{
+			"folder": dir, "done": done, "total": total, "track": lt,
+		})
 		return nil
 	})
-	return tracks, err
+
+	wailsruntime.EventsEmit(a.ctx, "local:scan:done", map[string]any{
+		"folder": dir,
+		"count":  done,
+	})
+	return err
+}
+
+// GetLocalTracks returns all cached tracks for the given folders from the
+// local SQLite DB.  This is an indexed query — much faster than re-scanning
+// the file system or deserialising a JSON blob.
+func (a *App) GetLocalTracks(folders []string) ([]LocalTrack, error) {
+	return a.getLocalTracks(folders)
+}
+
+// ClearLocalFolder removes all cached tracks for a folder from the local DB.
+func (a *App) ClearLocalFolder(folder string) error {
+	return a.deleteLocalTracksByFolder(folder)
+}
+
+// FindLocalDuplicates returns groups of local tracks that share the same
+// title, album, and album_artist (metadata-only duplicate detection via SQL).
+func (a *App) FindLocalDuplicates(folders []string) ([]LocalDuplicateGroup, error) {
+	return a.findLocalDuplicates(folders)
 }
 
 // durationCacheKey builds a cache key from the file's path, size, and mtime.
@@ -361,49 +407,55 @@ func (a *App) ChooseLocalFolder() (string, error) {
 	return dir, nil
 }
 
-// computeLocalFingerprints computes the SHA-256 content hash and (if available)
-// the Chromaprint acoustic fingerprint for a local track.  Results are cached
-// by path+size+mtime so only new / modified files pay the I/O cost.
-func computeLocalFingerprints(path string, fi os.FileInfo, lt *LocalTrack) {
-	key := durationCacheKey(path, fi)
-
-	// Check cache first.
-	if v, ok := fingerprintCache.Load(key); ok {
-		pair := v.([2]string)
-		lt.Fingerprint = pair[0]
-		lt.AcousticFingerprint = pair[1]
-		return
-	}
-
-	// SHA-256 content hash.
-	if f, err := os.Open(path); err == nil {
-		h := sha256.New()
-		if _, err := io.Copy(h, f); err == nil {
-			lt.Fingerprint = "sha256:" + hex.EncodeToString(h.Sum(nil))
-		}
-		f.Close()
-	}
-
-	// Chromaprint acoustic fingerprint (best-effort).
-	if fpcalcPath != "" {
-		cmd := exec.Command(fpcalcPath, "-plain", path)
-		if out, err := cmd.Output(); err == nil {
-			lines := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)
-			if len(lines) >= 2 && lines[1] != "" {
-				lt.AcousticFingerprint = lines[1]
-			}
-		}
-	}
-
-	fingerprintCache.Store(key, [2]string{lt.Fingerprint, lt.AcousticFingerprint})
-}
-
 // ─── Server Connection ───────────────────────────────────────────────────────
 
 // ConnectResult is returned on a successful server login.
 type ConnectResult struct {
 	User  json.RawMessage `json:"user"`
 	Token string          `json:"token"`
+}
+
+// RestoreSession attempts to restore a previous server session by validating
+// the stored JWT via the server's refresh endpoint. On success a fresh token
+// is stored and the background refresh loop is started. Returns an error if
+// the token has expired or the server is unreachable — the caller should then
+// clear the stored session and prompt the user to log in again.
+func (a *App) RestoreSession(serverURL, token string) error {
+	serverURL = strings.TrimRight(serverURL, "/")
+
+	req, err := http.NewRequest("POST", serverURL+"/api/auth/refresh", nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("server unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("session expired (%d): %s", resp.StatusCode, string(msg))
+	}
+
+	var result struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("invalid server response: %w", err)
+	}
+
+	a.mu.Lock()
+	a.serverURL = serverURL
+	a.token = result.Token
+	refreshCtx, cancel := context.WithCancel(a.ctx)
+	a.stopRefresh = cancel
+	a.mu.Unlock()
+
+	go a.refreshLoop(refreshCtx)
+	return nil
 }
 
 // ConnectToServer authenticates against a remote Pneuma server.

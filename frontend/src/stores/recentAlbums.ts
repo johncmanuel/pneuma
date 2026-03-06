@@ -1,5 +1,6 @@
 import { writable } from "svelte/store"
 import { artworkUrl, localBase } from "../lib/api"
+import { db } from "../lib/db"
 
 export interface RecentAlbum {
   key: string
@@ -11,20 +12,36 @@ export interface RecentAlbum {
 }
 
 const MAX_RECENT = 10
-const RECENT_ALBUMS_KEY = "pneuma_recent_albums"
+const DB_KEY = "recent_albums"
+const LS_KEY  = "pneuma_recent_albums"
 
-const stored: RecentAlbum[] = (() => {
-  try {
-    const raw = localStorage.getItem(RECENT_ALBUMS_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch { return [] }
-})()
+let _initialized = false
 
-export const recentAlbums = writable<RecentAlbum[]>(stored)
+export const recentAlbums = writable<RecentAlbum[]>([])
 
 recentAlbums.subscribe(v => {
-  try { localStorage.setItem(RECENT_ALBUMS_KEY, JSON.stringify(v)) } catch {}
+  if (!_initialized) return
+  void db.set(DB_KEY, JSON.stringify(v))
 })
+
+/** Migrate a single key from localStorage into the SQLite KV store (one-time). */
+async function migrateFromLS(lsKey: string, dbKey: string): Promise<void> {
+  const existing = await db.get(dbKey)
+  if (existing !== null) return // already migrated
+  try {
+    const raw = localStorage.getItem(lsKey)
+    if (raw) await db.set(dbKey, raw)
+    localStorage.removeItem(lsKey)
+  } catch {}
+}
+
+/** Call once at app startup (inside initApi) before any subscribers write. */
+export async function initRecentAlbums(): Promise<void> {
+  await migrateFromLS(LS_KEY, DB_KEY)
+  _initialized = true
+  const raw = await db.get(DB_KEY)
+  recentAlbums.set(raw ? (JSON.parse(raw) as RecentAlbum[]) : [])
+}
 
 export function recordRecentAlbum(album: RecentAlbum) {
   recentAlbums.update(list => {

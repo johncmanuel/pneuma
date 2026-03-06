@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -27,6 +28,13 @@ type scanTrigger interface {
 	ScanPath(path string)
 }
 
+// acousticFingerprinter is satisfied by *chromaprint.Service.
+// It is used exclusively for server-side duplicate detection on uploaded tracks.
+type acousticFingerprinter interface {
+	Available() bool
+	FingerprintString(ctx context.Context, path string) (string, error)
+}
+
 // eventPublisher is satisfied by *ws.Hub.
 type eventPublisher interface {
 	Publish(eventType string, payload any)
@@ -34,16 +42,19 @@ type eventPublisher interface {
 
 // LibraryHandler serves library-related API routes.
 type LibraryHandler struct {
-	lib        *library.Service
-	store      *sqlite.Store
-	scanner    scanTrigger
-	hub        eventPublisher
-	uploadsDir string
+	lib           *library.Service
+	store         *sqlite.Store
+	scanner       scanTrigger
+	hub           eventPublisher
+	uploadsDir    string
+	fingerprinter acousticFingerprinter
 }
 
 // NewLibraryHandler creates a LibraryHandler.
-func NewLibraryHandler(lib *library.Service, store *sqlite.Store, sc scanTrigger, hub eventPublisher, uploadsDir string) *LibraryHandler {
-	return &LibraryHandler{lib: lib, store: store, scanner: sc, hub: hub, uploadsDir: uploadsDir}
+// fp may be nil — acoustic dedup is silently skipped when the service is
+// unavailable or not configured.
+func NewLibraryHandler(lib *library.Service, store *sqlite.Store, sc scanTrigger, hub eventPublisher, uploadsDir string, fp acousticFingerprinter) *LibraryHandler {
+	return &LibraryHandler{lib: lib, store: store, scanner: sc, hub: hub, uploadsDir: uploadsDir, fingerprinter: fp}
 }
 
 // ListTracks returns all tracks.
@@ -303,6 +314,23 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		return c.JSON(http.StatusOK, existing)
 	}
 
+	// ── Dedup: acoustic fingerprint (catches re-encoded / transcoded copies) ──
+	// fpcalc reads the file we just wrote; the SHA-256 check above already
+	// handled byte-identical duplicates, so this catches perceptually-same songs.
+	var acousticFP string
+	if h.fingerprinter != nil && h.fingerprinter.Available() {
+		if fp, fpErr := h.fingerprinter.FingerprintString(ctx, destPath); fpErr == nil && fp != "" {
+			acousticFP = fp
+			if dup, _ := h.lib.TrackByAcousticFingerprint(ctx, fp); dup != nil {
+				_ = os.Remove(destPath)
+				return c.JSON(http.StatusConflict, map[string]any{
+					"error": "duplicate track (acoustic fingerprint match)",
+					"track": dup,
+				})
+			}
+		}
+	}
+
 	// Read embedded metadata (tags) from the uploaded file so the initial
 	// record is fully populated — no need to wait for async enrichment.
 	now := time.Now()
@@ -327,21 +355,22 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	}
 
 	t := &models.Track{
-		ID:               uuid.NewString(),
-		Path:             destPath,
-		Title:            title,
-		AlbumArtist:      albumArtist,
-		AlbumName:        albumName,
-		Genre:            genre,
-		Year:             year,
-		TrackNumber:      trackNumber,
-		DiscNumber:       discNumber,
-		Fingerprint:      hash,
-		FileSizeBytes:    info.Size(),
-		LastModified:     info.ModTime(),
-		UploadedByUserID: claims.UserID,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		ID:                  uuid.NewString(),
+		Path:                destPath,
+		Title:               title,
+		AlbumArtist:         albumArtist,
+		AlbumName:           albumName,
+		Genre:               genre,
+		Year:                year,
+		TrackNumber:         trackNumber,
+		DiscNumber:          discNumber,
+		Fingerprint:         hash,
+		AcousticFingerprint: acousticFP,
+		FileSizeBytes:       info.Size(),
+		LastModified:        info.ModTime(),
+		UploadedByUserID:    claims.UserID,
+		CreatedAt:           now,
+		UpdatedAt:           now,
 	}
 
 	if err := h.lib.UpsertTrack(ctx, t); err != nil {

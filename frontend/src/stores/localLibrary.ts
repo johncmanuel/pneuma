@@ -1,5 +1,7 @@
 import { writable, derived, get } from "svelte/store"
-import { ScanLocalFolder, ChooseLocalFolder } from "../../wailsjs/go/main/App"
+import { ScanLocalFolderStream, ChooseLocalFolder, GetLocalTracks, ClearLocalFolder, FindLocalDuplicates } from "../../wailsjs/go/main/App"
+import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime"
+import { db } from "../lib/db"
 
 /* ── Types ──────────────────────────────────────────────────────── */
 
@@ -15,135 +17,149 @@ export interface LocalTrack {
   disc_number: number
   duration_ms: number
   has_artwork: boolean
-  fingerprint: string          // SHA-256 content hash
-  acoustic_fingerprint: string // Chromaprint acoustic fingerprint
 }
 
 export interface DuplicateGroup {
-  fingerprint: string       // shared fingerprint value
-  kind: "exact" | "acoustic" // which method matched
-  tracks: LocalTrack[]      // 2+ copies
+  key: string             // "title|album|album_artist" (lower-cased)
+  tracks: LocalTrack[]    // 2+ copies
 }
+
+/* ── DB keys (KV table — settings only, tracks are relational now) ── */
+
+const KEY_FOLDERS    = "local_folders"
+const KEY_DISMISSED  = "dismissed_duplicates"
+const KEY_AUTO_DUPE  = "auto_dupe_check"
 
 /* ── Stores ─────────────────────────────────────────────────────── */
 
-/** List of local folder paths the user has added. Persisted in localStorage. */
-const storedFolders: string[] = (() => {
-  try {
-    const raw = localStorage.getItem("pneuma_local_folders")
-    return raw ? JSON.parse(raw) : []
-  } catch {
-    return []
-  }
-})()
+let _initialized = false
 
-export const localFolders = writable<string[]>(storedFolders)
-
-// Persist on change
+/** List of local folder paths the user has added. */
+export const localFolders = writable<string[]>([])
 localFolders.subscribe((v) => {
-  try {
-    localStorage.setItem("pneuma_local_folders", JSON.stringify(v))
-  } catch { /* ignore */ }
+  if (_initialized) void db.set(KEY_FOLDERS, JSON.stringify(v))
 })
 
 /** All local tracks combined from all scanned folders. */
 export const localTracks = writable<LocalTrack[]>([])
 
-/** Loading flag. */
+/** Loading flag — true while an initial load or full rescan is in progress. */
 export const localLoading = writable(false)
 
-/** localStorage key for caching scan results between sessions. */
-const TRACK_CACHE_KEY = "pneuma_local_tracks_cache"
-
-/** localStorage key for caching computed duplicate groups between sessions. */
-const DUPES_CACHE_KEY = "pneuma_local_dupes_cache"
-
-/** localStorage key for user-dismissed duplicate paths. */
-const DISMISSED_DUPES_KEY = "pneuma_dismissed_duplicates"
+/** Per-file scan progress: null when idle. */
+export const scanProgress = writable<{ folder: string; done: number; total: number } | null>(null)
 
 /** Paths the user has dismissed from the duplicates view. */
-const loadDismissed = (): Set<string> => {
-  try {
-    const raw = localStorage.getItem(DISMISSED_DUPES_KEY)
-    return raw ? new Set(JSON.parse(raw)) : new Set()
-  } catch { return new Set() }
-}
-export const dismissedDuplicates = writable<Set<string>>(loadDismissed())
+export const dismissedDuplicates = writable<Set<string>>(new Set())
 dismissedDuplicates.subscribe((v) => {
-  try {
-    localStorage.setItem(DISMISSED_DUPES_KEY, JSON.stringify([...v]))
-  } catch { /* ignore */ }
+  if (_initialized) void db.set(KEY_DISMISSED, JSON.stringify([...v]))
 })
 
-/** Dismiss a duplicate path — hides it from the track list. */
+/** Detected duplicate groups, computed after each scan. */
+export const localDuplicates = writable<DuplicateGroup[]>([])
+
+/** True while a duplicate check is in progress. */
+export const scanningDuplicates = writable(false)
+
+/** User preference: auto-run duplicate checks on startup. */
+export const autoDupeCheck = writable<boolean>(true)
+autoDupeCheck.subscribe((v) => {
+  if (_initialized) void db.set(KEY_AUTO_DUPE, String(v))
+})
+
+/** Monotonically-increasing scan generation counter. */
+let scanGeneration = 0
+
+/* ── Initialisation ─────────────────────────────────────────────── */
+
+async function migrateFromLS(lsKey: string, dbKey: string): Promise<string | null> {
+  const existing = await db.get(dbKey)
+  if (existing !== null) return existing
+  try {
+    const lsVal = localStorage.getItem(lsKey)
+    if (lsVal) {
+      await db.set(dbKey, lsVal)
+      localStorage.removeItem(lsKey)
+      return lsVal
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
+/**
+ * Load all persisted local-library state from SQLite into the Svelte stores.
+ * Tracks are loaded from the relational `local_tracks` table (indexed, fast).
+ */
+export async function initLocalLibrary(): Promise<void> {
+  const [foldersRaw, dismissedRaw, autoDupeRaw] = await Promise.all([
+    migrateFromLS("pneuma_local_folders",       KEY_FOLDERS),
+    migrateFromLS("pneuma_dismissed_duplicates", KEY_DISMISSED),
+    migrateFromLS("pneuma_auto_dupe_check",      KEY_AUTO_DUPE),
+  ])
+  // Clear legacy LS caches.
+  try { localStorage.removeItem("pneuma_local_tracks_cache") } catch { /* ignore */ }
+  try { localStorage.removeItem("pneuma_local_dupes_cache") } catch { /* ignore */ }
+
+  _initialized = true
+
+  let folders: string[] = []
+  try {
+    if (foldersRaw) folders = JSON.parse(foldersRaw)
+  } catch { /* corrupt — keep default */ }
+  localFolders.set(folders)
+
+  try {
+    if (dismissedRaw) dismissedDuplicates.set(new Set(JSON.parse(dismissedRaw)))
+  } catch { /* corrupt */ }
+
+  if (autoDupeRaw !== null) autoDupeCheck.set(autoDupeRaw !== "false")
+
+  // Hydrate the track list from the indexed relational table — instant.
+  if (folders.length > 0) {
+    try {
+      const tracks = await GetLocalTracks(folders)
+      if (tracks) {
+        const dismissed = get(dismissedDuplicates)
+        const visible = dismissed.size > 0
+          ? tracks.filter((t) => !dismissed.has(t.path))
+          : tracks
+        localTracks.set(visible)
+      }
+    } catch (e) {
+      console.warn("Failed to load cached tracks from DB:", e)
+    }
+  }
+}
+
+/* ── Actions ────────────────────────────────────────────────────── */
+
 export function dismissDuplicate(path: string) {
   dismissedDuplicates.update((s) => new Set([...s, path]))
-  // Also remove it from the live track list immediately.
   localTracks.update((tracks) => tracks.filter((t) => t.path !== path))
 }
 
-/** Restore a previously dismissed path (make it visible again). */
 export function restoreDuplicate(path: string) {
   dismissedDuplicates.update((s) => {
     const next = new Set(s)
     next.delete(path)
     return next
   })
-  // The track will reappear on next scan.
 }
 
-/** Detected duplicate groups, computed after each scan. */
-export const localDuplicates = writable<DuplicateGroup[]>((() => {
-  // Restore cached groups immediately so the Duplicates view is populated
-  // on startup without waiting for the background scan to finish.
-  try {
-    const raw = localStorage.getItem(DUPES_CACHE_KEY)
-    return raw ? JSON.parse(raw) : []
-  } catch { return [] }
-})())
-
-/** True while a folder scan (including fingerprinting) is in progress.
- * Unlike localLoading, this is always set even when cache exists. */
-export const scanningDuplicates = writable(false)
-
-/** User preference: auto-run duplicate checks on startup. */
-const AUTO_DUPE_KEY = "pneuma_auto_dupe_check"
-const loadAutoDupe = (): boolean => {
-  try {
-    const raw = localStorage.getItem(AUTO_DUPE_KEY)
-    return raw === null ? true : raw === "true"
-  } catch { return true }
-}
-export const autoDupeCheck = writable<boolean>(loadAutoDupe())
-autoDupeCheck.subscribe((v) => {
-  try { localStorage.setItem(AUTO_DUPE_KEY, String(v)) } catch { /* ignore */ }
-})
-
-/** Monotonically-increasing scan generation counter.
- * Each new scan increments this; any in-flight scan that sees a mismatch
- * on return knows it has been superseded (or cancelled) and discards results. */
-let scanGeneration = 0
-
-/** Cancel an in-progress duplicate/folder scan.
- * Immediately hides the spinner; any still-running Go work is discarded
- * when it eventually completes. */
 export function cancelDuplicateScan() {
-  scanGeneration++ // invalidate the current generation
+  scanGeneration++
   scanningDuplicates.set(false)
   localLoading.set(false)
+  scanProgress.set(null)
 }
 
-/* ── Actions ────────────────────────────────────────────────────── */
-
-/** Add a new local folder via native directory picker. */
 export async function addLocalFolder(): Promise<string | null> {
   try {
     const dir = await ChooseLocalFolder()
     if (!dir) return null
     const current = get(localFolders)
-    if (current.includes(dir)) return dir // already added
+    if (current.includes(dir)) return dir
     localFolders.set([...current, dir])
-    // Scan immediately
     await scanLocalFolders()
     return dir
   } catch {
@@ -151,120 +167,80 @@ export async function addLocalFolder(): Promise<string | null> {
   }
 }
 
-/** Remove a folder from the list and rescan. */
-export function removeLocalFolder(dir: string) {
+export async function removeLocalFolder(dir: string) {
   localFolders.update((dirs) => dirs.filter((d) => d !== dir))
-  localStorage.removeItem(TRACK_CACHE_KEY)
-  scanLocalFolders()
+  try { await ClearLocalFolder(dir) } catch { /* best-effort */ }
+  await scanLocalFolders()
 }
 
-/** Scan all registered local folders and merge results.
+/**
+ * Scan all registered local folders, streaming per-file progress.
  *
- * @param checkDuplicates - When false, track files are scanned and the
- *   track list is updated, but the expensive duplicate-group computation
- *   is skipped.  Defaults to true (full scan).  Pass `get(autoDupeCheck)`
- *   from call-sites that respect the user preference.
+ * Each folder is scanned via ScanLocalFolderStream which emits Wails events:
+ *   "local:scan:start"    → { folder, total }
+ *   "local:track:scanned" → { folder, done, total, track }
+ *   "local:scan:done"     → { folder, count }
+ *
+ * Tracks are persisted to the relational local_tracks table by Go as they
+ * are scanned — no JSON blob serialisation needed.
  */
-export async function scanLocalFolders({ checkDuplicates = true }: { checkDuplicates?: boolean } = {}) {
+export async function scanLocalFolders() {
   const dirs = get(localFolders)
   if (dirs.length === 0) {
     localTracks.set([])
-    localStorage.removeItem(TRACK_CACHE_KEY)
     return
   }
 
-  // Capture generation at start — if cancelled, the counter will have advanced.
   const myGen = ++scanGeneration
 
-  // Restore cached results immediately so the UI is instant on startup.
-  // The background scan below will refresh and overwrite the cache.
-  let hasCache = false
-  try {
-    const cached = localStorage.getItem(TRACK_CACHE_KEY)
-    if (cached) {
-      localTracks.set(JSON.parse(cached))
-      hasCache = true
-    }
-  } catch { /* ignore corrupt cache */ }
+  // Show existing data immediately while the scan runs in the background.
+  const existingTracks = get(localTracks)
+  const hasCache = existingTracks.length > 0
 
-  // Only show the loading spinner if we have no cached data to display.
-  if (!hasCache) localLoading.set(true)
-
-  // Only signal the duplicates spinner when we're actually going to check.
-  if (checkDuplicates) scanningDuplicates.set(true)
+  if (!hasCache)        localLoading.set(true)
 
   try {
-    // Remove folders that are subdirectories of another listed folder —
-    // the parent's recursive walk already covers them.
+    // Remove folders that are subdirectories of another listed folder.
     const sorted = [...dirs].sort()
     const effectiveDirs = sorted.filter(
       (d) => !sorted.some((other) => other !== d && (d + "/").startsWith(other + "/"))
     )
 
-    const results: LocalTrack[] = []
+    // Accumulate tracks across all folders as events arrive.
+    const allTracks: LocalTrack[] = []
+
+    // Set up a per-file progress listener.
+    const cancelTrackListener = EventsOn("local:track:scanned", (data: any) => {
+      if (scanGeneration !== myGen) return
+      scanProgress.set({ folder: data.folder, done: data.done, total: data.total })
+      if (data.track) {
+        allTracks.push(data.track as LocalTrack)
+      }
+    })
+
+    // Scan each folder sequentially (Go does the heavy lifting).
     for (const dir of effectiveDirs) {
-      if (scanGeneration !== myGen) return // cancelled or superseded
+      if (scanGeneration !== myGen) break
       try {
-        const tracks = await ScanLocalFolder(dir)
-        if (scanGeneration !== myGen) return // cancelled while Go was running
-        if (tracks) results.push(...tracks)
+        await ScanLocalFolderStream(dir)
       } catch (e) {
         console.warn("Failed to scan folder:", dir, e)
       }
     }
 
-    // One final check before committing results.
+    // Clean up event listener.
+    cancelTrackListener()
+    scanProgress.set(null)
+
     if (scanGeneration !== myGen) return
 
-    // Deduplicate by path
+    // Deduplicate by path.
     const seen = new Set<string>()
-    const deduped = results.filter((t) => {
+    const deduped = allTracks.filter((t) => {
       if (seen.has(t.path)) return false
       seen.add(t.path)
       return true
     })
-
-    // Build duplicate groups from fingerprints (only when requested).
-    if (checkDuplicates) {
-      const groups: DuplicateGroup[] = []
-      const exactMap = new Map<string, LocalTrack[]>()
-      const acousticMap = new Map<string, LocalTrack[]>()
-      const inExactGroup = new Set<string>() // paths already in an exact group
-
-      for (const t of deduped) {
-        if (t.fingerprint) {
-          const arr = exactMap.get(t.fingerprint) || []
-          arr.push(t)
-          exactMap.set(t.fingerprint, arr)
-        }
-        if (t.acoustic_fingerprint) {
-          const arr = acousticMap.get(t.acoustic_fingerprint) || []
-          arr.push(t)
-          acousticMap.set(t.acoustic_fingerprint, arr)
-        }
-      }
-
-      for (const [fp, tracks] of exactMap) {
-        if (tracks.length >= 2) {
-          groups.push({ fingerprint: fp, kind: "exact", tracks })
-          tracks.forEach((t) => inExactGroup.add(t.path))
-        }
-      }
-      for (const [fp, tracks] of acousticMap) {
-        // Skip if all members are already covered by an exact-match group.
-        const uncovered = tracks.filter((t) => !inExactGroup.has(t.path))
-        if (tracks.length >= 2 && uncovered.length > 0) {
-          groups.push({ fingerprint: fp, kind: "acoustic", tracks })
-        }
-      }
-
-      localDuplicates.set(groups)
-
-      // Persist duplicate groups for instant restore on next launch.
-      try {
-        localStorage.setItem(DUPES_CACHE_KEY, JSON.stringify(groups))
-      } catch { /* non-fatal */ }
-    }
 
     // Filter out dismissed paths from the visible track list.
     const dismissed = get(dismissedDuplicates)
@@ -273,13 +249,37 @@ export async function scanLocalFolders({ checkDuplicates = true }: { checkDuplic
       : deduped
 
     localTracks.set(visible)
-
-    // Persist for instant restore on next launch.
-    try {
-      localStorage.setItem(TRACK_CACHE_KEY, JSON.stringify(deduped))
-    } catch { /* quota exceeded — non-fatal */ }
   } finally {
     localLoading.set(false)
-    if (checkDuplicates) scanningDuplicates.set(false)
+    scanProgress.set(null)
   }
 }
+
+/**
+ * Check for duplicate local tracks using metadata-only SQL query.
+ * Fast — all grouping done in SQLite via CTE.
+ */
+export async function checkLocalDuplicates() {
+  const dirs = get(localFolders)
+  if (dirs.length === 0) {
+    localDuplicates.set([])
+    return
+  }
+
+  scanningDuplicates.set(true)
+  try {
+    const groups = await FindLocalDuplicates(dirs)
+    localDuplicates.set(
+      (groups || []).map((g: any) => ({
+        key: g.key,
+        tracks: g.tracks as LocalTrack[],
+      }))
+    )
+  } catch (e) {
+    console.warn("Failed to check local duplicates:", e)
+    localDuplicates.set([])
+  } finally {
+    scanningDuplicates.set(false)
+  }
+}
+

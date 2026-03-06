@@ -1,10 +1,12 @@
 import { writable, get } from "svelte/store"
+import { initLocalLibrary } from "../stores/localLibrary"
+import { initRecentAlbums } from "../stores/recentAlbums"
 import {
   IsConnected,
   GetServerURL,
   GetToken,
   GetLocalPort,
-  ConnectToServer,
+  RestoreSession,
 } from "../../wailsjs/go/main/App"
 
 /* ── Reactive state ─────────────────────────────────────────────── */
@@ -24,26 +26,35 @@ export const localPort = writable(0)
 /** Whether the app is currently trying to auto-reconnect. */
 export const isReconnecting = writable(false)
 
-/* ── Credential persistence ─────────────────────────────────────── */
+/* ── Session persistence ─────────────────────────────────────────── */
 
-const CRED_KEY = "pneuma_server_creds"
+// Only the server URL and JWT token are persisted — never the password.
+// The token is short-lived (24 h), rotated automatically, and can be
+// revoked server-side, making leakage far less damaging than a password.
+const SESSION_KEY = "pneuma_session"
 
-interface SavedCreds {
+interface SavedSession {
   url: string
-  username: string
-  password: string
+  token: string
 }
 
-export function saveCredentials(url: string, username: string, password: string) {
-  localStorage.setItem(CRED_KEY, JSON.stringify({ url, username, password }))
+export function saveSession(url: string, token: string) {
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ url, token }))
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ url, token }))
 }
 
-export function clearCredentials() {
-  localStorage.removeItem(CRED_KEY)
+export function clearSession() {
+  sessionStorage.removeItem(SESSION_KEY)
+  localStorage.removeItem(SESSION_KEY)
 }
 
-export function loadCredentials(): SavedCreds | null {
-  const raw = localStorage.getItem(CRED_KEY)
+export function loadSession(): SavedSession | null {
+  // One-time migration: remove any plaintext credentials left by the old storage scheme.
+  localStorage.removeItem("pneuma_server_creds")
+
+  // sessionStorage takes priority (same window); fall back to localStorage
+  // so it survives an app restart.
+  const raw = sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY)
   if (!raw) return null
   try {
     return JSON.parse(raw)
@@ -61,6 +72,8 @@ export async function initApi() {
   } catch {
     // Running outside Wails (e.g. browser dev) — keep 0
   }
+  // Load persisted local state from SQLite before any reactive subscribers write.
+  await Promise.all([initLocalLibrary(), initRecentAlbums()])
   await refreshConnection()
   // If not connected, try auto-reconnect with saved credentials
   if (!get(connected)) {
@@ -96,12 +109,27 @@ export async function refreshConnection() {
 
 let reconnectInterval: ReturnType<typeof setInterval> | null = null
 
-export function autoReconnect(onSuccess?: () => void) {
-  const creds = loadCredentials()
-  if (!creds) return
+export async function autoReconnect(onSuccess?: () => void) {
+  const session = loadSession()
+  if (!session) return
   if (reconnectInterval) return // already running
 
   isReconnecting.set(true)
+
+  // Try an immediate restore before starting the polling loop.
+  try {
+    await RestoreSession(session.url, session.token)
+    await refreshConnection()
+    if (get(connected)) {
+      // Token was refreshed by RestoreSession — persist the new one.
+      saveSession(session.url, get(authToken))
+      isReconnecting.set(false)
+      onSuccess?.()
+      return
+    }
+  } catch {
+    // Token expired or server unreachable — fall through to polling.
+  }
 
   reconnectInterval = setInterval(async () => {
     if (get(connected)) {
@@ -109,15 +137,27 @@ export function autoReconnect(onSuccess?: () => void) {
       onSuccess?.()
       return
     }
+    const s = loadSession()
+    if (!s) {
+      stopAutoReconnect()
+      return
+    }
     try {
-      await ConnectToServer(creds.url, creds.username, creds.password)
+      await RestoreSession(s.url, s.token)
       await refreshConnection()
       if (get(connected)) {
+        saveSession(s.url, get(authToken))
         stopAutoReconnect()
         onSuccess?.()
       }
-    } catch {
-      // will retry next interval
+    } catch (e: any) {
+      // 401/403 means the token is permanently invalid — stop retrying
+      // and clear the stale session so the user sees the login form.
+      if (typeof e?.message === "string" && e.message.includes("session expired")) {
+        clearSession()
+        stopAutoReconnect()
+      }
+      // Otherwise (network error) keep retrying.
     }
   }, 5000)
 }

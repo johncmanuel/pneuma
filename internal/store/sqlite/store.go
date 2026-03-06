@@ -129,6 +129,13 @@ var migrations = []migration{
 			`CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log(target_type, target_id)`,
 		},
 	},
+	{
+		version: 2,
+		stmts: []string{
+			`ALTER TABLE tracks ADD COLUMN acoustic_fingerprint TEXT NOT NULL DEFAULT ''`,
+			`CREATE INDEX IF NOT EXISTS idx_tracks_acoustic_fp ON tracks(acoustic_fingerprint)`,
+		},
+	},
 }
 
 const schema = `
