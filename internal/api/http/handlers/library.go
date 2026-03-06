@@ -127,7 +127,16 @@ func (h *LibraryHandler) ServeTrackArt(c echo.Context) error {
 	if ct == "" {
 		ct = "image/jpeg"
 	}
-	c.Response().Header().Set("Cache-Control", "public, max-age=604800")
+
+	// Stable ETag based on content hash — allows immutable caching.
+	sum := sha256.Sum256(pic.Data)
+	etag := `"` + hex.EncodeToString(sum[:8]) + `"`
+	if c.Request().Header.Get("If-None-Match") == etag {
+		return c.NoContent(http.StatusNotModified)
+	}
+
+	c.Response().Header().Set("ETag", etag)
+	c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	return c.Blob(http.StatusOK, ct, pic.Data)
 }
 

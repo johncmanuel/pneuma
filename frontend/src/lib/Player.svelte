@@ -2,7 +2,7 @@
   import { playerState, isPlaying, type Track } from "../stores/player"
   import { tracks } from "../stores/library"
   import { localTracks, type LocalTrack } from "../stores/localLibrary"
-  import { activePanel, togglePanel, toggleQueuePanel, currentView } from "../stores/ui"
+  import { activePanel, togglePanel, toggleQueuePanel, currentView, pushNav } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
   import { streamUrl, artworkUrl, connected } from "./api"
   import { wsSend } from "../stores/ws"
@@ -56,6 +56,21 @@
       } as Track
     }
     return null
+  }
+
+  function jumpToAlbum() {
+    if (!track) return
+    const UNORGANIZED_KEY = "__unorganized__"
+    const albumName = track.album_name?.trim() ?? ""
+    const albumArtist = track.album_artist?.trim() ?? ""
+    const hasAlbum = albumName !== ""
+    const albumKey = hasAlbum ? `${albumName}|||${albumArtist}` : UNORGANIZED_KEY
+    pushNav({
+      view: "library",
+      tab: isLocal ? "local" : "library",
+      subTab: "albums",
+      albumKey,
+    })
   }
 
   function togglePause() {
@@ -304,7 +319,7 @@
     </div>
     <div class="info">
       {#if track}
-        <span class="title truncate">{track.title}</span>
+        <button class="title truncate title-link" on:click={jumpToAlbum} title="Go to album">{track.title}</button>
         <span class="artist truncate text-2">{track.artist_name || track.album_artist || "Unknown Artist"}</span>
       {:else}
         <span class="text-3">No track selected</span>
@@ -437,6 +452,17 @@
     gap: 2px;
   }
   .title { font-size: 13px; font-weight: 600; }
+  .title-link {
+    cursor: pointer;
+    text-align: left;
+    padding: 0;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+  }
+  .title-link:hover { text-decoration: underline; }
   .artist { font-size: 12px; }
 
   /* Center: controls + seek */

@@ -595,6 +595,18 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Stat for ETag before opening the file.
+	info, err := os.Stat(path)
+	if err != nil {
+		http.Error(w, "file not found", http.StatusNotFound)
+		return
+	}
+	etag := fmt.Sprintf(`"%x-%x"`, info.ModTime().UnixNano(), info.Size())
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		http.Error(w, "file not found", http.StatusNotFound)
@@ -614,7 +626,8 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 		ct = "image/jpeg"
 	}
 	w.Header().Set("Content-Type", ct)
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.Write(pic.Data) //nolint:errcheck
 }
 

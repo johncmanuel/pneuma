@@ -8,14 +8,30 @@
   import { serverFetch, artworkUrl, connected, isReconnecting, localBase } from "./api"
   import { wsSend } from "../stores/ws"
   import { onMount } from "svelte"
+  import { activeTab, localSubTab, selectedAlbum, pushNav, type LibTab, type LocalSubTab } from "../stores/ui"
+  import { get } from "svelte/store"
+  import { recordRecentAlbum } from "../stores/recentAlbums"
+  import { cachedArtUrl } from "../stores/artCache"
 
-  type LibTab = "library" | "local"
-  let activeTab: LibTab = "library"
+  // ─── Album detail: filter & sort ────────────────────────────────────────────
+  let albumFilter = ""
+  let albumGridFilter = ""
+  type SortField = "default" | "title" | "artist" | "duration"
+  let albumSortField: SortField = "default"
+  let albumSortDir: "asc" | "desc" = "asc"
 
-  type LocalSubTab = "albums" | "duplicates"
-  let localSubTab: LocalSubTab = "albums"
+  function toggleSort(field: SortField) {
+    if (albumSortField === field) {
+      albumSortDir = albumSortDir === "asc" ? "desc" : "asc"
+    } else {
+      albumSortField = field
+      albumSortDir = "asc"
+    }
+  }
 
-  let selectedAlbum: string | null = null  // album_name to filter by
+  function sortIndicator(field: SortField): string {
+    return albumSortField === field ? (albumSortDir === "asc" ? " ↑" : " ↓") : ""
+  }
 
   // ─── Shared album grouping logic ────────────────────────────────────────────
 
@@ -111,13 +127,53 @@
 
   // ─── Reactive derivations ──────────────────────────────────────────────────
 
-  $: albumGroups = activeTab === "library" ? buildAlbumGroups($tracks) : buildLocalAlbumGroups($localTracks)
-  $: isLoading = activeTab === "library" ? $loading : $localLoading
+  $: albumGroups = $activeTab === "library" ? buildAlbumGroups($tracks) : buildLocalAlbumGroups($localTracks)
+  $: isLoading = $activeTab === "library" ? $loading : $localLoading
   $: localDupeCount = $localDuplicates.length
 
-  $: currentAlbumGroup = selectedAlbum
-    ? albumGroups.find(g => g.key === selectedAlbum) ?? null
+  $: filteredAlbumGroups = (() => {
+    if (!albumGridFilter.trim()) return albumGroups
+    const f = albumGridFilter.toLowerCase()
+    return albumGroups.filter(g =>
+      g.name.toLowerCase().includes(f) || g.artist.toLowerCase().includes(f)
+    )
+  })()
+
+  $: currentAlbumGroup = $selectedAlbum
+    ? albumGroups.find(g => g.key === $selectedAlbum) ?? null
     : null
+
+  // Reset filter/sort when switching albums
+  $: if ($selectedAlbum) { albumFilter = ""; albumSortField = "default"; albumSortDir = "asc" }
+
+  // Filtered + sorted tracks for album detail
+  $: albumDetailTracks = (() => {
+    if (!currentAlbumGroup) return []
+    const f = albumFilter.toLowerCase()
+    let result = currentAlbumGroup.tracks
+    if (f) {
+      result = result.filter(t =>
+        (t.title ?? "").toLowerCase().includes(f) ||
+        (t.artist_name ?? "").toLowerCase().includes(f)
+      )
+    }
+    if (albumSortField !== "default") {
+      const dir = albumSortDir === "asc" ? 1 : -1
+      result = [...result].sort((a, b) => {
+        if (albumSortField === "title") return dir * (a.title ?? "").localeCompare(b.title ?? "")
+        if (albumSortField === "artist") return dir * (a.artist_name ?? "").localeCompare(b.artist_name ?? "")
+        if (albumSortField === "duration") return dir * ((a.duration_ms ?? 0) - (b.duration_ms ?? 0))
+        return 0
+      })
+    }
+    return result
+  })()
+
+  // Album artwork for the detail header
+  $: selectedAlbumArtUrl = (() => {
+    if (!currentAlbumGroup) return ""
+    return getArtUrl(currentAlbumGroup)
+  })()
 
   // On mount, do an initial scan of saved folders (respects auto-check pref)
   onMount(() => {
@@ -132,7 +188,18 @@
     const idx = albumTracks.findIndex(t => t.id === track.id)
     const queueIds = albumTracks.map(t => t.id)
 
-    if (activeTab === "local") {
+    if (currentAlbumGroup) {
+      recordRecentAlbum({
+        key: currentAlbumGroup.key,
+        name: currentAlbumGroup.name,
+        artist: currentAlbumGroup.artist,
+        isLocal: currentAlbumGroup.isLocal ?? false,
+        firstTrackId: currentAlbumGroup.firstTrackId,
+        firstLocalPath: currentAlbumGroup.firstLocalPath ?? "",
+      })
+    }
+
+    if (get(activeTab) === "local") {
       // Local playback — just set state (Player.svelte handles audio)
       playerState.update(s => ({
         ...s,
@@ -165,7 +232,7 @@
   }
 
   function addToQueue(track: Track) {
-    if (activeTab === "local") {
+    if (get(activeTab) === "local") {
       // For local tracks, just append to queue
       const newQueue = [...$playerState.queue, track.id]
       playerState.update(s => ({ ...s, queue: newQueue }))
@@ -183,13 +250,12 @@
   }
 
   function goBack() {
-    selectedAlbum = null
+    pushNav({ albumKey: null })
   }
 
   function switchTab(tab: LibTab) {
-    activeTab = tab
-    selectedAlbum = null
-    localSubTab = "albums"
+    albumGridFilter = ""
+    pushNav({ tab, albumKey: null, subTab: "albums" })
   }
 
   function localArtUrl(track: Track): string {
@@ -206,10 +272,14 @@
   }
 
   function getTrackArtUrl(track: Track): string {
-    if (activeTab === "local") {
+    if (get(activeTab) === "local") {
       return localArtUrl(track)
     }
     return artworkUrl(track.id)
+  }
+
+  function openAlbum(album: AlbumGroup) {
+    pushNav({ albumKey: album.key })
   }
 
   async function handleAddFolder() {
@@ -227,14 +297,14 @@
   <div class="tab-bar">
     <button
       class="lib-tab"
-      class:active={activeTab === "library"}
+      class:active={$activeTab === "library"}
       on:click={() => switchTab("library")}
     >
       Library
     </button>
     <button
       class="lib-tab"
-      class:active={activeTab === "local"}
+      class:active={$activeTab === "local"}
       on:click={() => switchTab("local")}
     >
       Local Files
@@ -242,17 +312,17 @@
   </div>
 
   <!-- Sub-tab bar (Local Files only) — always visible, never scrolls away -->
-  {#if activeTab === "local"}
+  {#if $activeTab === "local"}
     <div class="subtab-bar">
       <button
         class="subtab"
-        class:active={localSubTab === "albums"}
-        on:click={() => { localSubTab = "albums"; selectedAlbum = null }}
+        class:active={$localSubTab === "albums"}
+        on:click={() => pushNav({ subTab: "albums", albumKey: null })}
       >Albums</button>
       <button
         class="subtab"
-        class:active={localSubTab === "duplicates"}
-        on:click={() => localSubTab = "duplicates"}
+        class:active={$localSubTab === "duplicates"}
+        on:click={() => pushNav({ subTab: "duplicates" })}
       >
         Duplicates
         {#if localDupeCount > 0}<span class="dupe-badge">{localDupeCount}</span>{/if}
@@ -264,37 +334,61 @@
   <!-- Scrollable body -->
   <div class="scroll-body">
 
-    {#if activeTab === "local" && localSubTab === "duplicates"}
+    {#if $activeTab === "local" && $localSubTab === "duplicates"}
       <Duplicates />
 
     {:else if currentAlbumGroup}
       <!-- Album detail view -->
-      <div class="toolbar">
-        <button class="back-btn" on:click={goBack} title="Back to albums">← Back</button>
-        <h2>{currentAlbumGroup.name}</h2>
+      <div class="album-detail-header">
+        <div class="album-art-hero">
+          {#if selectedAlbumArtUrl}
+            {#await cachedArtUrl(currentAlbumGroup.key, selectedAlbumArtUrl) then blobUrl}
+              <img src={blobUrl} alt={currentAlbumGroup.name} on:error={hideImgOnError} />
+            {/await}
+          {/if}
+          <div class="album-art-hero-placeholder">♫</div>
+        </div>
+        <div class="album-detail-info">
+          <h2 class="album-detail-title">{currentAlbumGroup.name}</h2>
+          <p class="album-meta text-2">{currentAlbumGroup.artist} · {currentAlbumGroup.tracks.length} tracks</p>
+          <div class="album-filter-bar">
+            <input
+              type="search"
+              class="album-filter-input"
+              placeholder="Filter songs…"
+              bind:value={albumFilter}
+            />
+          </div>
+        </div>
       </div>
-      <p class="album-meta text-2">{currentAlbumGroup.artist} · {currentAlbumGroup.tracks.length} tracks</p>
 
       <div class="track-list">
-        <div class="track-header">
-          <span>#</span><span>Title</span><span>Artist</span><span>Album</span><span>Duration</span>
+        <div class="track-header album-detail-cols">
+          <span>#</span>
+          <button class="col-sort" on:click={() => toggleSort("title")}>Title{sortIndicator("title")}</button>
+          <button class="col-sort" on:click={() => toggleSort("artist")}>Artist{sortIndicator("artist")}</button>
+          <button class="col-sort" on:click={() => toggleSort("duration")}>Duration{sortIndicator("duration")}</button>
         </div>
-        {#each currentAlbumGroup.tracks as track (track.id)}
+        {#each albumDetailTracks as track (track.id)}
           <TrackRow
             {track}
+            hideAlbum={true}
             active={$playerState.trackId === track.id}
-            on:play={() => playTrack(track, currentAlbumGroup.tracks)}
+            on:play={() => playTrack(track, albumDetailTracks)}
           on:select={() => {}}
           on:addToQueue={() => addToQueue(track)}
         />
       {/each}
+      {#if albumFilter && albumDetailTracks.length === 0}
+        <p class="no-results text-3">No songs match "{albumFilter}"</p>
+      {/if}
     </div>
   {:else}
     <!-- Album grid view -->
     <div class="toolbar">
-      <h2>{activeTab === "library" ? "Library" : "Local Files"}</h2>
+      <h2>{$activeTab === "library" ? "Library" : "Local Files"}</h2>
       <div class="toolbar-actions">
-        {#if activeTab === "library"}
+        {#if $activeTab === "library"}
           <button on:click={scanLibrary} title="Rescan watch folders">↺ Scan</button>
         {:else}
           <button on:click={handleAddFolder} title="Add a local music folder">+ Add Folder</button>
@@ -305,7 +399,20 @@
       </div>
     </div>
 
-    {#if activeTab === "local" && $localFolders.length > 0}
+    <div class="album-grid-search">
+      <svg class="grid-search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input
+        type="search"
+        class="album-grid-filter"
+        placeholder="Search albums…"
+        bind:value={albumGridFilter}
+      />
+      {#if albumGridFilter}
+        <button class="grid-filter-clear" on:click={() => albumGridFilter = ""}>×</button>
+      {/if}
+    </div>
+
+    {#if $activeTab === "local" && $localFolders.length > 0}
       <div class="folder-chips">
         {#each $localFolders as dir}
           <span class="folder-chip">
@@ -316,7 +423,7 @@
       </div>
     {/if}
 
-    {#if activeTab === "library" && !$connected}
+    {#if $activeTab === "library" && !$connected}
       <div class="offline-state">
         <span class="offline-icon">⚠</span>
         <p class="offline-title">{$isReconnecting ? "Reconnecting to server…" : "Not connected to a server"}</p>
@@ -325,26 +432,27 @@
     {:else if isLoading}
       <p class="text-3">Loading…</p>
     {:else if albumGroups.length === 0}
-      {#if activeTab === "local"}
+      {#if $activeTab === "local"}
         <p class="text-3">No local music. Click "Add Folder" to add a music directory.</p>
       {:else}
         <p class="text-3">No tracks found. Add a watch folder in Settings and scan.</p>
       {/if}
     {:else}
+      {#if filteredAlbumGroups.length === 0}
+        <p class="text-3">No albums match "{albumGridFilter}"</p>
+      {:else}
       <div class="album-grid">
-        {#each albumGroups as album (album.key)}
+        {#each filteredAlbumGroups as album (album.key)}
           <button
             class="album-card"
             class:unorganized={album.key === UNORGANIZED_KEY}
-            on:click={() => { selectedAlbum = album.key }}
+            on:click={() => openAlbum(album)}
           >
             <div class="album-art" class:unorg-art={album.key === UNORGANIZED_KEY}>
               {#if album.key !== UNORGANIZED_KEY}
-                <img
-                  src="{getArtUrl(album)}"
-                  alt={album.name}
-                  on:error={hideImgOnError}
-                />
+                {#await cachedArtUrl(album.key, getArtUrl(album)) then blobUrl}
+                  <img src={blobUrl} alt={album.name} on:error={hideImgOnError} />
+                {/await}
               {/if}
               <div class="album-art-placeholder">{album.key === UNORGANIZED_KEY ? "📂" : "♫"}</div>
             </div>
@@ -355,6 +463,8 @@
       </div>
     {/if}
   {/if}
+
+  {/if} <!-- /.scroll-body inner if -->
 
   </div> <!-- /.scroll-body -->
 </section>
@@ -442,7 +552,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 16px 0 0;
+    padding: 16px 16px 0 0;
   }
 
   .toolbar {
@@ -462,17 +572,9 @@
 
   h2 { margin: 0; font-size: 20px; font-weight: 700; }
 
-  .back-btn {
-    font-size: 13px;
-    color: var(--text-2);
-    padding: 4px 8px;
-    border-radius: var(--r-sm);
-  }
-  .back-btn:hover { color: var(--text-1); background: var(--surface-hover); }
-
   .album-meta {
     font-size: 13px;
-    margin: -8px 0 16px;
+    margin: 0;
   }
 
   /* Folder chips */
@@ -502,6 +604,46 @@
     line-height: 1;
   }
   .chip-remove:hover { color: var(--danger); }
+
+  /* Album grid filter bar */
+  .album-grid-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 5px 12px;
+    margin-bottom: 16px;
+    max-width: 280px;
+    transition: border-color 0.15s;
+  }
+  .album-grid-search:focus-within { border-color: var(--accent); }
+
+  .grid-search-icon { color: var(--text-3); flex-shrink: 0; }
+
+  .album-grid-filter {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--fg);
+    font-size: 13px;
+    outline: none;
+    padding: 0;
+  }
+  .album-grid-filter::placeholder { color: var(--text-3); }
+  .album-grid-filter::-webkit-search-cancel-button { display: none; }
+
+  .grid-filter-clear {
+    background: none;
+    border: none;
+    color: var(--text-3);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+  }
+  .grid-filter-clear:hover { color: var(--fg); }
 
   /* Album grid */
   .album-grid {
@@ -582,5 +724,102 @@
     color: var(--fg-3);
     border-bottom: 1px solid var(--border);
     margin-bottom: 4px;
+  }
+
+  /* Album detail columns — no Album column */
+  .track-header.album-detail-cols {
+    grid-template-columns: 32px 2fr 1fr 56px;
+  }
+
+  .col-sort {
+    background: none;
+    border: none;
+    color: var(--fg-3);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    padding: 0;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .col-sort:hover { color: var(--text-1); }
+
+  /* Album detail header with artwork */
+  .album-detail-header {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+
+  .album-detail-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    flex: 1;
+    min-width: 0;
+    padding-bottom: 4px;
+  }
+
+  .album-art-hero {
+    width: 160px;
+    height: 160px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .album-art-hero img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: relative;
+    z-index: 1;
+  }
+
+  .album-art-hero-placeholder {
+    position: absolute;
+    font-size: 48px;
+    color: var(--text-3);
+  }
+
+  .album-detail-title {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  /* Album filter bar */
+  .album-filter-bar {
+    margin-top: 12px;
+  }
+
+  .album-filter-input {
+    width: 100%;
+    max-width: 280px;
+    padding: 6px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    color: var(--fg);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .album-filter-input:focus { border-color: var(--accent); }
+  .album-filter-input::placeholder { color: var(--text-3); }
+  /* hide default search clear button */
+  .album-filter-input::-webkit-search-cancel-button { display: none; }
+
+  .no-results {
+    padding: 16px 8px;
+    font-size: 13px;
   }
 </style>

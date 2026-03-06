@@ -3,7 +3,7 @@
   import { initApi, connected } from "./lib/api"
   import { connectWS, disconnectWS } from "./stores/ws"
   import { loadTracks } from "./stores/library"
-  import { activePanel, currentView } from "./stores/ui"
+  import { activePanel, currentView, pushNav, goBack, goForward, canGoBack, canGoForward } from "./stores/ui"
 
   import Sidebar from "./lib/Sidebar.svelte"
   import Player from "./lib/Player.svelte"
@@ -12,7 +12,6 @@
   import Queue from "./lib/Queue.svelte"
   import DevicesPanel from "./lib/DevicesPanel.svelte"
   import Toasts from "./lib/Toasts.svelte"
-  import Downloads from "./lib/Downloads.svelte"
   import Settings from "./lib/Settings.svelte"
   import DisconnectBanner from "./lib/DisconnectBanner.svelte"
 
@@ -38,7 +37,7 @@
   }
 
   function handleNavigate(e: CustomEvent<string>) {
-    currentView.set(e.detail)
+    pushNav({ view: e.detail, tab: "library", subTab: "albums", albumKey: null })
   }
 </script>
 
@@ -48,6 +47,14 @@
   </div>
 
   <header class="topbar">
+    <div class="nav-history">
+      <button class="nav-btn" disabled={!$canGoBack} on:click={goBack} title="Go back">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <button class="nav-btn" disabled={!$canGoForward} on:click={goForward} title="Go forward">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      </button>
+    </div>
     <div class="search-wrapper">
       <SearchBar />
     </div>
@@ -56,8 +63,6 @@
   <main class="content">
     {#if $currentView === "library"}
       <Library />
-    {:else if $currentView === "downloads"}
-      <Downloads />
     {:else if $currentView === "settings"}
       <Settings />
     {/if}
@@ -121,10 +126,34 @@
     grid-area: topbar;
     display: flex;
     align-items: center;
+    gap: 12px;
     padding: 0 24px;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
   }
+
+  .nav-history {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text-1);
+    border: none;
+    cursor: pointer;
+    transition: background 0.12s, opacity 0.12s;
+    padding: 0;
+  }
+  .nav-btn:hover:not(:disabled) { background: var(--surface-hover); }
+  .nav-btn:disabled { opacity: 0.3; cursor: default; }
 
   .search-wrapper {
     position: relative;

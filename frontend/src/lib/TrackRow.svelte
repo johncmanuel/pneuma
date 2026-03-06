@@ -4,6 +4,7 @@
 
   export let track: Track | null = null
   export let active: boolean = false
+  export let hideAlbum: boolean = false
 
   const dispatch = createEventDispatcher()
 
@@ -29,6 +30,7 @@
 <button
   class="track-row"
   class:active
+  class:hide-album={hideAlbum}
   on:dblclick={() => dispatch("play")}
   on:click={() => dispatch("select")}
   on:contextmenu={onContext}
@@ -36,7 +38,9 @@
   <span class="num text-3">{track?.track_number || "–"}</span>
   <span class="title truncate">{track?.title ?? "Unknown"}</span>
   <span class="artist truncate text-2">{track?.artist_name || track?.album_artist || "–"}</span>
-  <span class="album truncate text-2">{track?.album_name || "–"}</span>
+  {#if !hideAlbum}
+    <span class="album truncate text-2">{track?.album_name || "–"}</span>
+  {/if}
   <span class="duration text-3">{formatDuration(track?.duration_ms ?? 0)}</span>
 </button>
 
@@ -66,6 +70,9 @@
     border-radius: var(--r-sm);
     color: var(--text-1);
     transition: background 0.1s;
+  }
+  .track-row.hide-album {
+    grid-template-columns: 32px 2fr 1fr 56px;
   }
   .track-row:hover { background: var(--surface-hover); }
   .track-row.active { color: var(--accent); }

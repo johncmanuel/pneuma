@@ -1,50 +1,11 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte"
   import { currentUser, logout } from "./api"
-
-  export let activeView: string = "library"
-
-  const dispatch = createEventDispatcher<{ navigate: string }>()
-
-  interface NavItem {
-    id: string
-    label: string
-    icon: string
-    /** If set, only show when this returns true */
-    show?: () => boolean
-  }
-
-  $: items = buildNavItems($currentUser)
-
-  function buildNavItems(user: typeof $currentUser): NavItem[] {
-    const out: NavItem[] = [
-      { id: "library", label: "Library", icon: "🎵" },
-    ]
-    // Admin dashboard visible to admins or users with any permission
-    if (user && (user.is_admin || user.can_upload || user.can_edit || user.can_delete)) {
-      out.push({ id: "admin", label: "Admin", icon: "⚙" })
-    }
-    return out
-  }
 </script>
 
 <nav class="sidebar">
   <div class="brand">
     <span class="brand-icon">♫</span>
     <span class="brand-text">Pneuma</span>
-  </div>
-
-  <div class="nav-items">
-    {#each items as item (item.id)}
-      <button
-        class="nav-btn"
-        class:active={activeView === item.id}
-        on:click={() => dispatch("navigate", item.id)}
-      >
-        <span class="nav-icon">{item.icon}</span>
-        <span class="nav-label">{item.label}</span>
-      </button>
-    {/each}
   </div>
 
   <div class="sidebar-footer">
@@ -85,14 +46,6 @@
   }
   .brand-icon { color: var(--accent); font-size: 22px; }
 
-  .nav-items {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 0 8px;
-  }
-
   .nav-btn {
     display: flex;
     align-items: center;
@@ -106,7 +59,6 @@
     transition: background 0.12s, color 0.12s;
   }
   .nav-btn:hover { background: var(--surface-hover); color: var(--text-1); }
-  .nav-btn.active { background: var(--surface-hover); color: var(--accent); }
 
   .nav-icon { font-size: 16px; flex-shrink: 0; }
   .nav-label { flex: 1; }

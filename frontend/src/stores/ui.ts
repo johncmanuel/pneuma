@@ -1,4 +1,4 @@
-import { writable, derived } from "svelte/store"
+import { writable, derived, get } from "svelte/store"
 
 export type PanelName = "queue" | "devices" | null
 
@@ -20,4 +20,96 @@ export function toggleQueuePanel() {
 
 export function closePanel() {
   activePanel.set(null)
+}
+
+/* ── Library sub-navigation state ──────────────────────────────── */
+
+export type LibTab = "library" | "local"
+export type LocalSubTab = "albums" | "duplicates"
+
+export const activeTab = writable<LibTab>("library")
+export const localSubTab = writable<LocalSubTab>("albums")
+export const selectedAlbum = writable<string | null>(null)
+
+/* ── Navigation history (back / forward) ───────────────────────── */
+
+export interface NavState {
+  view: string
+  tab: LibTab
+  subTab: LocalSubTab
+  albumKey: string | null
+}
+
+function currentNavState(): NavState {
+  return {
+    view: get(currentView),
+    tab: get(activeTab),
+    subTab: get(localSubTab),
+    albumKey: get(selectedAlbum),
+  }
+}
+
+function applyNavState(s: NavState) {
+  currentView.set(s.view)
+  activeTab.set(s.tab)
+  localSubTab.set(s.subTab)
+  selectedAlbum.set(s.albumKey)
+}
+
+const _navStack = writable<NavState[]>([{
+  view: "library", tab: "library", subTab: "albums", albumKey: null,
+}])
+const _navIndex = writable<number>(0)
+
+export const canGoBack = derived(_navIndex, i => i > 0)
+export const canGoForward = derived(
+  [_navIndex, _navStack],
+  ([$i, $s]) => $i < $s.length - 1,
+)
+
+/**
+ * Record a navigation action.  Truncates any forward history, appends new
+ * state, and advances the index.  Call this whenever the user navigates to
+ * a new "page" (tab switch, album click, sidebar item, etc.).
+ */
+export function pushNav(partial?: Partial<NavState>) {
+  const cur = currentNavState()
+  const next: NavState = { ...cur, ...partial }
+
+  // Apply to stores
+  applyNavState(next)
+
+  // Update history stack
+  _navStack.update(stack => {
+    const idx = get(_navIndex)
+    // Truncate forward entries
+    const trimmed = stack.slice(0, idx + 1)
+    // Avoid duplicate consecutive entries
+    const prev = trimmed[trimmed.length - 1]
+    if (prev && prev.view === next.view && prev.tab === next.tab
+        && prev.subTab === next.subTab && prev.albumKey === next.albumKey) {
+      return trimmed
+    }
+    trimmed.push(next)
+    _navIndex.set(trimmed.length - 1)
+    return trimmed
+  })
+}
+
+export function goBack() {
+  const idx = get(_navIndex)
+  if (idx <= 0) return
+  const newIdx = idx - 1
+  _navIndex.set(newIdx)
+  const stack = get(_navStack)
+  applyNavState(stack[newIdx])
+}
+
+export function goForward() {
+  const idx = get(_navIndex)
+  const stack = get(_navStack)
+  if (idx >= stack.length - 1) return
+  const newIdx = idx + 1
+  _navIndex.set(newIdx)
+  applyNavState(stack[newIdx])
 }

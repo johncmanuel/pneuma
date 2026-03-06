@@ -1,3 +1,5 @@
+<!-- this'll be used in the web version of the desktop app later in the future -->
+
 <script lang="ts">
   import { onMount } from "svelte"
   import { apiFetch, artworkUrl, currentUser } from "../lib/api"

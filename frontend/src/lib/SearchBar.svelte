@@ -1,5 +1,6 @@
 <script lang="ts">
   import { searchResults, searchTracks } from "../stores/library"
+  import { localTracks } from "../stores/localLibrary"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import type { Track } from "../stores/player"
@@ -9,22 +10,77 @@
   export let query = ""
   let debounce: number
 
+  interface TaggedTrack extends Track { _source: "remote" | "local" }
+
+  let combinedResults: TaggedTrack[] = []
+
   function onInput() {
     clearTimeout(debounce)
-    debounce = window.setTimeout(() => {
-      if (query.trim().length >= 2) searchTracks(query.trim())
-      else searchResults.set([])
+    debounce = window.setTimeout(async () => {
+      const q = query.trim()
+      if (q.length < 2) {
+        searchResults.set([])
+        combinedResults = []
+        return
+      }
+      // Fire remote search (updates searchResults store)
+      await searchTracks(q)
+      // Build combined list
+      buildCombined(q)
     }, 300)
+  }
+
+  function buildCombined(q: string) {
+    const lq = q.toLowerCase()
+    // Tag remote results
+    const remote: TaggedTrack[] = $searchResults.map(t => ({ ...t, _source: "remote" as const }))
+    // Filter local tracks client-side
+    const local: TaggedTrack[] = $localTracks
+      .filter(t =>
+        [t.title, t.artist, t.album, t.path].some(f => f?.toLowerCase().includes(lq))
+      )
+      .slice(0, 20)
+      .map(t => ({
+        id: t.path,
+        path: t.path,
+        title: t.title,
+        artist_id: "",
+        album_id: "",
+        artist_name: t.artist,
+        album_artist: t.album_artist,
+        album_name: t.album,
+        genre: t.genre,
+        year: t.year,
+        track_number: t.track_number,
+        disc_number: t.disc_number,
+        duration_ms: t.duration_ms,
+        bitrate_kbps: 0,
+        replay_gain_track: 0,
+        artwork_id: "",
+        _source: "local" as const,
+      }))
+    combinedResults = [...remote, ...local]
   }
 
   function clearSearch() {
     query = ""
     searchResults.set([])
+    combinedResults = []
   }
 
-  function playTrack(track: Track) {
+  function playTrack(track: TaggedTrack) {
+    if (track._source === "local") {
+      // Local playback
+      const q = combinedResults.filter(t => t._source === "local").map(t => t.id)
+      const idx = q.indexOf(track.id)
+      const queue = [...q.slice(idx), ...q.slice(0, idx)]
+      playerState.update(s => ({
+        ...s, trackId: track.id, track, queue, queueIndex: 0, positionMs: 0, paused: false,
+      }))
+      return
+    }
     if (!$connected) return
-    const q = $searchResults.map(t => t.id)
+    const q = combinedResults.filter(t => t._source === "remote").map(t => t.id)
     const idx = q.indexOf(track.id)
     const queue = [...q.slice(idx), ...q.slice(0, idx)]
     playerState.update(s => ({
@@ -34,11 +90,12 @@
     wsSend("playback.play",  { device_id: "desktop", track_id: track.id, position_ms: 0 })
   }
 
-  function addToQueue(track: Track) {
-    if (!$connected) return
+  function addToQueue(track: TaggedTrack) {
     const newQueue = [...$playerState.queue, track.id]
     playerState.update(s => ({ ...s, queue: newQueue }))
-    wsSend("playback.queue", { device_id: "desktop", track_ids: newQueue, start_index: $playerState.queueIndex })
+    if (track._source === "remote" && $connected) {
+      wsSend("playback.queue", { device_id: "desktop", track_ids: newQueue, start_index: $playerState.queueIndex })
+    }
   }
 
   export const hasResults = () => query.trim().length >= 2
@@ -61,15 +118,20 @@
 
 {#if query.trim().length >= 2}
   <div class="search-results">
-    {#if $searchResults.length > 0}
-      {#each $searchResults as track (track.id)}
-        <TrackRow
-          {track}
-          active={$playerState.trackId === track.id}
-          on:play={() => playTrack(track)}
-          on:select={() => {}}
-          on:addToQueue={() => addToQueue(track)}
-        />
+    {#if combinedResults.length > 0}
+      {#each combinedResults as track (track._source + ':' + track.id)}
+        <div class="result-row">
+          <TrackRow
+            track={track}
+            active={$playerState.trackId === track.id}
+            on:play={() => playTrack(track)}
+            on:select={() => {}}
+            on:addToQueue={() => addToQueue(track)}
+          />
+          <span class="source-badge" class:local={track._source === "local"} class:remote={track._source === "remote"}>
+            {track._source === "local" ? "Local" : "Remote"}
+          </span>
+        </div>
       {/each}
     {:else}
       <p class="no-results">No results for "{query}"</p>
@@ -152,5 +214,31 @@
     padding: 16px;
     color: var(--text-3);
     font-size: 13px;
+  }
+
+  .result-row {
+    position: relative;
+  }
+
+  .source-badge {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    pointer-events: none;
+  }
+  .source-badge.remote {
+    background: rgba(96, 165, 250, 0.15);
+    color: rgb(96, 165, 250);
+  }
+  .source-badge.local {
+    background: rgba(74, 222, 128, 0.15);
+    color: rgb(74, 222, 128);
   }
 </style>
