@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte"
-  import { initApi, connected } from "./lib/api"
+  import { initApi, connected } from "./utils/api"
   import { connectWS, disconnectWS } from "./stores/ws"
   import { loadTracks } from "./stores/library"
   import { activePanel, currentView, pushNav, goBack, goForward, canGoBack, canGoForward } from "./stores/ui"

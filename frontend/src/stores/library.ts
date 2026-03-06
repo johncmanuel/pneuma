@@ -1,6 +1,6 @@
 import { writable } from "svelte/store"
 import type { Track } from "./player"
-import { serverFetch, connected } from "../lib/api"
+import { serverFetch, connected } from "../utils/api"
 import { get } from "svelte/store"
 
 export interface Album {

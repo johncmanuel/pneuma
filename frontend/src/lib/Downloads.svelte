@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte"
-  import { serverFetch, connected } from "./api"
+  import { serverFetch, connected } from "../utils/api"
   import { get } from "svelte/store"
 
   interface Pack {

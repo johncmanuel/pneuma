@@ -1,6 +1,6 @@
 import { writable } from "svelte/store"
-import { artworkUrl, localBase } from "../lib/api"
-import { db } from "../lib/db"
+import { artworkUrl, localBase } from "../utils/api"
+import { db } from "../utils/db"
 
 export interface RecentAlbum {
   key: string

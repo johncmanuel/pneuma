@@ -2,7 +2,7 @@ import { writable } from "svelte/store"
 import { playerState } from "./player"
 import type { Track } from "./player"
 import { loadTracks, tracks } from "./library"
-import { wsBase, authToken, connected, serverFetch, autoReconnect } from "../lib/api"
+import { wsBase, authToken, connected, serverFetch, autoReconnect } from "../utils/api"
 import { addToast } from "./toasts"
 import { get } from "svelte/store"
 

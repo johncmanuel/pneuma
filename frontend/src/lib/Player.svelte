@@ -4,7 +4,7 @@
   import { localTracks } from "../stores/localLibrary"
   import { activePanel, togglePanel, toggleQueuePanel, currentView, pushNav } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
-  import { streamUrl, artworkUrl } from "./api"
+  import { streamUrl, artworkUrl } from "../utils/api"
   import { wsSend } from "../stores/ws"
 
   let audio: HTMLAudioElement

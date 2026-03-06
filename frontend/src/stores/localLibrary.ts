@@ -1,7 +1,7 @@
 import { writable, derived, get } from "svelte/store"
 import { ScanLocalFolderStream, ChooseLocalFolder, GetLocalTracks, ClearLocalFolder, FindLocalDuplicates } from "../../wailsjs/go/main/App"
 import { EventsOn, EventsOff } from "../../wailsjs/runtime/runtime"
-import { db } from "../lib/db"
+import { db } from "../utils/db"
 
 /* ── Types ──────────────────────────────────────────────────────── */
 

@@ -4,7 +4,7 @@
   import { localTracks } from "../stores/localLibrary"
   import { closePanel } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
-  import { artworkUrl, connected } from "./api"
+  import { artworkUrl, connected } from "../utils/api"
   import { wsSend } from "../stores/ws"
 
   $: queue = $playerState.queue ?? []

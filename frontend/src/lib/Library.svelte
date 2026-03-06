@@ -5,7 +5,7 @@
   import TrackRow from "./TrackRow.svelte"
   import Duplicates from "./Duplicates.svelte"
   import type { Track } from "../stores/player"
-  import { serverFetch, artworkUrl, connected, isReconnecting, localBase } from "./api"
+  import { serverFetch, artworkUrl, connected, isReconnecting, localBase } from "../utils/api"
   import { wsSend } from "../stores/ws"
   import { onMount } from "svelte"
   import { activeTab, localSubTab, selectedAlbum, pushNav, type LibTab } from "../stores/ui"
@@ -257,10 +257,6 @@
     await serverFetch("/api/library/scan", { method: "POST" })
   }
 
-  function goBack() {
-    pushNav({ albumKey: null })
-  }
-
   function switchTab(tab: LibTab) {
     albumGridFilter = ""
     pushNav({ tab, albumKey: null, subTab: "albums" })
@@ -277,13 +273,6 @@
       return localArtUrl({ path: album.firstLocalPath } as Track)
     }
     return artworkUrl(album.firstTrackId)
-  }
-
-  function getTrackArtUrl(track: Track): string {
-    if (get(activeTab) === "local") {
-      return localArtUrl(track)
-    }
-    return artworkUrl(track.id)
   }
 
   function openAlbum(album: AlbumGroup) {

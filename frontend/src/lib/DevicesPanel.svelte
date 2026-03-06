@@ -3,7 +3,7 @@
   import { type Track } from "../stores/player"
   import { tracks } from "../stores/library"
   import { closePanel } from "../stores/ui"
-  import { serverFetch, connected } from "./api"
+  import { serverFetch, connected } from "../utils/api"
 
   interface Session {
     id: string

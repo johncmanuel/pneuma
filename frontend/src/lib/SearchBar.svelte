@@ -4,7 +4,7 @@
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import type { Track } from "../stores/player"
-  import { connected } from "./api"
+  import { connected } from "../utils/api"
   import { wsSend } from "../stores/ws"
 
   export let query = ""

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ConnectToServer, DisconnectFromServer } from "../../wailsjs/go/main/App"
-  import { connected, serverURL, authToken, refreshConnection, saveSession, clearSession, isReconnecting, stopAutoReconnect } from "../lib/api"
+  import { connected, serverURL, authToken, refreshConnection, saveSession, clearSession, isReconnecting, stopAutoReconnect } from "../utils/api"
   import { loadTracks } from "../stores/library"
   import { autoDupeCheck, scanProgress, localLoading } from "../stores/localLibrary"
 

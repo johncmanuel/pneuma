@@ -3,7 +3,7 @@
   import { recentAlbums, getRecentAlbumArtUrl } from "../stores/recentAlbums"
   import { cachedArtUrl } from "../stores/artCache"
   import { pushNav } from "../stores/ui"
-  import { connected, localPort } from "../lib/api"
+  import { connected, localPort } from "../utils/api"
 
   export let activeView: string = "library"
 
