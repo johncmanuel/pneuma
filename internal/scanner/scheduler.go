@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -143,7 +144,17 @@ func (sc *Scheduler) scan(ctx context.Context) {
 				return nil
 			}
 
-			track, err := sc.parser.ParseFile(ctx, path)
+			// Open the file once: stream through a SHA-256 hasher (full read),
+			// seek back to zero, then parse tags — one open, one full pass.
+			cacheKey := path + "|" + strconv.FormatInt(info.Size(), 10) + "|" + strconv.FormatInt(info.ModTime().Unix(), 10)
+			f, err := os.Open(path)
+			if err != nil {
+				sc.log.Error("open error in scan", "path", path, "err", err)
+				return nil
+			}
+			hash, hashErr := contentHashFile(f, cacheKey)
+			track, err := sc.parser.ParseFrom(ctx, path, f)
+			f.Close()
 			if err != nil {
 				sc.log.Error("parse error in scan", "path", path, "err", err)
 				return nil
@@ -157,7 +168,7 @@ func (sc *Scheduler) scan(ctx context.Context) {
 			}
 
 			// ── Dedup: SHA-256 content hash (exact copies across folders) ────────
-			if hash, hashErr := contentHash(path); hashErr == nil {
+			if hashErr == nil {
 				track.Fingerprint = hash
 				if dup, _ := sc.lib.TrackByFingerprint(ctx, hash); dup != nil && dup.Path != path {
 					sc.log.Info("skipping duplicate (content hash match)", "path", path, "existing", dup.Path)
