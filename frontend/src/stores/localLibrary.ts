@@ -149,6 +149,19 @@ export async function searchLocalTracksQuery(query: string): Promise<LocalTrack[
   }
 }
 
+/** Search local album groups by name/artist filter (non-destructive, doesn't touch main store). */
+export async function searchLocalAlbumGroups(query: string): Promise<LocalAlbumGroup[]> {
+  const dirs = get(localFolders)
+  if (dirs.length === 0) return []
+  try {
+    const result = await GetLocalAlbumGroups(dirs, query, 0, 10)
+    return result?.albums ?? []
+  } catch (e) {
+    console.warn("Local album search failed:", e)
+    return []
+  }
+}
+
 /** Resolve local tracks by exact paths (for queue). */
 export async function resolveLocalTracksByPaths(paths: string[]): Promise<LocalTrack[]> {
   if (paths.length === 0) return []

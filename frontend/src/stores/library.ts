@@ -23,6 +23,7 @@ export const tracks   = writable<Track[]>([])
 export const albums   = writable<Album[]>([])
 export const loading  = writable(false)
 export const searchResults = writable<Track[]>([])
+export const albumSearchResults = writable<RemoteAlbumGroup[]>([])
 
 // ─── Remote album groups (derived from tracks table) ─────────────────────────
 
@@ -182,8 +183,24 @@ export async function searchTracks(q: string): Promise<Track[]> {
   }
 }
 
+export async function searchAlbumGroups(q: string): Promise<RemoteAlbumGroup[]> {
+  if (!get(connected)) return []
+  try {
+    const r = await serverFetch(`/api/library/albumgroups?filter=${encodeURIComponent(q)}&limit=10`)
+    if (!r.ok) { albumSearchResults.set([]); return [] }
+    const data = await r.json()
+    const arr: RemoteAlbumGroup[] = data.groups ?? []
+    albumSearchResults.set(arr)
+    return arr
+  } catch {
+    albumSearchResults.set([])
+    return []
+  }
+}
+
 export function clearSearch() {
   searchResults.set([])
+  albumSearchResults.set([])
 }
 
 export async function triggerScan() {
