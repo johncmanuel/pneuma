@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ConnectToServer, DisconnectFromServer } from "../../wailsjs/go/main/App"
+  import { ConnectToServer, DisconnectFromServer, ClearArtworkCache } from "../../wailsjs/go/main/App"
   import { connected, serverURL, authToken, refreshConnection, saveSession, clearSession, isReconnecting, stopAutoReconnect } from "../utils/api"
   import { loadTracks } from "../stores/library"
   import { autoDupeCheck, scanProgress, localLoading } from "../stores/localLibrary"
@@ -14,6 +14,9 @@
   // Scan state
   let scanMsg = ""
   let scanning = false
+
+  // Cache state
+  let cacheCleared = false
 
   async function connect() {
     connectErr = ""
@@ -142,6 +145,18 @@
       <span>Auto-check for duplicates on startup</span>
     </label>
     <p class="text-3 muted">When disabled, use the "Check Now" button in Library → Local Files → Duplicates.</p>
+  </div>
+
+  <!-- ── Cache ── -->
+  <div class="group">
+    <h3>Cache</h3>
+    <p class="text-3">Thumbnail images are cached on disk to speed up the album grid.</p>
+    <button on:click={async () => {
+      await ClearArtworkCache()
+      cacheCleared = true
+      setTimeout(() => cacheCleared = false, 3000)
+    }}>Clear Artwork Cache</button>
+    {#if cacheCleared}<p class="msg">Cache cleared.</p>{/if}
   </div>
 
   <div class="group">

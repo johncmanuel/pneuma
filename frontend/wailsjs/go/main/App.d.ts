@@ -10,6 +10,8 @@ export function AppDBSet(arg1:string,arg2:string):Promise<void>;
 
 export function ChooseLocalFolder():Promise<string>;
 
+export function ClearArtworkCache():Promise<void>;
+
 export function ClearLocalFolder(arg1:string):Promise<void>;
 
 export function ConnectToServer(arg1:string,arg2:string,arg3:string):Promise<main.ConnectResult>;

@@ -229,13 +229,24 @@
   })
 
   // On mount, load album groups and optionally check duplicates.
+  // Library is destroyed/re-created on every view switch (App.svelte uses {#if}),
+  // so onMount fires each time the user navigates back. Only do a full
+  // scanLocalFolders() on the first ever mount (store still empty); on return
+  // visits just refresh the paginated view from the already-populated SQLite
+  // table, which is instant and doesn't re-read the file system.
   onMount(() => {
     if ($activeTab === "library") {
       loadRemoteAlbumGroupsPage(0)
     }
     if ($localFolders.length > 0) {
-      scanLocalFolders()
-      if ($autoDupeCheck) checkLocalDuplicates()
+      if (get(localAlbumGroups).length === 0) {
+        // First mount — populate the SQLite cache with a full scan.
+        scanLocalFolders()
+        if ($autoDupeCheck) checkLocalDuplicates()
+      } else {
+        // Returning from another view — data is in memory, just reload the page.
+        loadLocalAlbumGroups(0, get(localAlbumFilter))
+      }
     }
   })
 

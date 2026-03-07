@@ -18,6 +18,10 @@ export function ChooseLocalFolder() {
   return window['go']['main']['App']['ChooseLocalFolder']();
 }
 
+export function ClearArtworkCache() {
+  return window['go']['main']['App']['ClearArtworkCache']();
+}
+
 export function ClearLocalFolder(arg1) {
   return window['go']['main']['App']['ClearLocalFolder'](arg1);
 }

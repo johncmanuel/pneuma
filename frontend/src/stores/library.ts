@@ -167,11 +167,19 @@ export async function loadAlbums() {
   albums.set(await r.json())
 }
 
-export async function searchTracks(q: string) {
-  if (!get(connected)) return
-  const r = await serverFetch(`/api/library/search?q=${encodeURIComponent(q)}`)
-  const results = await r.json()
-  searchResults.set(results ?? [])
+export async function searchTracks(q: string): Promise<Track[]> {
+  if (!get(connected)) return []
+  try {
+    const r = await serverFetch(`/api/library/search?q=${encodeURIComponent(q)}`)
+    if (!r.ok) { searchResults.set([]); return [] }
+    const results = await r.json()
+    const arr = Array.isArray(results) ? results : []
+    searchResults.set(arr)
+    return arr
+  } catch {
+    searchResults.set([])
+    return []
+  }
 }
 
 export function clearSearch() {

@@ -131,16 +131,20 @@ func (s *Store) CountTracks(ctx context.Context) (int, error) {
 	return n, err
 }
 
-// SearchTracks performs a case-insensitive substring search on title, genre, artist name, album title.
+// SearchTracks performs a case-insensitive substring search on title, album name,
+// album artist, artist name (via correlated subquery), and genre.
+// No JOIN is used to avoid ambiguous column names with the trackColumns constant.
 func (s *Store) SearchTracks(ctx context.Context, query string) ([]*models.Track, error) {
 	q := `SELECT ` + trackColumns + ` FROM tracks
-		LEFT JOIN artists ON artists.id = tracks.artist_id
-		LEFT JOIN albums ON albums.id = tracks.album_id
 		WHERE tracks.deleted_at IS NULL
-		  AND (tracks.title LIKE ? OR tracks.genre LIKE ? OR artists.name LIKE ? OR albums.title LIKE ?)
+		  AND (tracks.title LIKE ?
+		    OR tracks.album_name LIKE ?
+		    OR tracks.album_artist LIKE ?
+		    OR COALESCE((SELECT name FROM artists WHERE id=tracks.artist_id),'') LIKE ?
+		    OR tracks.genre LIKE ?)
 		ORDER BY tracks.title COLLATE NOCASE LIMIT 200`
 	like := "%" + query + "%"
-	rows, err := s.db.QueryContext(ctx, q, like, like, like, like)
+	rows, err := s.db.QueryContext(ctx, q, like, like, like, like, like)
 	if err != nil {
 		return nil, err
 	}

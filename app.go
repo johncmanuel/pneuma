@@ -37,6 +37,12 @@ var ffprobePath string
 // Key: "path|size|mtime_unix"  Value: duration in milliseconds.
 var durationCache sync.Map
 
+// artworkHashCache maps "path|size|mtime_unix" → sha256 hex of the raw artwork
+// bytes. Lets us resolve the content-addressed thumbnail path without re-reading
+// the audio file on every subsequent request, and ensures all tracks sharing
+// the same embedded image share a single cached thumbnail on disk.
+var artworkHashCache sync.Map
+
 func init() {
 	if p, err := exec.LookPath("ffprobe"); err == nil {
 		ffprobePath = p
@@ -650,6 +656,28 @@ func (a *App) Notify(title, message string) {
 	wailsruntime.LogInfo(a.ctx, fmt.Sprintf("[notify] %s: %s", title, message))
 }
 
+// ClearArtworkCache removes all cached thumbnail files from the thumbs
+// directory and resets the in-memory artwork hash cache. The cache is
+// rebuilt on demand when artwork is next requested.
+func (a *App) ClearArtworkCache() error {
+	entries, err := os.ReadDir(a.thumbDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, e := range entries {
+		_ = os.Remove(filepath.Join(a.thumbDir, e.Name()))
+	}
+	// Purge the in-memory hash map so subsequent requests regenerate thumbnails.
+	artworkHashCache.Range(func(k, _ any) bool {
+		artworkHashCache.Delete(k)
+		return true
+	})
+	return nil
+}
+
 // ─── Internal ────────────────────────────────────────────────────────────────
 
 // handleLocalStream serves a local audio file for the <audio> element.
@@ -705,7 +733,8 @@ func (a *App) handleLocalStream(w http.ResponseWriter, r *http.Request) {
 // thumbMaxDim is the maximum width/height for cached artwork thumbnails.
 const thumbMaxDim = 400
 
-// thumbCacheKey returns a hex string derived from the file path, size, and mtime.
+// thumbCacheKey returns a short hex key derived from the file path, size, and
+// mtime. Used only as an index into artworkHashCache — not as the disk filename.
 func thumbCacheKey(path string, info os.FileInfo) string {
 	h := sha256.New()
 	fmt.Fprintf(h, "%s|%d|%d", path, info.Size(), info.ModTime().UnixNano())
@@ -713,10 +742,9 @@ func thumbCacheKey(path string, info os.FileInfo) string {
 }
 
 // handleLocalArt serves a resized thumbnail of the embedded album art.
-// On first request the artwork is extracted, resized to 400×400 max, encoded
-// as JPEG, and written to a persistent disk cache.  Subsequent requests are
-// served directly via http.ServeFile (which handles ETag / Last-Modified /
-// Range automatically).
+// Thumbnails are stored content-addressed (keyed by SHA-256 of the raw art
+// bytes), so every track that shares the same cover image reuses one file on
+// disk instead of creating duplicates.
 func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
@@ -736,17 +764,22 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check the disk thumbnail cache.
-	key := thumbCacheKey(path, info)
-	thumbPath := filepath.Join(a.thumbDir, key+".jpg")
+	// fileKey changes whenever the audio file is modified, invalidating the
+	// cached artwork hash so we re-read the file on the next request.
+	fileKey := thumbCacheKey(path, info)
 
-	if _, err := os.Stat(thumbPath); err == nil {
-		// Cache hit — serve the pre-resized file.
-		http.ServeFile(w, r, thumbPath)
-		return
+	// Fast path: file identity → artwork hash already known.
+	if v, ok := artworkHashCache.Load(fileKey); ok {
+		artHash := v.(string)
+		thumbPath := filepath.Join(a.thumbDir, artHash+".jpg")
+		if _, err := os.Stat(thumbPath); err == nil {
+			http.ServeFile(w, r, thumbPath)
+			return
+		}
+		// Thumb was deleted from disk — fall through to regenerate.
 	}
 
-	// Cache miss — extract, resize, and persist.
+	// Open file and extract embedded art.
 	f, err := os.Open(path)
 	if err != nil {
 		http.Error(w, "file not found", http.StatusNotFound)
@@ -760,13 +793,29 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	src, _, err := image.Decode(bytes.NewReader(m.Picture().Data))
+	artData := m.Picture().Data
+
+	// Content-addressed key: SHA-256 of the raw artwork bytes.
+	// Tracks sharing identical embedded art resolve to the same cache file.
+	sum := sha256.Sum256(artData)
+	artHash := hex.EncodeToString(sum[:])[:24]
+	artworkHashCache.Store(fileKey, artHash)
+
+	thumbPath := filepath.Join(a.thumbDir, artHash+".jpg")
+
+	if _, err := os.Stat(thumbPath); err == nil {
+		// Another track already cached this exact artwork — serve it directly.
+		http.ServeFile(w, r, thumbPath)
+		return
+	}
+
+	// Decode, resize, and persist.
+	src, _, err := image.Decode(bytes.NewReader(artData))
 	if err != nil {
 		http.Error(w, "failed to decode artwork", http.StatusInternalServerError)
 		return
 	}
 
-	// Compute destination size preserving aspect ratio within thumbMaxDim.
 	b := src.Bounds()
 	srcW, srcH := b.Dx(), b.Dy()
 	dstW, dstH := srcW, srcH

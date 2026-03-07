@@ -104,6 +104,9 @@
     margin-top: 24px;
     flex: 1;
     min-height: 0;
+    /* display: flex;
+    flex-direction: column;
+    justify-content: flex-end; */
   }
 
   .recents-heading {

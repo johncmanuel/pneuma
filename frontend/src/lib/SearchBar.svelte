@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { searchResults, searchTracks, clearSearch as clearSearchStore } from "../stores/library"
+  import { searchTracks, clearSearch as clearSearchStore } from "../stores/library"
   import { searchLocalTracksQuery } from "../stores/localLibrary"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
@@ -23,20 +23,23 @@
         combinedResults = []
         return
       }
-      // Fire remote search (updates searchResults store) and local search
-      // concurrently — both go to their respective backends.
-      const [, localResults] = await Promise.all([
-        searchTracks(q),
-        searchLocalTracksQuery(q),
-      ])
-      // Build combined list from backend results
-      buildCombined(localResults ?? [])
+      try {
+        // Fire remote search and local search concurrently.
+        const [remoteResults, localResults] = await Promise.all([
+          searchTracks(q),
+          searchLocalTracksQuery(q),
+        ])
+        // Build combined list from both result sets
+        buildCombined(remoteResults ?? [], localResults ?? [])
+      } catch (e) {
+        console.warn("Search error:", e)
+      }
     }, 300)
   }
 
-  function buildCombined(localResults: import("../stores/localLibrary").LocalTrack[]) {
+  function buildCombined(remoteResults: Track[], localResults: import("../stores/localLibrary").LocalTrack[]) {
     // Tag remote results
-    const remote: TaggedTrack[] = $searchResults.map(t => ({ ...t, _source: "remote" as const }))
+    const remote: TaggedTrack[] = remoteResults.map(t => ({ ...t, _source: "remote" as const }))
     // Convert local results from Go IPC (already limited to 50 server-side)
     const local: TaggedTrack[] = localResults
       .slice(0, 20)
