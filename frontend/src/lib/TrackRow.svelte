@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte"
+  import { createEventDispatcher, onDestroy } from "svelte"
   import type { Track } from "../stores/player"
 
   export let track: Track | null = null
@@ -11,6 +11,15 @@
   let showMenu = false
   let menuX = 0
   let menuY = 0
+
+  // Portal action: moves the node to document.body so it is never clipped
+  // by any ancestor overflow or contain property.
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node)
+    return {
+      destroy() { node.remove() }
+    }
+  }
 
   function onContext(e: MouseEvent) {
     e.preventDefault()
@@ -25,6 +34,8 @@
     dispatch("addToQueue", track)
     showMenu = false
   }
+
+  onDestroy(() => { showMenu = false })
 </script>
 
 <button
@@ -45,7 +56,7 @@
 </button>
 
 {#if showMenu}
-  <div class="ctx-menu" style="left:{menuX}px;top:{menuY}px">
+  <div class="ctx-menu" use:portal style="left:{menuX}px;top:{menuY}px">
     <button on:click={handleAddToQueue}>Add to queue</button>
   </div>
 {/if}
@@ -81,7 +92,7 @@
 
   .ctx-menu {
     position: fixed;
-    z-index: 999;
+    z-index: 9999;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: var(--r-md);

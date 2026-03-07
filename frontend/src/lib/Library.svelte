@@ -889,7 +889,6 @@
     top: 0;
     left: 0;
     width: 100%;
-    contain: layout paint;
   }
 
   .track-list.scrolling .virtual-row {
