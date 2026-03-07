@@ -26,6 +26,8 @@ import (
 	"time"
 
 	"github.com/dhowden/tag"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/image/draw"
 )
@@ -138,6 +140,19 @@ func (a *App) shutdown(ctx context.Context) {
 		a.localSrv.Close() //nolint:errcheck
 	}
 	a.closeAppDB()
+}
+
+// onSecondInstanceLaunch is called by Wails when a second instance of the app is launched.
+func (a *App) onSecondInstanceLaunch(secondInstanceData options.SecondInstanceData) {
+	secondInstanceArgs := secondInstanceData.Args
+
+	slog.Info("second instance launched", "args", secondInstanceArgs)
+	slog.Info("opened from directorry:", secondInstanceData.WorkingDirectory)
+
+	runtime.WindowUnminimise(a.ctx)
+	runtime.Show(a.ctx)
+
+	go runtime.EventsEmit(a.ctx, "launchArgs", secondInstanceArgs)
 }
 
 // ─── Wails-bound methods (callable from Svelte) ──────────────────────────────

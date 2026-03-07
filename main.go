@@ -28,8 +28,18 @@ func main() {
 		},
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
+		// prevent multiple instances of the app from running at the same time
+		// https://wails.io/docs/guides/single-instance-lock/
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId:               "c0d0b46b-2b5c-43bb-9f1c-c4b0b5c3eaff",
+			OnSecondInstanceLaunch: app.onSecondInstanceLaunch,
+		},
 		Bind: []interface{}{
 			app,
+		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop:     false,
+			DisableWebViewDrop: true,
 		},
 	})
 	if err != nil {
