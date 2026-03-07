@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte"
   import { initApi, connected } from "./utils/api"
   import { connectWS, disconnectWS } from "./stores/ws"
-  import { loadTracks, loadRemoteAlbumGroupsPage } from "./stores/library"
+  import { loadRemoteAlbumGroupsPage } from "./stores/library"
   import { activePanel, currentView, pushNav, goBack, goForward, canGoBack, canGoForward } from "./stores/ui"
 
   import Sidebar from "./lib/Sidebar.svelte"
@@ -30,7 +30,6 @@
   $: if ($connected && !wasConnected) {
     wasConnected = true
     connectWS()
-    loadTracks()
     loadRemoteAlbumGroupsPage(0)
   } else if (!$connected && wasConnected) {
     wasConnected = false

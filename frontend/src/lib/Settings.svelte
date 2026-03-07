@@ -1,7 +1,6 @@
 <script lang="ts">
   import { ConnectToServer, DisconnectFromServer, ClearArtworkCache } from "../../wailsjs/go/main/App"
   import { connected, serverURL, authToken, refreshConnection, saveSession, clearSession, isReconnecting, stopAutoReconnect } from "../utils/api"
-  import { loadTracks } from "../stores/library"
   import { autoDupeCheck, scanProgress, localLoading } from "../stores/localLibrary"
 
   // Connect form state
@@ -27,7 +26,6 @@
       stopAutoReconnect()
       // Persist the URL + fresh token — never the password.
       saveSession(connectURL, $authToken)
-      await loadTracks()
       connectUser = ""
       connectPass = ""
     } catch (e: any) {

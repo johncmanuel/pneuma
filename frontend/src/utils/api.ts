@@ -87,7 +87,7 @@ export async function refreshConnection() {
     const ok = await IsConnected()
     if (ok) {
       // Populate URL & token BEFORE setting connected so that reactive
-      // statements (connectWS, loadTracks) see valid values immediately.
+      // statements (connectWS, loadRemoteAlbumGroupsPage) see valid values immediately.
       const url = await GetServerURL()
       const token = await GetToken()
       serverURL.set(url)

@@ -1,5 +1,5 @@
 import { writable, get } from "svelte/store"
-import { ScanLocalFolderStream, ChooseLocalFolder, GetLocalTracks, ClearLocalFolder, FindLocalDuplicates, GetLocalAlbumGroups, GetLocalAlbumTracks, SearchLocalTracks, GetLocalTracksByPaths } from "../../wailsjs/go/main/App"
+import { ScanLocalFolderStream, ChooseLocalFolder, ClearLocalFolder, FindLocalDuplicates, GetLocalAlbumGroups, GetLocalAlbumTracks, SearchLocalTracks, GetLocalTracksByPaths } from "../../wailsjs/go/main/App"
 import { EventsOn } from "../../wailsjs/runtime/runtime"
 import { db } from "../utils/db"
 
@@ -175,33 +175,16 @@ export async function resolveLocalTracksByPaths(paths: string[]): Promise<LocalT
 
 /* ── Initialisation ─────────────────────────────────────────────── */
 
-async function migrateFromLS(lsKey: string, dbKey: string): Promise<string | null> {
-  const existing = await db.get(dbKey)
-  if (existing !== null) return existing
-  try {
-    const lsVal = localStorage.getItem(lsKey)
-    if (lsVal) {
-      await db.set(dbKey, lsVal)
-      localStorage.removeItem(lsKey)
-      return lsVal
-    }
-  } catch { /* ignore */ }
-  return null
-}
-
 /**
  * Load all persisted local-library state from SQLite into the Svelte stores.
  * Tracks are loaded from the relational `local_tracks` table (indexed, fast).
  */
 export async function initLocalLibrary(): Promise<void> {
   const [foldersRaw, dismissedRaw, autoDupeRaw] = await Promise.all([
-    migrateFromLS("pneuma_local_folders",       KEY_FOLDERS),
-    migrateFromLS("pneuma_dismissed_duplicates", KEY_DISMISSED),
-    migrateFromLS("pneuma_auto_dupe_check",      KEY_AUTO_DUPE),
+    db.get(KEY_FOLDERS),
+    db.get(KEY_DISMISSED),
+    db.get(KEY_AUTO_DUPE),
   ])
-  // Clear legacy LS caches.
-  try { localStorage.removeItem("pneuma_local_tracks_cache") } catch { /* ignore */ }
-  try { localStorage.removeItem("pneuma_local_dupes_cache") } catch { /* ignore */ }
 
   _initialized = true
 

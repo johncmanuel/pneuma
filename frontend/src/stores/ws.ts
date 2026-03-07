@@ -1,7 +1,7 @@
 import { writable } from "svelte/store"
 import { playerState } from "./player"
 import type { Track } from "./player"
-import { loadTracks, loadRemoteAlbumGroupsPage, tracks } from "./library"
+import { loadRemoteAlbumGroupsPage, tracks } from "./library"
 import { wsBase, authToken, connected, serverFetch, autoReconnect } from "../utils/api"
 import { addToast } from "./toasts"
 import { get } from "svelte/store"
@@ -40,7 +40,6 @@ export function connectWS() {
       case "track.added":
       case "track.updated":
       case "track.removed":
-        loadTracks()
         loadRemoteAlbumGroupsPage(0)
         break
       case "library.deduped": {
@@ -49,7 +48,6 @@ export function connectWS() {
           `Removed ${n} duplicate song${n !== 1 ? "s" : ""} from your library.`,
           "warning"
         )
-        loadTracks()
         loadRemoteAlbumGroupsPage(0)
         break
       }
