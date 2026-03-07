@@ -1,5 +1,5 @@
 import { writable, get } from "svelte/store"
-import { ScanLocalFolderStream, ChooseLocalFolder, GetLocalTracks, ClearLocalFolder, FindLocalDuplicates } from "../../wailsjs/go/main/App"
+import { ScanLocalFolderStream, ChooseLocalFolder, GetLocalTracks, ClearLocalFolder, FindLocalDuplicates, GetLocalAlbumGroups, GetLocalAlbumTracks, SearchLocalTracks, GetLocalTracksByPaths } from "../../wailsjs/go/main/App"
 import { EventsOn } from "../../wailsjs/runtime/runtime"
 import { db } from "../utils/db"
 
@@ -70,6 +70,96 @@ autoDupeCheck.subscribe((v) => {
 /** Monotonically-increasing scan generation counter. */
 let scanGeneration = 0
 
+/* ── Album Groups (paginated, computed in Go SQL) ──────────────────────────── */
+
+export interface LocalAlbumGroup {
+  key: string
+  name: string
+  artist: string
+  track_count: number
+  first_track_path: string
+}
+
+const ALBUM_PAGE_SIZE = 50
+
+/** Paginated album groups — only the current page is held in memory. */
+export const localAlbumGroups = writable<LocalAlbumGroup[]>([])
+export const localAlbumGroupsTotal = writable(0)
+export const localAlbumGroupsOffset = writable(0)
+export const localAlbumFilter = writable("")
+
+/** Load a page of local album groups from Go. */
+export async function loadLocalAlbumGroups(offset = 0, filter = "") {
+  const dirs = get(localFolders)
+  if (dirs.length === 0) {
+    localAlbumGroups.set([])
+    localAlbumGroupsTotal.set(0)
+    localAlbumGroupsOffset.set(0)
+    return
+  }
+  try {
+    const result = await GetLocalAlbumGroups(dirs, filter, offset, ALBUM_PAGE_SIZE)
+    if (result) {
+      localAlbumGroups.set(result.albums ?? [])
+      localAlbumGroupsTotal.set(result.total ?? 0)
+      localAlbumGroupsOffset.set(offset)
+    }
+  } catch (e) {
+    console.warn("Failed to load local album groups:", e)
+  }
+}
+
+/** Append the next page of album groups. */
+export async function loadMoreLocalAlbumGroups(filter = "") {
+  const dirs = get(localFolders)
+  const current = get(localAlbumGroupsOffset)
+  const total = get(localAlbumGroupsTotal)
+  const next = current + ALBUM_PAGE_SIZE
+  if (next >= total) return
+  try {
+    const result = await GetLocalAlbumGroups(dirs, filter, next, ALBUM_PAGE_SIZE)
+    if (result) {
+      localAlbumGroups.update(existing => [...existing, ...(result.albums ?? [])])
+      localAlbumGroupsOffset.set(next)
+    }
+  } catch (e) {
+    console.warn("Failed to load more album groups:", e)
+  }
+}
+
+/** Fetch tracks for a specific local album group. */
+export async function fetchLocalAlbumTracks(albumName: string, albumArtist: string): Promise<LocalTrack[]> {
+  const dirs = get(localFolders)
+  try {
+    return (await GetLocalAlbumTracks(dirs, albumName, albumArtist)) ?? []
+  } catch (e) {
+    console.warn("Failed to fetch album tracks:", e)
+    return []
+  }
+}
+
+/** Search local tracks via Go LIKE query. */
+export async function searchLocalTracksQuery(query: string): Promise<LocalTrack[]> {
+  const dirs = get(localFolders)
+  try {
+    return (await SearchLocalTracks(dirs, query)) ?? []
+  } catch (e) {
+    console.warn("Local search failed:", e)
+    return []
+  }
+}
+
+/** Resolve local tracks by exact paths (for queue). */
+export async function resolveLocalTracksByPaths(paths: string[]): Promise<LocalTrack[]> {
+  if (paths.length === 0) return []
+  try {
+    return (await GetLocalTracksByPaths(paths)) ?? []
+  } catch (e) {
+    console.warn("Failed to resolve local tracks by path:", e)
+    return []
+  }
+}
+
 /* ── Initialisation ─────────────────────────────────────────────── */
 
 async function migrateFromLS(lsKey: string, dbKey: string): Promise<string | null> {
@@ -115,18 +205,12 @@ export async function initLocalLibrary(): Promise<void> {
   if (autoDupeRaw !== null) autoDupeCheck.set(autoDupeRaw !== "false")
 
   // Hydrate the track list from the indexed relational table — instant.
+  // Now we only load album groups (paginated) instead of all tracks.
   if (folders.length > 0) {
     try {
-      const tracks = await GetLocalTracks(folders)
-      if (tracks) {
-        const dismissed = get(dismissedDuplicates)
-        const visible = dismissed.size > 0
-          ? tracks.filter((t) => !dismissed.has(t.path))
-          : tracks
-        localTracks.set(visible)
-      }
+      await loadLocalAlbumGroups(0, "")
     } catch (e) {
-      console.warn("Failed to load cached tracks from DB:", e)
+      console.warn("Failed to load album groups from DB:", e)
     }
   }
 }
@@ -206,16 +290,10 @@ export async function scanLocalFolders() {
       (d) => !sorted.some((other) => other !== d && (d + "/").startsWith(other + "/"))
     )
 
-    // Accumulate tracks across all folders as events arrive.
-    const allTracks: LocalTrack[] = []
-
     // Set up a per-file progress listener.
     const cancelTrackListener = EventsOn("local:track:scanned", (data: any) => {
       if (scanGeneration !== myGen) return
       scanProgress.set({ folder: data.folder, done: data.done, total: data.total })
-      if (data.track) {
-        allTracks.push(data.track as LocalTrack)
-      }
     })
 
     // Scan each folder sequentially (Go does the heavy lifting).
@@ -234,21 +312,8 @@ export async function scanLocalFolders() {
 
     if (scanGeneration !== myGen) return
 
-    // Deduplicate by path.
-    const seen = new Set<string>()
-    const deduped = allTracks.filter((t) => {
-      if (seen.has(t.path)) return false
-      seen.add(t.path)
-      return true
-    })
-
-    // Filter out dismissed paths from the visible track list.
-    const dismissed = get(dismissedDuplicates)
-    const visible = dismissed.size > 0
-      ? deduped.filter((t) => !dismissed.has(t.path))
-      : deduped
-
-    localTracks.set(visible)
+    // Refresh album groups from the database (paginated).
+    await loadLocalAlbumGroups(0, get(localAlbumFilter))
   } finally {
     localLoading.set(false)
     scanProgress.set(null)

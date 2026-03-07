@@ -9,14 +9,142 @@ export interface Album {
   artist_name?: string
 }
 
+/** Album group derived from the tracks table (reliable regardless of albums table state). */
+export interface RemoteAlbumGroup {
+  key: string          // "name|||artist" or "__unorganized__"
+  name: string
+  artist: string
+  track_count: number
+  first_track_id: string
+  artwork_id: string
+}
+
 export const tracks   = writable<Track[]>([])
 export const albums   = writable<Album[]>([])
 export const loading  = writable(false)
 export const searchResults = writable<Track[]>([])
 
+// ─── Remote album groups (derived from tracks table) ─────────────────────────
+
+export const remoteAlbumGroups      = writable<RemoteAlbumGroup[]>([])
+export const remoteAlbumGroupsTotal = writable(0)
+export const remoteAlbumGroupsOffset = writable(0)
+
+const ALBUM_GROUP_PAGE_SIZE = 50
+
+export async function loadRemoteAlbumGroupsPage(offset = 0, filter = "") {
+  if (!get(connected)) return
+  const params = new URLSearchParams({ offset: String(offset), limit: String(ALBUM_GROUP_PAGE_SIZE) })
+  if (filter) params.set("filter", filter)
+  try {
+    const r = await serverFetch(`/api/library/albumgroups?${params}`)
+    if (!r.ok) return
+    const data = await r.json()
+    remoteAlbumGroups.set(data.groups ?? [])
+    remoteAlbumGroupsTotal.set(data.total ?? 0)
+    remoteAlbumGroupsOffset.set(data.offset ?? 0)
+  } catch {
+    // ignore network errors silently
+  }
+}
+
+export async function loadMoreRemoteAlbumGroups(filter = "") {
+  if (!get(connected)) return
+  const currentOffset = get(remoteAlbumGroupsOffset)
+  const total = get(remoteAlbumGroupsTotal)
+  const nextOffset = currentOffset + ALBUM_GROUP_PAGE_SIZE
+  if (nextOffset >= total) return
+  const params = new URLSearchParams({ offset: String(nextOffset), limit: String(ALBUM_GROUP_PAGE_SIZE) })
+  if (filter) params.set("filter", filter)
+  try {
+    const r = await serverFetch(`/api/library/albumgroups?${params}`)
+    if (!r.ok) return
+    const data = await r.json()
+    remoteAlbumGroups.update(existing => [...existing, ...(data.groups ?? [])])
+    remoteAlbumGroupsOffset.set(nextOffset)
+  } catch {
+    // ignore
+  }
+}
+
+// ─── Pagination state ────────────────────────────────────────────────────────
+
+export const tracksTotal  = writable(0)
+export const tracksOffset = writable(0)
+export const albumsTotal  = writable(0)
+export const albumsOffset = writable(0)
+
+const PAGE_SIZE = 50
+
+// ─── Paginated loading ───────────────────────────────────────────────────────
+
+/** Load a page of tracks from the server. Replaces the full-library fetch. */
+export async function loadTracksPage(offset = 0) {
+  if (!get(connected)) return
+  let isEmpty = true
+  tracks.subscribe(v => { isEmpty = v.length === 0 })()
+  if (isEmpty) loading.set(true)
+  try {
+    const r = await serverFetch(`/api/library/tracks?offset=${offset}&limit=${PAGE_SIZE}`)
+    const data = await r.json()
+    tracks.set(data.tracks ?? [])
+    tracksTotal.set(data.total ?? 0)
+    tracksOffset.set(data.offset ?? 0)
+  } finally { loading.set(false) }
+}
+
+/** Load a page of albums from the server, with optional filter. */
+export async function loadAlbumsPage(offset = 0, filter = "") {
+  if (!get(connected)) return
+  const params = new URLSearchParams({ offset: String(offset), limit: String(PAGE_SIZE) })
+  if (filter) params.set("filter", filter)
+  const r = await serverFetch(`/api/library/albums?${params}`)
+  const data = await r.json()
+  albums.set(data.albums ?? [])
+  albumsTotal.set(data.total ?? 0)
+  albumsOffset.set(data.offset ?? 0)
+}
+
+/** Fetch the next page of tracks and append to the existing list. */
+export async function loadMoreTracks() {
+  if (!get(connected)) return
+  const currentOffset = get(tracksOffset)
+  const total = get(tracksTotal)
+  const nextOffset = currentOffset + PAGE_SIZE
+  if (nextOffset >= total) return
+  const r = await serverFetch(`/api/library/tracks?offset=${nextOffset}&limit=${PAGE_SIZE}`)
+  const data = await r.json()
+  tracks.update(existing => [...existing, ...(data.tracks ?? [])])
+  tracksOffset.set(nextOffset)
+}
+
+/** Fetch the next page of albums and append. */
+export async function loadMoreAlbums(filter = "") {
+  if (!get(connected)) return
+  const currentOffset = get(albumsOffset)
+  const total = get(albumsTotal)
+  const nextOffset = currentOffset + PAGE_SIZE
+  if (nextOffset >= total) return
+  const params = new URLSearchParams({ offset: String(nextOffset), limit: String(PAGE_SIZE) })
+  if (filter) params.set("filter", filter)
+  const r = await serverFetch(`/api/library/albums?${params}`)
+  const data = await r.json()
+  albums.update(existing => [...existing, ...(data.albums ?? [])])
+  albumsOffset.set(nextOffset)
+}
+
+/** Fetch tracks by IDs (for queue resolution). */
+export async function fetchTracksByIDs(ids: string[]): Promise<Track[]> {
+  if (!get(connected) || ids.length === 0) return []
+  const r = await serverFetch(`/api/library/tracks?ids=${ids.join(",")}`)
+  const data = await r.json()
+  return Array.isArray(data) ? data : []
+}
+
+// ─── Legacy full-library fetch (kept for backward compat with web client) ────
+
 export async function loadTracks() {
   if (!get(connected)) return
-  // Only show loading spinner on initial fetch (empty store).
   let isEmpty = true
   tracks.subscribe(v => { isEmpty = v.length === 0 })()
   if (isEmpty) loading.set(true)

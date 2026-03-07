@@ -201,6 +201,17 @@ type LocalTrack struct {
 	HasArtwork  bool   `json:"has_artwork"`
 }
 
+// LocalAlbumGroup represents a group of tracks sharing the same album+artist,
+// computed via SQL GROUP BY. The frontend uses this for the album grid without
+// needing the full track list.
+type LocalAlbumGroup struct {
+	Key            string `json:"key"`              // "albumName|||albumArtist"
+	Name           string `json:"name"`             // album name
+	Artist         string `json:"artist"`           // album artist
+	TrackCount     int    `json:"track_count"`      // number of tracks in the album
+	FirstTrackPath string `json:"first_track_path"` // for artwork resolution
+}
+
 // ScanLocalFolderStream recursively scans a directory for audio files,
 // reading embedded tags and persisting each track to the local SQLite DB.
 // Instead of returning the full list, progress is streamed to the frontend
@@ -297,6 +308,42 @@ func (a *App) ScanLocalFolderStream(dir string) error {
 // the file system or deserialising a JSON blob.
 func (a *App) GetLocalTracks(folders []string) ([]LocalTrack, error) {
 	return a.getLocalTracks(folders)
+}
+
+// GetLocalTracksPage returns a paginated slice of cached tracks for the given
+// folders. Offset/limit pagination keeps IPC payloads small.
+func (a *App) GetLocalTracksPage(folders []string, offset, limit int) ([]LocalTrack, int, error) {
+	return a.getLocalTracksPage(folders, offset, limit)
+}
+
+// SearchLocalTracks performs a case-insensitive search across title, artist,
+// album, and path columns of local_tracks, returning at most 50 results.
+func (a *App) SearchLocalTracks(folders []string, query string) ([]LocalTrack, error) {
+	return a.searchLocalTracks(folders, query)
+}
+
+// GetLocalTracksByPaths returns tracks for the given exact paths.
+// Used by the queue to resolve track IDs without loading the full library.
+func (a *App) GetLocalTracksByPaths(paths []string) ([]LocalTrack, error) {
+	return a.getLocalTracksByPaths(paths)
+}
+
+// LocalAlbumGroupsResult holds paginated album groups plus the total count.
+type LocalAlbumGroupsResult struct {
+	Albums []LocalAlbumGroup `json:"albums"`
+	Total  int               `json:"total"`
+}
+
+// GetLocalAlbumGroups returns paginated album groups computed via SQL GROUP BY.
+// filter is an optional case-insensitive substring match on album name or artist.
+func (a *App) GetLocalAlbumGroups(folders []string, filter string, offset, limit int) (*LocalAlbumGroupsResult, error) {
+	return a.getLocalAlbumGroups(folders, filter, offset, limit)
+}
+
+// GetLocalAlbumTracks returns the tracks for a specific album by its group key
+// ("albumName|||albumArtist"), ordered by disc/track number.
+func (a *App) GetLocalAlbumTracks(folders []string, albumName, albumArtist string) ([]LocalTrack, error) {
+	return a.getLocalAlbumTracks(folders, albumName, albumArtist)
 }
 
 // ClearLocalFolder removes all cached tracks for a folder from the local DB.

@@ -14,6 +14,58 @@ export namespace main {
 	        this.token = source["token"];
 	    }
 	}
+	export class LocalAlbumGroup {
+	    key: string;
+	    name: string;
+	    artist: string;
+	    track_count: number;
+	    first_track_path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalAlbumGroup(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.name = source["name"];
+	        this.artist = source["artist"];
+	        this.track_count = source["track_count"];
+	        this.first_track_path = source["first_track_path"];
+	    }
+	}
+	export class LocalAlbumGroupsResult {
+	    albums: LocalAlbumGroup[];
+	    total: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalAlbumGroupsResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.albums = this.convertValues(source["albums"], LocalAlbumGroup);
+	        this.total = source["total"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class LocalTrack {
 	    path: string;
 	    title: string;

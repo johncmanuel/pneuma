@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte"
   import { type Track } from "../stores/player"
-  import { tracks } from "../stores/library"
+  import { fetchTracksByIDs } from "../stores/library"
   import { closePanel } from "../stores/ui"
   import { serverFetch, connected } from "../utils/api"
 
@@ -20,7 +20,7 @@
   let transferring: string | null = null
   const currentDevice = "desktop"
 
-  $: trackMap = new Map(($tracks as Track[]).map(t => [t.id, t]))
+  let trackMap = new Map<string, Track>()
 
   onMount(() => {
     fetchSessions()
@@ -33,6 +33,12 @@
       const res = await serverFetch("/api/sessions")
       if (res.ok) {
         sessions = (await res.json()) ?? []
+        // Resolve track metadata for all sessions in one batch
+        const ids = sessions.map(s => s.track_id).filter(Boolean)
+        if (ids.length > 0) {
+          const resolved = await fetchTracksByIDs(ids)
+          trackMap = new Map(resolved.map(t => [t.id, t]))
+        }
       }
     } catch {
       // ignore

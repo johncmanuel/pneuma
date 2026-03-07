@@ -1,7 +1,7 @@
 <script lang="ts">
   import { playerState, type Track } from "../stores/player"
-  import { tracks } from "../stores/library"
-  import { localTracks } from "../stores/localLibrary"
+  import { fetchTracksByIDs } from "../stores/library"
+  import { resolveLocalTracksByPaths } from "../stores/localLibrary"
   import { closePanel } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
   import { artworkUrl, connected } from "../utils/api"
@@ -11,39 +11,74 @@
   $: currentIndex = $playerState.queueIndex ?? 0
   $: nowPlayingTrack = $playerState.track
 
-  // Resolve track IDs to full Track objects — only for IDs in the queue
-  $: upNext = (() => {
-    const ids = queue.slice(currentIndex + 1)
-    if (ids.length === 0) return []
-    const needed = new Set(ids)
-    const map = new Map<string, Track>()
-    for (const t of $tracks as Track[]) {
-      if (needed.has(t.id)) map.set(t.id, t)
-    }
-    for (const lt of $localTracks) {
-      if (needed.has(lt.path)) {
-        map.set(lt.path, {
-          id: lt.path,
-          path: lt.path,
-          title: lt.title,
-          artist_id: "",
-          album_id: "",
-          artist_name: lt.artist,
-          album_artist: lt.album_artist,
-          album_name: lt.album,
-          genre: lt.genre,
-          year: lt.year,
-          track_number: lt.track_number,
-          disc_number: lt.disc_number,
-          duration_ms: lt.duration_ms,
-          bitrate_kbps: 0,
-          replay_gain_track: 0,
-          artwork_id: "",
-        } as Track)
+  // Cached map of track ID → Track for queue resolution.
+  // Populated lazily — only fetches IDs not already in the cache.
+  const trackCache = new Map<string, Track>()
+  let upNext: Track[] = []
+  let resolving = false
+
+  // When the queue changes, resolve any new IDs from the backend.
+  $: if (queue.length > 0 || currentIndex >= 0) {
+    resolveQueue(queue, currentIndex)
+  }
+
+  async function resolveQueue(q: string[], idx: number) {
+    const ids = q.slice(idx + 1)
+    if (ids.length === 0) { upNext = []; return }
+
+    // Split IDs into cached vs uncached
+    const uncachedRemote: string[] = []
+    const uncachedLocal: string[] = []
+    for (const id of ids) {
+      if (!trackCache.has(id)) {
+        // Local tracks use filesystem paths as IDs (contain /)
+        if (id.includes("/")) {
+          uncachedLocal.push(id)
+        } else {
+          uncachedRemote.push(id)
+        }
       }
     }
-    return ids.map(id => map.get(id)).filter((t): t is Track => t != null)
-  })()
+
+    // Fetch uncached tracks from the backend
+    if (uncachedRemote.length > 0 || uncachedLocal.length > 0) {
+      resolving = true
+      try {
+        const [remoteTracks, localTracks] = await Promise.all([
+          uncachedRemote.length > 0 ? fetchTracksByIDs(uncachedRemote) : [],
+          uncachedLocal.length > 0 ? resolveLocalTracksByPaths(uncachedLocal) : [],
+        ])
+        for (const t of remoteTracks) {
+          trackCache.set(t.id, t)
+        }
+        for (const lt of localTracks) {
+          trackCache.set(lt.path, {
+            id: lt.path,
+            path: lt.path,
+            title: lt.title,
+            artist_id: "",
+            album_id: "",
+            artist_name: lt.artist,
+            album_artist: lt.album_artist,
+            album_name: lt.album,
+            genre: lt.genre,
+            year: lt.year,
+            track_number: lt.track_number,
+            disc_number: lt.disc_number,
+            duration_ms: lt.duration_ms,
+            bitrate_kbps: 0,
+            replay_gain_track: 0,
+            artwork_id: "",
+          })
+        }
+      } finally {
+        resolving = false
+      }
+    }
+
+    // Build the resolved list from cache
+    upNext = ids.map(id => trackCache.get(id)).filter((t): t is Track => t != null)
+  }
 
   function close() {
     closePanel()

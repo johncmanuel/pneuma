@@ -18,9 +18,17 @@ export function DisconnectFromServer():Promise<void>;
 
 export function FindLocalDuplicates(arg1:Array<string>):Promise<Array<main.LocalDuplicateGroup>>;
 
+export function GetLocalAlbumGroups(arg1:Array<string>,arg2:string,arg3:number,arg4:number):Promise<main.LocalAlbumGroupsResult>;
+
+export function GetLocalAlbumTracks(arg1:Array<string>,arg2:string,arg3:string):Promise<Array<main.LocalTrack>>;
+
 export function GetLocalPort():Promise<number>;
 
 export function GetLocalTracks(arg1:Array<string>):Promise<Array<main.LocalTrack>>;
+
+export function GetLocalTracksByPaths(arg1:Array<string>):Promise<Array<main.LocalTrack>>;
+
+export function GetLocalTracksPage(arg1:Array<string>,arg2:number,arg3:number):Promise<Array<main.LocalTrack>>;
 
 export function GetServerURL():Promise<string>;
 
@@ -37,5 +45,7 @@ export function OpenLocalFolder():Promise<Array<string>>;
 export function RestoreSession(arg1:string,arg2:string):Promise<void>;
 
 export function ScanLocalFolderStream(arg1:string):Promise<void>;
+
+export function SearchLocalTracks(arg1:Array<string>,arg2:string):Promise<Array<main.LocalTrack>>;
 
 export function UploadLocalFile(arg1:string):Promise<string>;

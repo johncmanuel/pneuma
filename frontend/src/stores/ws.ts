@@ -1,7 +1,7 @@
 import { writable } from "svelte/store"
 import { playerState } from "./player"
 import type { Track } from "./player"
-import { loadTracks, tracks } from "./library"
+import { loadTracks, loadRemoteAlbumGroupsPage, tracks } from "./library"
 import { wsBase, authToken, connected, serverFetch, autoReconnect } from "../utils/api"
 import { addToast } from "./toasts"
 import { get } from "svelte/store"
@@ -41,6 +41,7 @@ export function connectWS() {
       case "track.updated":
       case "track.removed":
         loadTracks()
+        loadRemoteAlbumGroupsPage(0)
         break
       case "library.deduped": {
         const n: number = msg.payload?.removed ?? 0
@@ -49,6 +50,7 @@ export function connectWS() {
           "warning"
         )
         loadTracks()
+        loadRemoteAlbumGroupsPage(0)
         break
       }
       case "playback.changed": {

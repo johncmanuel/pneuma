@@ -1,10 +1,14 @@
 <script lang="ts">
-  import { tracks, loading } from "../stores/library"
-  import { localTracks, localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, checkLocalDuplicates, localDuplicates, scanningDuplicates, autoDupeCheck } from "../stores/localLibrary"
+  import { loading,
+           remoteAlbumGroups, remoteAlbumGroupsTotal, remoteAlbumGroupsOffset,
+           loadRemoteAlbumGroupsPage, loadMoreRemoteAlbumGroups,
+           type RemoteAlbumGroup } from "../stores/library"
+  import { localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, checkLocalDuplicates, localDuplicates, scanningDuplicates, autoDupeCheck, localAlbumGroups, localAlbumGroupsTotal, localAlbumGroupsOffset, localAlbumFilter, loadLocalAlbumGroups, loadMoreLocalAlbumGroups, fetchLocalAlbumTracks, type LocalAlbumGroup } from "../stores/localLibrary"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import Duplicates from "./Duplicates.svelte"
   import type { Track } from "../stores/player"
+  import type { LocalTrack } from "../stores/localLibrary"
   import { serverFetch, artworkUrl, connected, isReconnecting, localBase } from "../utils/api"
   import { wsSend } from "../stores/ws"
   import { onMount } from "svelte"
@@ -36,124 +40,162 @@
     return albumSortField === field ? (albumSortDir === "asc" ? " ↑" : " ↓") : ""
   }
 
-  // ─── Shared album grouping logic ────────────────────────────────────────────
+  // ─── Album group types (unified for local and remote display) ───────────────
 
   interface AlbumGroup {
     key: string
     name: string
     artist: string
-    tracks: Track[]
-    firstTrackId: string  // for album art
+    trackCount: number
+    firstTrackId: string  // for remote album art
     isLocal?: boolean
     firstLocalPath?: string // for local art
   }
 
   const UNORGANIZED_KEY = "__unorganized__"
 
-  function buildAlbumGroups(allTracks: Track[]): AlbumGroup[] {
-    const map = new Map<string, AlbumGroup>()
-    for (const t of allTracks) {
-      const hasAlbum = (t.album_name ?? "").trim() !== ""
-      const name = hasAlbum ? t.album_name : "Unorganized"
-      const artist = hasAlbum ? (t.album_artist || "Unknown Artist") : "Various"
-      const key = hasAlbum ? `${name}|||${artist}` : UNORGANIZED_KEY
-      let g = map.get(key)
-      if (!g) {
-        g = { key, name, artist, tracks: [], firstTrackId: t.id }
-        map.set(key, g)
-      }
-      g.tracks.push(t)
-    }
-    // Separate unorganized from normal albums
-    const unorg = map.get(UNORGANIZED_KEY)
-    map.delete(UNORGANIZED_KEY)
-    // Sort albums alphabetically
-    const groups = Array.from(map.values())
-    groups.sort((a, b) => a.name.localeCompare(b.name))
-    // Sort each album's tracks by disc/track number
-    for (const g of groups) {
-      g.tracks.sort((a, b) => (a.disc_number ?? 0) - (b.disc_number ?? 0) || (a.track_number ?? 0) - (b.track_number ?? 0))
-    }
-    // Unorganized tracks sorted by title
-    if (unorg) {
-      unorg.tracks.sort((a, b) => (a.title || "").localeCompare(b.title || ""))
-      groups.push(unorg) // place at end
-    }
-    return groups
+  // ─── Album detail state (on-demand loaded tracks) ───────────────────────────
+
+  let currentAlbumGroup: AlbumGroup | null = null
+  let albumDetailTracks: Track[] = []
+  let albumDetailLoading = false
+
+  // Convert local album groups to AlbumGroup shape
+  function localGroupsAsAlbumGroups(groups: LocalAlbumGroup[]): AlbumGroup[] {
+    return (groups ?? []).map(g => ({
+      key: g.key,
+      name: g.name,
+      artist: g.artist,
+      trackCount: g.track_count,
+      firstTrackId: "",
+      isLocal: true,
+      firstLocalPath: g.first_track_path,
+    }))
   }
 
-  function buildLocalAlbumGroups(localTracks: import("../stores/localLibrary").LocalTrack[]): AlbumGroup[] {
-    const map = new Map<string, AlbumGroup>()
-    for (const t of localTracks) {
-      const hasAlbum = (t.album ?? "").trim() !== ""
-      const name = hasAlbum ? t.album : "Unorganized"
-      const artist = hasAlbum ? (t.album_artist || t.artist || "Unknown Artist") : "Various"
-      const key = hasAlbum ? `${name}|||${artist}` : UNORGANIZED_KEY
-      let g = map.get(key)
-      if (!g) {
-        g = { key, name, artist, tracks: [], firstTrackId: "", isLocal: true, firstLocalPath: t.path }
-        map.set(key, g)
-      }
-      // Convert LocalTrack to Track shape for TrackRow
-      g.tracks.push({
-        id: t.path, // use path as ID for local tracks
-        path: t.path,
-        title: t.title,
-        artist_id: "",
-        album_id: "",
-        artist_name: t.artist,
-        album_artist: t.album_artist,
-        album_name: t.album,
-        genre: t.genre,
-        year: t.year,
-        track_number: t.track_number,
-        disc_number: t.disc_number,
-        duration_ms: t.duration_ms,
-        bitrate_kbps: 0,
-        replay_gain_track: 0,
-        artwork_id: "",
-      })
+  // Convert remote album groups (from /albumgroups endpoint) to AlbumGroup shape
+  function remoteGroupsAsAlbumGroups(groups: RemoteAlbumGroup[]): AlbumGroup[] {
+    return (groups ?? []).map(g => ({
+      key: g.key,
+      name: g.name || "Unknown Album",
+      artist: g.artist || "Unknown Artist",
+      trackCount: g.track_count,
+      firstTrackId: g.first_track_id,
+      isLocal: false,
+      firstLocalPath: "",
+    }))
+  }
+
+  // Convert a LocalTrack to the Track shape used by TrackRow
+  function localTrackToTrack(t: LocalTrack): Track {
+    return {
+      id: t.path,
+      path: t.path,
+      title: t.title,
+      artist_id: "",
+      album_id: "",
+      artist_name: t.artist,
+      album_artist: t.album_artist,
+      album_name: t.album,
+      genre: t.genre,
+      year: t.year,
+      track_number: t.track_number,
+      disc_number: t.disc_number,
+      duration_ms: t.duration_ms,
+      bitrate_kbps: 0,
+      replay_gain_track: 0,
+      artwork_id: "",
     }
-    const unorg = map.get(UNORGANIZED_KEY)
-    map.delete(UNORGANIZED_KEY)
-    const groups = Array.from(map.values())
-    groups.sort((a, b) => a.name.localeCompare(b.name))
-    for (const g of groups) {
-      g.tracks.sort((a, b) => (a.disc_number ?? 0) - (b.disc_number ?? 0) || (a.track_number ?? 0) - (b.track_number ?? 0))
-    }
-    if (unorg) {
-      unorg.tracks.sort((a, b) => (a.title || "").localeCompare(b.title || ""))
-      groups.push(unorg)
-    }
-    return groups
   }
 
   // ─── Reactive derivations ──────────────────────────────────────────────────
 
-  $: albumGroups = $activeTab === "library" ? buildAlbumGroups($tracks) : buildLocalAlbumGroups($localTracks)
+  $: displayedGroups = $activeTab === "library"
+    ? remoteGroupsAsAlbumGroups($remoteAlbumGroups)
+    : localGroupsAsAlbumGroups($localAlbumGroups)
   $: isLoading = $activeTab === "library" ? $loading : $localLoading
   $: localDupeCount = $localDuplicates.length
+  $: currentTotal = $activeTab === "library" ? $remoteAlbumGroupsTotal : $localAlbumGroupsTotal
+  $: currentOffset = $activeTab === "library" ? $remoteAlbumGroupsOffset : $localAlbumGroupsOffset
+  $: hasMore = displayedGroups.length < currentTotal
 
-  $: filteredAlbumGroups = (() => {
-    if (!albumGridFilter.trim()) return albumGroups
-    const f = albumGridFilter.toLowerCase()
-    return albumGroups.filter(g =>
-      g.name.toLowerCase().includes(f) || g.artist.toLowerCase().includes(f)
-    )
-  })()
+  // Load the selected album's tracks on demand
+  $: if ($selectedAlbum && !albumDetailLoading) {
+    const group = displayedGroups.find(g => g.key === $selectedAlbum) ?? null
+    if (group && (!currentAlbumGroup || currentAlbumGroup.key !== group.key)) {
+      loadAlbumDetail(group)
+    }
+  }
 
-  $: currentAlbumGroup = $selectedAlbum
-    ? albumGroups.find(g => g.key === $selectedAlbum) ?? null
-    : null
+  // Clear album detail when deselecting
+  $: if (!$selectedAlbum) {
+    currentAlbumGroup = null
+    albumDetailTracks = []
+    albumFilter = ""
+    albumSortField = "default"
+    albumSortDir = "asc"
+  }
 
-  // Reset filter/sort when switching albums
-  $: if ($selectedAlbum) { albumFilter = ""; albumSortField = "default"; albumSortDir = "asc" }
+  async function loadAlbumDetail(group: AlbumGroup) {
+    albumDetailLoading = true
+    currentAlbumGroup = group
+    albumFilter = ""
+    albumSortField = "default"
+    albumSortDir = "asc"
+    try {
+      if (group.isLocal) {
+        // Parse albumName and albumArtist from the key
+        let albumName: string, albumArtist: string
+        if (group.key === UNORGANIZED_KEY) {
+          albumName = ""
+          albumArtist = ""
+        } else {
+          const parts = group.key.split("|||")
+          albumName = parts[0] ?? ""
+          albumArtist = parts[1] ?? ""
+        }
+        const locals = await fetchLocalAlbumTracks(albumName, albumArtist)
+        albumDetailTracks = locals.map(localTrackToTrack)
+        // Update track count with the actual number
+        if (currentAlbumGroup) {
+          currentAlbumGroup = { ...currentAlbumGroup, trackCount: albumDetailTracks.length }
+        }
+      } else {
+        // Remote: fetch tracks for this album by album_name + album_artist
+        let albumName: string, albumArtist: string
+        if (group.key === UNORGANIZED_KEY) {
+          albumName = ""
+          albumArtist = ""
+        } else {
+          const parts = group.key.split("|||")
+          albumName = parts[0] ?? ""
+          albumArtist = parts[1] ?? ""
+        }
+        const params = new URLSearchParams()
+        params.set("album_name", albumName)
+        if (albumArtist) params.set("album_artist", albumArtist)
+        const r = await serverFetch(`/api/library/tracks?${params}`)
+        const data = await r.json()
+        const fetched: Track[] = Array.isArray(data) ? data : (data.tracks ?? [])
+        albumDetailTracks = fetched
+          .sort((a, b) => (a.disc_number ?? 0) - (b.disc_number ?? 0) || (a.track_number ?? 0) - (b.track_number ?? 0))
+        if (currentAlbumGroup) {
+          currentAlbumGroup = { ...currentAlbumGroup, trackCount: albumDetailTracks.length }
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to load album detail:", e)
+      albumDetailTracks = []
+    } finally {
+      albumDetailLoading = false
+    }
+  }
 
-  // Filtered + sorted tracks for album detail
-  $: albumDetailTracks = (() => {
+  // Filtered + sorted tracks for album detail (client-side on the small album track set)
+  $: filteredAlbumDetailTracks = (() => {
     if (!currentAlbumGroup) return []
     const f = albumFilter.toLowerCase()
-    let result = currentAlbumGroup.tracks
+    let result = albumDetailTracks
     if (f) {
       result = result.filter(t =>
         (t.title ?? "").toLowerCase().includes(f) ||
@@ -180,22 +222,75 @@
 
   // Virtualized track list for album detail view
   $: virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: albumDetailTracks.length,
+    count: filteredAlbumDetailTracks.length,
     getScrollElement: () => trackListEl,
     estimateSize: () => 38,
     overscan: 5,
   })
 
-  // On mount, always load local tracks if the user has saved folders.
-  // scanLocalFolders() restores from localStorage cache immediately (fast path)
-  // and then kicks off a background rescan.
-  // The duplicate check is gated on the autoDupeCheck preference.
+  // On mount, load album groups and optionally check duplicates.
   onMount(() => {
+    if ($activeTab === "library") {
+      loadRemoteAlbumGroupsPage(0)
+    }
     if ($localFolders.length > 0) {
       scanLocalFolders()
       if ($autoDupeCheck) checkLocalDuplicates()
     }
   })
+
+  // ─── Debounced album grid filter ───────────────────────────────────────────
+
+  let gridFilterDebounce: ReturnType<typeof setTimeout>
+
+  function onAlbumGridFilterInput() {
+    clearTimeout(gridFilterDebounce)
+    gridFilterDebounce = setTimeout(() => {
+      const q = albumGridFilter.trim()
+      if ($activeTab === "library") {
+        loadRemoteAlbumGroupsPage(0, q)
+      } else {
+        localAlbumFilter.set(q)
+        loadLocalAlbumGroups(0, q)
+      }
+    }, 300)
+  }
+
+  function clearAlbumGridFilter() {
+    albumGridFilter = ""
+    if ($activeTab === "library") {
+      loadRemoteAlbumGroupsPage(0)
+    } else {
+      localAlbumFilter.set("")
+      loadLocalAlbumGroups(0, "")
+    }
+  }
+
+  // ─── Infinite scroll for album grid ────────────────────────────────────────
+
+  let gridScrollEl: HTMLDivElement
+  let loadingMore = false
+
+  function handleGridScroll() {
+    if (loadingMore || !hasMore || !gridScrollEl) return
+    const { scrollTop, scrollHeight, clientHeight } = gridScrollEl
+    if (scrollTop + clientHeight >= scrollHeight - 200) {
+      loadMorePage()
+    }
+  }
+
+  async function loadMorePage() {
+    loadingMore = true
+    try {
+      if ($activeTab === "library") {
+        await loadMoreRemoteAlbumGroups(albumGridFilter.trim())
+      } else {
+        await loadMoreLocalAlbumGroups(get(localAlbumFilter))
+      }
+    } finally {
+      loadingMore = false
+    }
+  }
 
   // ─── Playback ──────────────────────────────────────────────────────────────
 
@@ -249,9 +344,6 @@
   }
 
   function addToQueue(track: Track) {
-    // Insert directly after the currently playing track (Spotify-style),
-    // not at the end. Do NOT send playback.queue to the server because
-    // SetQueue resets PositionMS=0, which would interrupt playback.
     playerState.update(s => {
       const insertAt = s.queueIndex + 1
       const newQueue = [
@@ -271,6 +363,12 @@
   function switchTab(tab: LibTab) {
     albumGridFilter = ""
     pushNav({ tab, albumKey: null, subTab: "albums" })
+    // Reload album groups for the new tab
+    if (tab === "library") {
+      loadRemoteAlbumGroupsPage(0)
+    } else if (tab === "local") {
+      loadLocalAlbumGroups(0, "")
+    }
   }
 
   function localArtUrl(track: Track): string {
@@ -300,7 +398,7 @@
   }
 
   function handlePlay(e: CustomEvent<Track>) {
-    playTrack(e.detail, albumDetailTracks)
+    playTrack(e.detail, filteredAlbumDetailTracks)
   }
 
   function handleQueue(e: CustomEvent<Track>) {
@@ -374,7 +472,7 @@
           </div>
           <div class="album-detail-info">
             <h2 class="album-detail-title">{currentAlbumGroup.name}</h2>
-            <p class="album-meta text-2">{currentAlbumGroup.artist} · {currentAlbumGroup.tracks.length} tracks</p>
+      <p class="album-meta text-2">{currentAlbumGroup.artist} · {currentAlbumGroup.trackCount} tracks</p>
             <div class="album-filter-bar">
               <input
                 type="search"
@@ -393,7 +491,7 @@
           <button class="col-sort" on:click={() => toggleSort("duration")}>Duration{sortIndicator("duration")}</button>
         </div>
 
-        {#if albumFilter && albumDetailTracks.length === 0}
+        {#if albumFilter && filteredAlbumDetailTracks.length === 0}
           <p class="no-results text-3">No songs match "{albumFilter}"</p>
         {:else}
           <div class="track-list" class:scrolling={isScrolling} bind:this={trackListEl} on:scroll={handleScroll}>
@@ -404,9 +502,9 @@
                   style="height: {row.size}px; transform: translateY({row.start}px);"
                 >
                   <TrackRow
-                    track={albumDetailTracks[row.index]}
+                    track={filteredAlbumDetailTracks[row.index]}
                     hideAlbum={true}
-                    active={$currentTrackId === albumDetailTracks[row.index]?.id}
+                    active={$currentTrackId === filteredAlbumDetailTracks[row.index]?.id}
                     on:play={handlePlay}
                     on:select={() => {}}
                     on:addToQueue={handleQueue}
@@ -419,7 +517,7 @@
       </div>
   {:else}
     <!-- Album grid view -->
-    <div class="grid-scroll-wrapper">
+    <div class="grid-scroll-wrapper" bind:this={gridScrollEl} on:scroll={handleGridScroll}>
     <div class="toolbar">
       <h2>{$activeTab === "library" ? "Library" : "Local Files"}</h2>
       <div class="toolbar-actions">
@@ -441,9 +539,10 @@
         class="album-grid-filter"
         placeholder="Search albums…"
         bind:value={albumGridFilter}
+        on:input={onAlbumGridFilterInput}
       />
       {#if albumGridFilter}
-        <button class="grid-filter-clear" on:click={() => albumGridFilter = ""}>×</button>
+        <button class="grid-filter-clear" on:click={clearAlbumGridFilter}>×</button>
       {/if}
     </div>
 
@@ -466,18 +565,18 @@
       </div>
     {:else if isLoading}
       <p class="text-3">Loading…</p>
-    {:else if albumGroups.length === 0}
+    {:else if displayedGroups.length === 0}
       {#if $activeTab === "local"}
         <p class="text-3">No local music. Click "Add Folder" to add a music directory.</p>
       {:else}
         <p class="text-3">No tracks found. Add a watch folder in Settings and scan.</p>
       {/if}
     {:else}
-      {#if filteredAlbumGroups.length === 0}
+      {#if displayedGroups.length === 0}
         <p class="text-3">No albums match "{albumGridFilter}"</p>
       {:else}
       <div class="album-grid">
-        {#each filteredAlbumGroups as album (album.key)}
+        {#each displayedGroups as album (album.key)}
           <button
             class="album-card"
             class:unorganized={album.key === UNORGANIZED_KEY}
@@ -490,10 +589,13 @@
               <div class="album-art-placeholder">{album.key === UNORGANIZED_KEY ? "📂" : "♫"}</div>
             </div>
             <p class="album-title truncate" class:unorg-title={album.key === UNORGANIZED_KEY}>{album.name}</p>
-            <p class="album-artist truncate text-3">{album.artist} · {album.tracks.length} tracks</p>
+            <p class="album-artist truncate text-3">{album.artist} · {album.trackCount} tracks</p>
           </button>
         {/each}
       </div>
+      {#if hasMore}
+        <p class="text-3" style="text-align:center;padding:12px;">Loading more…</p>
+      {/if}
     {/if}
   {/if}
 

@@ -34,12 +34,28 @@ export function FindLocalDuplicates(arg1) {
   return window['go']['main']['App']['FindLocalDuplicates'](arg1);
 }
 
+export function GetLocalAlbumGroups(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['GetLocalAlbumGroups'](arg1, arg2, arg3, arg4);
+}
+
+export function GetLocalAlbumTracks(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetLocalAlbumTracks'](arg1, arg2, arg3);
+}
+
 export function GetLocalPort() {
   return window['go']['main']['App']['GetLocalPort']();
 }
 
 export function GetLocalTracks(arg1) {
   return window['go']['main']['App']['GetLocalTracks'](arg1);
+}
+
+export function GetLocalTracksByPaths(arg1) {
+  return window['go']['main']['App']['GetLocalTracksByPaths'](arg1);
+}
+
+export function GetLocalTracksPage(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GetLocalTracksPage'](arg1, arg2, arg3);
 }
 
 export function GetServerURL() {
@@ -72,6 +88,10 @@ export function RestoreSession(arg1, arg2) {
 
 export function ScanLocalFolderStream(arg1) {
   return window['go']['main']['App']['ScanLocalFolderStream'](arg1);
+}
+
+export function SearchLocalTracks(arg1, arg2) {
+  return window['go']['main']['App']['SearchLocalTracks'](arg1, arg2);
 }
 
 export function UploadLocalFile(arg1) {

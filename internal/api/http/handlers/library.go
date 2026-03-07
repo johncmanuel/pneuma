@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -57,9 +58,62 @@ func NewLibraryHandler(lib *library.Service, store *sqlite.Store, sc scanTrigger
 	return &LibraryHandler{lib: lib, store: store, scanner: sc, hub: hub, uploadsDir: uploadsDir, fingerprinter: fp}
 }
 
-// ListTracks returns all tracks.
+// ListTracks returns tracks. Supports optional pagination via ?offset=&limit=
+// query params. Without them, returns all tracks (backwards-compatible).
 func (h *LibraryHandler) ListTracks(c echo.Context) error {
-	tracks, err := h.lib.AllTracks(c.Request().Context())
+	ctx := c.Request().Context()
+
+	// Bulk fetch by IDs: GET /api/library/tracks?ids=id1,id2,...
+	if idsParam := c.QueryParam("ids"); idsParam != "" {
+		ids := strings.Split(idsParam, ",")
+		tracks, err := h.lib.TracksByIDs(ctx, ids)
+		if err != nil {
+			return internalErr(err)
+		}
+		return c.JSON(http.StatusOK, tracks)
+	}
+
+	// Fetch tracks by album: GET /api/library/tracks?album_name=X&album_artist=Y
+	if albumName := c.QueryParam("album_name"); albumName != "" || c.QueryParam("album_artist") != "" {
+		albumArtist := c.QueryParam("album_artist")
+		tracks, err := h.lib.TracksByAlbum(ctx, albumName, albumArtist)
+		if err != nil {
+			return internalErr(err)
+		}
+		return c.JSON(http.StatusOK, tracks)
+	}
+
+	offsetStr := c.QueryParam("offset")
+	limitStr := c.QueryParam("limit")
+	if offsetStr != "" || limitStr != "" {
+		offset, _ := strconv.Atoi(offsetStr)
+		limit, _ := strconv.Atoi(limitStr)
+		if limit <= 0 {
+			limit = 50
+		}
+		if limit > 200 {
+			limit = 200
+		}
+		if offset < 0 {
+			offset = 0
+		}
+		tracks, err := h.lib.AllTracksPage(ctx, offset, limit)
+		if err != nil {
+			return internalErr(err)
+		}
+		total, err := h.lib.CountTracks(ctx)
+		if err != nil {
+			return internalErr(err)
+		}
+		return c.JSON(http.StatusOK, map[string]any{
+			"tracks": tracks,
+			"total":  total,
+			"offset": offset,
+			"limit":  limit,
+		})
+	}
+
+	tracks, err := h.lib.AllTracks(ctx)
 	if err != nil {
 		return internalErr(err)
 	}
@@ -205,13 +259,84 @@ func (h *LibraryHandler) UpdateTrackMeta(c echo.Context) error {
 	return c.JSON(http.StatusOK, track)
 }
 
-// ListAlbums returns all albums.
+// ListAlbums returns albums. Supports optional pagination via ?offset=&limit=
+// and filtering via ?filter= query params.
 func (h *LibraryHandler) ListAlbums(c echo.Context) error {
-	albums, err := h.lib.AllAlbums(c.Request().Context())
+	ctx := c.Request().Context()
+	offsetStr := c.QueryParam("offset")
+	limitStr := c.QueryParam("limit")
+	filter := c.QueryParam("filter")
+
+	if offsetStr != "" || limitStr != "" || filter != "" {
+		offset, _ := strconv.Atoi(offsetStr)
+		limit, _ := strconv.Atoi(limitStr)
+		if limit <= 0 {
+			limit = 50
+		}
+		if limit > 200 {
+			limit = 200
+		}
+		if offset < 0 {
+			offset = 0
+		}
+		albums, err := h.lib.AllAlbumsPage(ctx, filter, offset, limit)
+		if err != nil {
+			return internalErr(err)
+		}
+		total, err := h.lib.CountAlbums(ctx, filter)
+		if err != nil {
+			return internalErr(err)
+		}
+		return c.JSON(http.StatusOK, map[string]any{
+			"albums": albums,
+			"total":  total,
+			"offset": offset,
+			"limit":  limit,
+		})
+	}
+
+	albums, err := h.lib.AllAlbums(ctx)
 	if err != nil {
 		return internalErr(err)
 	}
 	return c.JSON(http.StatusOK, albums)
+}
+
+// ListAlbumGroups returns album groups derived from the tracks table using
+// GROUP BY album_name, album_artist. This is more reliable than /albums because
+// it does not require the albums table to be populated — it reflects the actual
+// music files present in the library. Supports ?offset=&limit=&filter= params.
+func (h *LibraryHandler) ListAlbumGroups(c echo.Context) error {
+	ctx := c.Request().Context()
+	offset, _ := strconv.Atoi(c.QueryParam("offset"))
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	filter := c.QueryParam("filter")
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	groups, err := h.lib.AllTrackAlbumGroupsPage(ctx, filter, offset, limit)
+	if err != nil {
+		return internalErr(err)
+	}
+	total, err := h.lib.CountTrackAlbumGroups(ctx, filter)
+	if err != nil {
+		return internalErr(err)
+	}
+	if groups == nil {
+		groups = []*models.TrackAlbumGroup{}
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"groups": groups,
+		"total":  total,
+		"offset": offset,
+		"limit":  limit,
+	})
 }
 
 // Search performs a text search across tracks.

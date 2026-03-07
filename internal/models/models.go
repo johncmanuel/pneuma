@@ -43,6 +43,18 @@ type Album struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// TrackAlbumGroup is an album group derived directly from the tracks table
+// using GROUP BY. Unlike Album, it does not require a separate albums table
+// and always reflects the actual music files present.
+type TrackAlbumGroup struct {
+	Key          string `json:"key"`    // "name|||artist" or "__unorganized__"
+	Name         string `json:"name"`   // album_name
+	Artist       string `json:"artist"` // album_artist
+	TrackCount   int    `json:"track_count"`
+	FirstTrackID string `json:"first_track_id"` // any track in this album (for artwork)
+	ArtworkID    string `json:"artwork_id"`
+}
+
 type Track struct {
 	ID                  string     `json:"id"`
 	Path                string     `json:"path"`

@@ -87,6 +87,50 @@ func (s *Store) ListTracks(ctx context.Context) ([]*models.Track, error) {
 	return collectTracks(rows)
 }
 
+// ListTracksPage returns a paginated slice of non-deleted tracks ordered by title.
+func (s *Store) ListTracksPage(ctx context.Context, offset, limit int) ([]*models.Track, error) {
+	const q = `SELECT ` + trackColumns + ` FROM tracks WHERE deleted_at IS NULL ORDER BY title COLLATE NOCASE LIMIT ? OFFSET ?`
+	rows, err := s.db.QueryContext(ctx, q, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectTracks(rows)
+}
+
+// ListTracksByAlbum returns tracks for a given album_name + album_artist, ordered by disc/track.
+// Pass albumArtist="" to match any artist (useful for unorganized tracks with empty album_name).
+func (s *Store) ListTracksByAlbum(ctx context.Context, albumName, albumArtist string) ([]*models.Track, error) {
+	var q string
+	var args []any
+	if albumName == "" {
+		// Unorganized: tracks with blank album_name
+		q = `SELECT ` + trackColumns + ` FROM tracks WHERE deleted_at IS NULL AND TRIM(COALESCE(album_name,''))=''
+		     ORDER BY disc_number, track_number, title COLLATE NOCASE`
+	} else if albumArtist == "" {
+		q = `SELECT ` + trackColumns + ` FROM tracks WHERE deleted_at IS NULL AND album_name=?
+		     ORDER BY disc_number, track_number, title COLLATE NOCASE`
+		args = []any{albumName}
+	} else {
+		q = `SELECT ` + trackColumns + ` FROM tracks WHERE deleted_at IS NULL AND album_name=? AND COALESCE(album_artist,'')=?
+		     ORDER BY disc_number, track_number, title COLLATE NOCASE`
+		args = []any{albumName, albumArtist}
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return collectTracks(rows)
+}
+
+// CountTracks returns the total number of non-deleted tracks.
+func (s *Store) CountTracks(ctx context.Context) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM tracks WHERE deleted_at IS NULL`).Scan(&n)
+	return n, err
+}
+
 // SearchTracks performs a case-insensitive substring search on title, genre, artist name, album title.
 func (s *Store) SearchTracks(ctx context.Context, query string) ([]*models.Track, error) {
 	q := `SELECT ` + trackColumns + ` FROM tracks
@@ -264,6 +308,118 @@ func (s *Store) ListAlbums(ctx context.Context) ([]*models.Album, error) {
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+
+// ListAlbumsPage returns a paginated, optionally filtered, slice of albums.
+func (s *Store) ListAlbumsPage(ctx context.Context, filter string, offset, limit int) ([]*models.Album, error) {
+	var q string
+	var args []any
+	if filter != "" {
+		q = `SELECT id,title,COALESCE(artist_id,''),year,COALESCE(mb_release_id,''),COALESCE(artwork_id,''),created_at
+		     FROM albums WHERE title LIKE ? ORDER BY title COLLATE NOCASE LIMIT ? OFFSET ?`
+		args = []any{"%" + filter + "%", limit, offset}
+	} else {
+		q = `SELECT id,title,COALESCE(artist_id,''),year,COALESCE(mb_release_id,''),COALESCE(artwork_id,''),created_at
+		     FROM albums ORDER BY title COLLATE NOCASE LIMIT ? OFFSET ?`
+		args = []any{limit, offset}
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*models.Album
+	for rows.Next() {
+		a, err := scanAlbum(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// CountAlbums returns the total number of albums, optionally filtered.
+func (s *Store) CountAlbums(ctx context.Context, filter string) (int, error) {
+	var n int
+	var err error
+	if filter != "" {
+		err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM albums WHERE title LIKE ?`, "%"+filter+"%").Scan(&n)
+	} else {
+		err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM albums`).Scan(&n)
+	}
+	return n, err
+}
+
+// ─── Track-derived album groups ───────────────────────────────────────────────
+// These functions derive album groups directly from the tracks table using
+// GROUP BY, so they work even when the albums table is empty or incomplete.
+
+const trackAlbumGroupKey = `CASE WHEN TRIM(COALESCE(album_name,''))='' THEN '__unorganized__'
+	ELSE album_name || '|||' || COALESCE(album_artist,'') END`
+
+// ListTrackAlbumGroupsPage returns paginated album groups derived from tracks.
+func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, offset, limit int) ([]*models.TrackAlbumGroup, error) {
+	var q string
+	var args []any
+	if filter != "" {
+		q = `SELECT ` + trackAlbumGroupKey + ` AS grp_key,
+			COALESCE(NULLIF(TRIM(album_name),''),'') AS album_name,
+			COALESCE(album_artist,'') AS album_artist,
+			COUNT(*) AS track_count,
+			MIN(id) AS first_track_id,
+			COALESCE(MAX(NULLIF(artwork_id,'')), '') AS artwork_id
+		FROM tracks
+		WHERE deleted_at IS NULL AND (album_name LIKE ? OR album_artist LIKE ?)
+		GROUP BY grp_key
+		ORDER BY album_name COLLATE NOCASE
+		LIMIT ? OFFSET ?`
+		like := "%" + filter + "%"
+		args = []any{like, like, limit, offset}
+	} else {
+		q = `SELECT ` + trackAlbumGroupKey + ` AS grp_key,
+			COALESCE(NULLIF(TRIM(album_name),''),'') AS album_name,
+			COALESCE(album_artist,'') AS album_artist,
+			COUNT(*) AS track_count,
+			MIN(id) AS first_track_id,
+			COALESCE(MAX(NULLIF(artwork_id,'')), '') AS artwork_id
+		FROM tracks
+		WHERE deleted_at IS NULL
+		GROUP BY grp_key
+		ORDER BY album_name COLLATE NOCASE
+		LIMIT ? OFFSET ?`
+		args = []any{limit, offset}
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*models.TrackAlbumGroup
+	for rows.Next() {
+		var g models.TrackAlbumGroup
+		if err := rows.Scan(&g.Key, &g.Name, &g.Artist, &g.TrackCount, &g.FirstTrackID, &g.ArtworkID); err != nil {
+			return nil, err
+		}
+		out = append(out, &g)
+	}
+	return out, rows.Err()
+}
+
+// CountTrackAlbumGroups returns the total number of distinct album groups in tracks.
+func (s *Store) CountTrackAlbumGroups(ctx context.Context, filter string) (int, error) {
+	var n int
+	var err error
+	if filter != "" {
+		like := "%" + filter + "%"
+		err = s.db.QueryRowContext(ctx,
+			`SELECT COUNT(DISTINCT `+trackAlbumGroupKey+`) FROM tracks WHERE deleted_at IS NULL AND (album_name LIKE ? OR album_artist LIKE ?)`,
+			like, like).Scan(&n)
+	} else {
+		err = s.db.QueryRowContext(ctx,
+			`SELECT COUNT(DISTINCT `+trackAlbumGroupKey+`) FROM tracks WHERE deleted_at IS NULL`).Scan(&n)
+	}
+	return n, err
 }
 
 // ─── Artist ──────────────────────────────────────────────────────────────────

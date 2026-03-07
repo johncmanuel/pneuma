@@ -104,6 +104,7 @@ func NewRouter(svc Services) *echo.Echo {
 	lib.POST("/tracks/upload", lh.UploadTrack, middleware.RequirePerm(secret, "can_upload"))
 	lib.DELETE("/tracks/:id", lh.DeleteTrack, middleware.RequirePerm(secret, "can_delete"))
 	lib.GET("/albums", lh.ListAlbums)
+	lib.GET("/albumgroups", lh.ListAlbumGroups)
 	lib.GET("/search", lh.Search)
 	lib.POST("/scan", lh.TriggerScan, adminMW)
 

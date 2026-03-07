@@ -25,6 +25,16 @@ func (s *Service) AllTracks(ctx context.Context) ([]*models.Track, error) {
 	return s.store.ListTracks(ctx)
 }
 
+// AllTracksPage returns a paginated slice of tracks.
+func (s *Service) AllTracksPage(ctx context.Context, offset, limit int) ([]*models.Track, error) {
+	return s.store.ListTracksPage(ctx, offset, limit)
+}
+
+// CountTracks returns the total number of non-deleted tracks.
+func (s *Service) CountTracks(ctx context.Context) (int, error) {
+	return s.store.CountTracks(ctx)
+}
+
 // Search performs a text search.
 func (s *Service) Search(ctx context.Context, q string) ([]*models.Track, error) {
 	return s.store.SearchTracks(ctx, q)
@@ -48,6 +58,11 @@ func (s *Service) TrackByFingerprint(ctx context.Context, fp string) (*models.Tr
 // TracksByIDs returns tracks for the given IDs.
 func (s *Service) TracksByIDs(ctx context.Context, ids []string) ([]*models.Track, error) {
 	return s.store.TracksByIDs(ctx, ids)
+}
+
+// TracksByAlbum returns all tracks for a given album_name + album_artist, ordered by disc/track.
+func (s *Service) TracksByAlbum(ctx context.Context, albumName, albumArtist string) ([]*models.Track, error) {
+	return s.store.ListTracksByAlbum(ctx, albumName, albumArtist)
 }
 
 // UpsertTrack inserts or updates a track, auto-generating an ID if empty.
@@ -141,6 +156,26 @@ func (s *Service) EnsureAlbum(ctx context.Context, title, artistID string) (*mod
 // AllAlbums returns every album in the database.
 func (s *Service) AllAlbums(ctx context.Context) ([]*models.Album, error) {
 	return s.store.ListAlbums(ctx)
+}
+
+// AllAlbumsPage returns a paginated, optionally filtered, slice of albums.
+func (s *Service) AllAlbumsPage(ctx context.Context, filter string, offset, limit int) ([]*models.Album, error) {
+	return s.store.ListAlbumsPage(ctx, filter, offset, limit)
+}
+
+// CountAlbums returns the total number of albums, optionally filtered.
+func (s *Service) CountAlbums(ctx context.Context, filter string) (int, error) {
+	return s.store.CountAlbums(ctx, filter)
+}
+
+// AllTrackAlbumGroupsPage returns paginated album groups derived from the tracks table.
+func (s *Service) AllTrackAlbumGroupsPage(ctx context.Context, filter string, offset, limit int) ([]*models.TrackAlbumGroup, error) {
+	return s.store.ListTrackAlbumGroupsPage(ctx, filter, offset, limit)
+}
+
+// CountTrackAlbumGroups returns the total number of distinct album groups in tracks.
+func (s *Service) CountTrackAlbumGroups(ctx context.Context, filter string) (int, error) {
+	return s.store.CountTrackAlbumGroups(ctx, filter)
 }
 
 // SetAlbumArtwork updates the artwork ID on an album.

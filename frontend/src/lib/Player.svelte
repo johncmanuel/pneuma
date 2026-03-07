@@ -1,7 +1,7 @@
 <script lang="ts">
   import { playerState, type Track } from "../stores/player"
-  import { tracks } from "../stores/library"
-  import { localTracks } from "../stores/localLibrary"
+  import { fetchTracksByIDs } from "../stores/library"
+  import { resolveLocalTracksByPaths } from "../stores/localLibrary"
   import { activePanel, togglePanel, toggleQueuePanel, currentView, pushNav } from "../stores/ui"
   import { formatDuration } from "./TrackRow.svelte"
   import { streamUrl, artworkUrl } from "../utils/api"
@@ -27,33 +27,49 @@
   // Local tracks use their filesystem path as the ID — don't send WS events for them.
   $: isLocal = !!($playerState.trackId?.startsWith('/') || /^[a-zA-Z]:[/\\]/.test($playerState.trackId ?? ''))
 
+  /** Cache of resolved tracks — avoids re-fetching on every skip. */
+  const trackCache = new Map<string, Track>()
+  const isLocalPath = (id: string) => id.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(id)
+
   /** Resolve a track ID to a Track object (server library OR local files). */
-  function findTrackById(id: string): Track | null {
-    // Server tracks
-    const all = $tracks as Track[]
-    const found = all?.find(t => t.id === id)
-    if (found) return found
-    // Local tracks — convert LocalTrack shape to Track
-    const lt = $localTracks.find(t => t.path === id)
-    if (lt) {
-      return {
-        id: lt.path,
-        path: lt.path,
-        title: lt.title,
-        artist_id: "",
-        album_id: "",
-        artist_name: lt.artist,
-        album_artist: lt.album_artist,
-        album_name: lt.album,
-        genre: lt.genre,
-        year: lt.year,
-        track_number: lt.track_number,
-        disc_number: lt.disc_number,
-        duration_ms: lt.duration_ms,
-        bitrate_kbps: 0,
-        replay_gain_track: 0,
-        artwork_id: "",
-      } as Track
+  async function findTrackById(id: string): Promise<Track | null> {
+    if (trackCache.has(id)) return trackCache.get(id)!
+
+    try {
+      if (isLocalPath(id)) {
+        const locals = await resolveLocalTracksByPaths([id])
+        if (locals.length > 0) {
+          const lt = locals[0]
+          const t: Track = {
+            id: lt.path,
+            path: lt.path,
+            title: lt.title,
+            artist_id: "",
+            album_id: "",
+            artist_name: lt.artist,
+            album_artist: lt.album_artist,
+            album_name: lt.album,
+            genre: lt.genre,
+            year: lt.year,
+            track_number: lt.track_number,
+            disc_number: lt.disc_number,
+            duration_ms: lt.duration_ms,
+            bitrate_kbps: 0,
+            replay_gain_track: 0,
+            artwork_id: "",
+          } as Track
+          trackCache.set(id, t)
+          return t
+        }
+      } else {
+        const remotes = await fetchTracksByIDs([id])
+        if (remotes.length > 0) {
+          trackCache.set(id, remotes[0])
+          return remotes[0]
+        }
+      }
+    } catch {
+      // ignore — return null
     }
     return null
   }
@@ -86,16 +102,15 @@
     })
   }
 
-  function skipNext() {
+  async function skipNext() {
     if (!hasTrack) return
     const q = $playerState.queue
     if (q.length === 0) return
-    const isLocalPath = (id: string) => id.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(id)
 
     if ($playerState.repeat === 2) {
       // Repeat-one: restart the current track in-place
       const id = q[$playerState.queueIndex]
-      const nextTrack = findTrackById(id)
+      const nextTrack = await findTrackById(id)
       audioDurationMs = 0
       playerState.update(s => ({ ...s, track: nextTrack, positionMs: 0, paused: false }))
       if (!isLocalPath(id)) wsSend("playback.play", { device_id: deviceId, track_id: id, position_ms: 0 })
@@ -114,7 +129,7 @@
       nextIdx = 0
     }
     const nextId = nextQueue[nextIdx]
-    const nextTrack = findTrackById(nextId)
+    const nextTrack = await findTrackById(nextId)
     audioDurationMs = 0
     playerState.update(s => ({
       ...s,
@@ -128,15 +143,14 @@
     if (!isLocalPath(nextId)) wsSend("playback.play", { device_id: deviceId, track_id: nextId, position_ms: 0 })
   }
 
-  function skipPrev() {
+  async function skipPrev() {
     if (!hasTrack) return
     const q = $playerState.queue
     if (q.length === 0) return
     let prevIdx = $playerState.queueIndex - 1
     if (prevIdx < 0) prevIdx = q.length - 1
     const prevId = q[prevIdx]
-    const prevTrack = findTrackById(prevId)
-    const isLocalPath = (id: string) => id.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(id)
+    const prevTrack = await findTrackById(prevId)
     const prevIsLocal = isLocalPath(prevId)
     audioDurationMs = 0
     playerState.update(s => ({
