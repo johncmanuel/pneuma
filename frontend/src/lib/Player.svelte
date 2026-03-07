@@ -6,11 +6,19 @@
   import { formatDuration } from "./TrackRow.svelte"
   import { streamUrl, artworkUrl } from "../utils/api"
   import { wsSend } from "../stores/ws"
+  import { onMount } from "svelte"
 
   let audio: HTMLAudioElement
   let deviceId = "desktop"
   let volume = 1
   let prevVolume = 1  // last non-zero volume, restored on unmute
+
+  onMount(() => {
+    const saved = parseFloat(localStorage.getItem("pneuma_volume") ?? "1")
+    volume = isNaN(saved) ? 1 : Math.max(0, Math.min(1, saved))
+    prevVolume = volume > 0 ? volume : 1
+    if (audio) audio.volume = volume
+  })
   let audioDurationMs = 0  // actual duration from <audio> element
   let seeking = false       // true while user is dragging seekbar
   let seekSyncTimer: ReturnType<typeof setTimeout> | null = null
@@ -179,6 +187,12 @@
           }
           return { ...s, shuffle: true, queue: [current, ...rest], queueIndex: 0 }
         }
+        // Turning shuffle off: restore the original album order from baseQueue
+        if (!enabled && s.baseQueue.length > 0) {
+          const currentId = s.queue[s.queueIndex]
+          const restoredIdx = s.baseQueue.indexOf(currentId)
+          return { ...s, shuffle: false, queue: s.baseQueue, queueIndex: restoredIdx >= 0 ? restoredIdx : 0 }
+        }
         return { ...s, shuffle: enabled }
       })
       return
@@ -215,6 +229,7 @@
     volume = Number(target.value)
     if (audio) audio.volume = volume
     if (volume > 0) prevVolume = volume
+    localStorage.setItem("pneuma_volume", String(volume))
   }
 
   function toggleMute() {

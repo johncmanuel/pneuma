@@ -2,6 +2,7 @@
   import { createEventDispatcher } from "svelte"
   import { recentAlbums, getRecentAlbumArtUrl } from "../stores/recentAlbums"
   import { pushNav } from "../stores/ui"
+  import { serverURL, authToken } from "../utils/api"
   export let activeView: string = "library"
 
   const dispatch = createEventDispatcher()
@@ -24,6 +25,9 @@
     const img = e.currentTarget as HTMLImageElement
     if (img) img.style.display = "none"
   }
+
+  // Re-compute artwork URLs whenever auth state changes (needed for remote albums)
+  $: _authDeps = [$serverURL, $authToken]
 </script>
 
 <nav>
@@ -49,7 +53,9 @@
           <li>
             <button class="recent-row" on:click={() => openRecentAlbum(album)}>
               <div class="recent-art">
-                  <img src={getRecentAlbumArtUrl(album)} alt={album.name} on:error={hideImg} loading="lazy"/>
+                {#if _authDeps && getRecentAlbumArtUrl(album)}
+                  <img src={_authDeps && getRecentAlbumArtUrl(album)} alt={album.name} on:error={hideImg} loading="lazy"/>
+                {/if}
                 <span class="recent-art-placeholder">♫</span>
               </div>
               <div class="recent-info">
