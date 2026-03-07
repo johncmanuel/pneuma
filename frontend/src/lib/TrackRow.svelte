@@ -22,7 +22,7 @@
   }
 
   function handleAddToQueue() {
-    dispatch("addToQueue")
+    dispatch("addToQueue", track)
     showMenu = false
   }
 </script>
@@ -31,15 +31,15 @@
   class="track-row"
   class:active
   class:hide-album={hideAlbum}
-  on:dblclick={() => dispatch("play")}
+  on:dblclick={() => dispatch("play", track)}
   on:click={() => dispatch("select")}
   on:contextmenu={onContext}
 >
-  <span class="num text-3">{track?.track_number || "–"}</span>
+  <span class="num text-3">{track?.track_number || "-"}</span>
   <span class="title truncate">{track?.title ?? "Unknown"}</span>
-  <span class="artist truncate text-2">{track?.artist_name || track?.album_artist || "–"}</span>
+  <span class="artist truncate text-2">{track?.artist_name || track?.album_artist || "-"}</span>
   {#if !hideAlbum}
-    <span class="album truncate text-2">{track?.album_name || "–"}</span>
+    <span class="album truncate text-2">{track?.album_name || "-"}</span>
   {/if}
   <span class="duration text-3">{formatDuration(track?.duration_ms ?? 0)}</span>
 </button>

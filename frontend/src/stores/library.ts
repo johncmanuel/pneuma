@@ -46,6 +46,10 @@ export async function searchTracks(q: string) {
   searchResults.set(results ?? [])
 }
 
+export function clearSearch() {
+  searchResults.set([])
+}
+
 export async function triggerScan() {
   if (!get(connected)) return
   await serverFetch("/api/library/scan", { method: "POST" })

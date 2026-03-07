@@ -3,10 +3,15 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
+	_ "image/png"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -22,6 +27,7 @@ import (
 
 	"github.com/dhowden/tag"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"golang.org/x/image/draw"
 )
 
 // ffprobePath is resolved once at init; empty means unavailable.
@@ -56,6 +62,9 @@ type App struct {
 	localPort int
 	localSrv  *http.Server
 
+	// Directory for cached artwork thumbnails.
+	thumbDir string
+
 	// Optional server connection state (guarded by mu).
 	mu          sync.RWMutex
 	serverURL   string
@@ -78,6 +87,18 @@ func (a *App) startup(ctx context.Context) {
 	} else {
 		a.appDB = db
 	}
+
+	// Initialise thumbnail cache directory.
+	if cacheDir, err := os.UserCacheDir(); err == nil {
+		a.thumbDir = filepath.Join(cacheDir, "pneuma", "thumbs")
+	} else {
+		a.thumbDir = filepath.Join(os.TempDir(), "pneuma-thumbs")
+		slog.Warn("UserCacheDir unavailable, using temp dir for thumbnails", "dir", a.thumbDir)
+	}
+	if err := os.MkdirAll(a.thumbDir, 0o755); err != nil {
+		slog.Error("failed to create thumbnail cache dir", "dir", a.thumbDir, "err", err)
+	}
+
 	// Start a local-only HTTP server on a random port for streaming local files.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -89,6 +110,7 @@ func (a *App) startup(ctx context.Context) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/local/stream", a.handleLocalStream)
 	mux.HandleFunc("/local/art", a.handleLocalArt)
+
 	a.localSrv = &http.Server{Handler: mux}
 	go func() {
 		if err := a.localSrv.Serve(listener); err != nil && err != http.ErrServerClosed {
@@ -633,7 +655,21 @@ func (a *App) handleLocalStream(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }
 
-// handleLocalArt extracts embedded album art from a local audio file.
+// thumbMaxDim is the maximum width/height for cached artwork thumbnails.
+const thumbMaxDim = 400
+
+// thumbCacheKey returns a hex string derived from the file path, size, and mtime.
+func thumbCacheKey(path string, info os.FileInfo) string {
+	h := sha256.New()
+	fmt.Fprintf(h, "%s|%d|%d", path, info.Size(), info.ModTime().UnixNano())
+	return hex.EncodeToString(h.Sum(nil))[:16]
+}
+
+// handleLocalArt serves a resized thumbnail of the embedded album art.
+// On first request the artwork is extracted, resized to 400×400 max, encoded
+// as JPEG, and written to a persistent disk cache.  Subsequent requests are
+// served directly via http.ServeFile (which handles ETag / Last-Modified /
+// Range automatically).
 func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Query().Get("path")
 	if path == "" {
@@ -647,18 +683,23 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stat for ETag before opening the file.
 	info, err := os.Stat(path)
 	if err != nil {
 		http.Error(w, "file not found", http.StatusNotFound)
 		return
 	}
-	etag := fmt.Sprintf(`"%x-%x"`, info.ModTime().UnixNano(), info.Size())
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
+
+	// Check the disk thumbnail cache.
+	key := thumbCacheKey(path, info)
+	thumbPath := filepath.Join(a.thumbDir, key+".jpg")
+
+	if _, err := os.Stat(thumbPath); err == nil {
+		// Cache hit — serve the pre-resized file.
+		http.ServeFile(w, r, thumbPath)
 		return
 	}
 
+	// Cache miss — extract, resize, and persist.
 	f, err := os.Open(path)
 	if err != nil {
 		http.Error(w, "file not found", http.StatusNotFound)
@@ -672,15 +713,58 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pic := m.Picture()
-	ct := pic.MIMEType
-	if ct == "" {
-		ct = "image/jpeg"
+	src, _, err := image.Decode(bytes.NewReader(m.Picture().Data))
+	if err != nil {
+		http.Error(w, "failed to decode artwork", http.StatusInternalServerError)
+		return
 	}
-	w.Header().Set("Content-Type", ct)
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	w.Write(pic.Data) //nolint:errcheck
+
+	// Compute destination size preserving aspect ratio within thumbMaxDim.
+	b := src.Bounds()
+	srcW, srcH := b.Dx(), b.Dy()
+	dstW, dstH := srcW, srcH
+	if srcW > thumbMaxDim || srcH > thumbMaxDim {
+		if srcW >= srcH {
+			dstW = thumbMaxDim
+			dstH = srcH * thumbMaxDim / srcW
+		} else {
+			dstH = thumbMaxDim
+			dstW = srcW * thumbMaxDim / srcH
+		}
+	}
+	if dstW < 1 {
+		dstW = 1
+	}
+	if dstH < 1 {
+		dstH = 1
+	}
+
+	dst := image.NewNRGBA(image.Rect(0, 0, dstW, dstH))
+	draw.BiLinear.Scale(dst, dst.Bounds(), src, b, draw.Over, nil)
+
+	// Write to a temp file then atomically rename to avoid serving partial files.
+	tmp, err := os.CreateTemp(a.thumbDir, "tmp-*.jpg")
+	if err != nil {
+		http.Error(w, "cache write failed", http.StatusInternalServerError)
+		return
+	}
+	tmpName := tmp.Name()
+
+	if err := jpeg.Encode(tmp, dst, &jpeg.Options{Quality: 82}); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		http.Error(w, "encode failed", http.StatusInternalServerError)
+		return
+	}
+	tmp.Close()
+
+	if err := os.Rename(tmpName, thumbPath); err != nil {
+		os.Remove(tmpName)
+		http.Error(w, "cache write failed", http.StatusInternalServerError)
+		return
+	}
+
+	http.ServeFile(w, r, thumbPath)
 }
 
 // refreshLoop periodically refreshes the JWT before it expires.

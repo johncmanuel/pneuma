@@ -1,10 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte"
   import { recentAlbums, getRecentAlbumArtUrl } from "../stores/recentAlbums"
-  import { cachedArtUrl } from "../stores/artCache"
   import { pushNav } from "../stores/ui"
-  import { connected, localPort } from "../utils/api"
-
   export let activeView: string = "library"
 
   const dispatch = createEventDispatcher()
@@ -52,11 +49,7 @@
           <li>
             <button class="recent-row" on:click={() => openRecentAlbum(album)}>
               <div class="recent-art">
-                {#key `${$connected}:${$localPort}`}
-                  {#await cachedArtUrl(album.key, getRecentAlbumArtUrl(album)) then blobUrl}
-                    <img src={blobUrl} alt={album.name} on:error={hideImg} />
-                  {/await}
-                {/key}
+                  <img src={getRecentAlbumArtUrl(album)} alt={album.name} on:error={hideImg} loading="lazy"/>
                 <span class="recent-art-placeholder">♫</span>
               </div>
               <div class="recent-info">

@@ -11,35 +11,39 @@
   $: currentIndex = $playerState.queueIndex ?? 0
   $: nowPlayingTrack = $playerState.track
 
-  // Resolve track IDs to full Track objects — includes both server and local tracks
-  $: trackMap = (() => {
-    const map = new Map<string, Track>(($tracks as Track[]).map(t => [t.id, t]))
-    for (const lt of $localTracks) {
-      map.set(lt.path, {
-        id: lt.path,
-        path: lt.path,
-        title: lt.title,
-        artist_id: "",
-        album_id: "",
-        artist_name: lt.artist,
-        album_artist: lt.album_artist,
-        album_name: lt.album,
-        genre: lt.genre,
-        year: lt.year,
-        track_number: lt.track_number,
-        disc_number: lt.disc_number,
-        duration_ms: lt.duration_ms,
-        bitrate_kbps: 0,
-        replay_gain_track: 0,
-        artwork_id: "",
-      } as Track)
+  // Resolve track IDs to full Track objects — only for IDs in the queue
+  $: upNext = (() => {
+    const ids = queue.slice(currentIndex + 1)
+    if (ids.length === 0) return []
+    const needed = new Set(ids)
+    const map = new Map<string, Track>()
+    for (const t of $tracks as Track[]) {
+      if (needed.has(t.id)) map.set(t.id, t)
     }
-    return map
+    for (const lt of $localTracks) {
+      if (needed.has(lt.path)) {
+        map.set(lt.path, {
+          id: lt.path,
+          path: lt.path,
+          title: lt.title,
+          artist_id: "",
+          album_id: "",
+          artist_name: lt.artist,
+          album_artist: lt.album_artist,
+          album_name: lt.album,
+          genre: lt.genre,
+          year: lt.year,
+          track_number: lt.track_number,
+          disc_number: lt.disc_number,
+          duration_ms: lt.duration_ms,
+          bitrate_kbps: 0,
+          replay_gain_track: 0,
+          artwork_id: "",
+        } as Track)
+      }
+    }
+    return ids.map(id => map.get(id)).filter((t): t is Track => t != null)
   })()
-  $: upNext = queue
-    .slice(currentIndex + 1)
-    .map(id => trackMap.get(id))
-    .filter((t): t is Track => t != null)
 
   function close() {
     closePanel()

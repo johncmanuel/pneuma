@@ -9,12 +9,15 @@
   import { wsSend } from "../stores/ws"
   import { onMount } from "svelte"
   import { activeTab, localSubTab, selectedAlbum, pushNav, type LibTab } from "../stores/ui"
-  import { get } from "svelte/store"
+  import { get, derived } from "svelte/store"
   import { recordRecentAlbum } from "../stores/recentAlbums"
-  import { cachedArtUrl } from "../stores/artCache"
+  import { createVirtualizer } from "@tanstack/svelte-virtual"
+
+  const currentTrackId = derived(playerState, $s => $s.trackId);
 
   // ─── Album detail: filter & sort ────────────────────────────────────────────
   let albumFilter = ""
+  let trackListEl: HTMLDivElement
   let albumGridFilter = ""
   type SortField = "default" | "title" | "artist" | "duration"
   let albumSortField: SortField = "default"
@@ -175,6 +178,14 @@
     return getArtUrl(currentAlbumGroup)
   })()
 
+  // Virtualized track list for album detail view
+  $: virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
+    count: albumDetailTracks.length,
+    getScrollElement: () => trackListEl,
+    estimateSize: () => 38,
+    overscan: 5,
+  })
+
   // On mount, always load local tracks if the user has saved folders.
   // scanLocalFolders() restores from localStorage cache immediately (fast path)
   // and then kicks off a background rescan.
@@ -287,6 +298,23 @@
     const img = e.currentTarget as HTMLImageElement
     if (img) img.style.display = "none"
   }
+
+  function handlePlay(e: CustomEvent<Track>) {
+    playTrack(e.detail, albumDetailTracks)
+  }
+
+  function handleQueue(e: CustomEvent<Track>) {
+    addToQueue(e.detail)
+  }
+
+  let isScrolling = false
+  let scrollTimer: ReturnType<typeof setTimeout>
+
+  function handleScroll() {
+    isScrolling = true
+    clearTimeout(scrollTimer)
+    scrollTimer = setTimeout(() => { isScrolling = false }, 150)
+  }
 </script>
 
 <section>
@@ -336,52 +364,62 @@
 
     {:else if currentAlbumGroup}
       <!-- Album detail view -->
-      <div class="album-detail-header">
-        <div class="album-art-hero">
-          {#if selectedAlbumArtUrl}
-            {#await cachedArtUrl(currentAlbumGroup.key, selectedAlbumArtUrl) then blobUrl}
-              <img src={blobUrl} alt={currentAlbumGroup.name} on:error={hideImgOnError} />
-            {/await}
-          {/if}
-          <div class="album-art-hero-placeholder">♫</div>
-        </div>
-        <div class="album-detail-info">
-          <h2 class="album-detail-title">{currentAlbumGroup.name}</h2>
-          <p class="album-meta text-2">{currentAlbumGroup.artist} · {currentAlbumGroup.tracks.length} tracks</p>
-          <div class="album-filter-bar">
-            <input
-              type="search"
-              class="album-filter-input"
-              placeholder="Filter songs…"
-              bind:value={albumFilter}
-            />
+      <div class="album-detail-view">
+        <div class="album-detail-header">
+          <div class="album-art-hero">
+            {#if selectedAlbumArtUrl}
+                <img src={selectedAlbumArtUrl} alt={currentAlbumGroup.name} on:error={hideImgOnError} loading="lazy" decoding="async" />
+            {/if}
+            <div class="album-art-hero-placeholder">♫</div>
+          </div>
+          <div class="album-detail-info">
+            <h2 class="album-detail-title">{currentAlbumGroup.name}</h2>
+            <p class="album-meta text-2">{currentAlbumGroup.artist} · {currentAlbumGroup.tracks.length} tracks</p>
+            <div class="album-filter-bar">
+              <input
+                type="search"
+                class="album-filter-input"
+                placeholder="Filter songs…"
+                bind:value={albumFilter}
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="track-list">
         <div class="track-header album-detail-cols">
           <span>#</span>
           <button class="col-sort" on:click={() => toggleSort("title")}>Title{sortIndicator("title")}</button>
           <button class="col-sort" on:click={() => toggleSort("artist")}>Artist{sortIndicator("artist")}</button>
           <button class="col-sort" on:click={() => toggleSort("duration")}>Duration{sortIndicator("duration")}</button>
         </div>
-        {#each albumDetailTracks as track (track.id)}
-          <TrackRow
-            {track}
-            hideAlbum={true}
-            active={$playerState.trackId === track.id}
-            on:play={() => playTrack(track, albumDetailTracks)}
-          on:select={() => {}}
-          on:addToQueue={() => addToQueue(track)}
-        />
-      {/each}
-      {#if albumFilter && albumDetailTracks.length === 0}
-        <p class="no-results text-3">No songs match "{albumFilter}"</p>
-      {/if}
-    </div>
+
+        {#if albumFilter && albumDetailTracks.length === 0}
+          <p class="no-results text-3">No songs match "{albumFilter}"</p>
+        {:else}
+          <div class="track-list" class:scrolling={isScrolling} bind:this={trackListEl} on:scroll={handleScroll}>
+            <div style="position: relative; width: 100%; height: {$virtualizer.getTotalSize()}px;">
+              {#each $virtualizer.getVirtualItems() as row (row.index)}
+                <div
+                  class="virtual-row"
+                  style="height: {row.size}px; transform: translateY({row.start}px);"
+                >
+                  <TrackRow
+                    track={albumDetailTracks[row.index]}
+                    hideAlbum={true}
+                    active={$currentTrackId === albumDetailTracks[row.index]?.id}
+                    on:play={handlePlay}
+                    on:select={() => {}}
+                    on:addToQueue={handleQueue}
+                  />
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </div>
   {:else}
     <!-- Album grid view -->
+    <div class="grid-scroll-wrapper">
     <div class="toolbar">
       <h2>{$activeTab === "library" ? "Library" : "Local Files"}</h2>
       <div class="toolbar-actions">
@@ -423,7 +461,7 @@
     {#if $activeTab === "library" && !$connected}
       <div class="offline-state">
         <span class="offline-icon">⚠</span>
-        <p class="offline-title">{$isReconnecting ? "Reconnecting to server…" : "Not connected to a server"}</p>
+        <p class="offline-title">{$isReconnecting ? "Reconnecting to server..." : "Not connected to a server"}</p>
         <p class="offline-sub">{$isReconnecting ? "Your library will appear once the connection is restored." : "Open Settings to connect to your pneuma server."}</p>
       </div>
     {:else if isLoading}
@@ -447,9 +485,7 @@
           >
             <div class="album-art" class:unorg-art={album.key === UNORGANIZED_KEY}>
               {#if album.key !== UNORGANIZED_KEY}
-                {#await cachedArtUrl(album.key, getArtUrl(album)) then blobUrl}
-                  <img src={blobUrl} alt={album.name} on:error={hideImgOnError} />
-                {/await}
+                  <img src={getArtUrl(album)} alt={album.name} on:error={hideImgOnError} loading="lazy"/>
               {/if}
               <div class="album-art-placeholder">{album.key === UNORGANIZED_KEY ? "📂" : "♫"}</div>
             </div>
@@ -461,6 +497,7 @@
     {/if}
   {/if}
 
+  </div> <!-- /.grid-scroll-wrapper -->
   {/if} <!-- /.scroll-body inner if -->
 
   </div> <!-- /.scroll-body -->
@@ -544,12 +581,30 @@
     50% { opacity: 0.3; }
   }
 
-  /* Scrollable body — owns all vertical scroll */
+  /* Scrollable body — flex container for album detail or grid */
   .scroll-body {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     padding: 16px 16px 0 0;
+  }
+
+  /* Album detail view — flex column so track-list fills remaining space */
+  .album-detail-view {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Grid scroll wrapper — owns vertical scroll for album grid view */
+  .grid-scroll-wrapper {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .toolbar {
@@ -709,7 +764,25 @@
   .offline-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-1); }
   .offline-sub { margin: 0; font-size: 13px; color: var(--text-3); }
 
-  /* Track list within album detail */
+  /* Virtualized track list within album detail */
+  .track-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .virtual-row {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    contain: layout paint;
+  }
+
+  .track-list.scrolling .virtual-row {
+    pointer-events: none;
+  }
+
   .track-header {
     display: grid;
     grid-template-columns: 32px 2fr 1fr 1fr 56px;

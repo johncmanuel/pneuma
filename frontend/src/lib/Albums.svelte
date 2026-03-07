@@ -1,6 +1,6 @@
 <script lang="ts">
   import { albums, loading } from "../stores/library"
-  import { apiBase } from "./api"
+  import { apiBase } from "../utils/api"
 
   function artUrl(artworkId: string | null): string {
     if (!artworkId) return ""
@@ -23,7 +23,7 @@
         <div class="card">
           <div class="art">
             {#if album.artwork_id}
-              <img src={artUrl(album.artwork_id)} alt={album.title} />
+              <img src={artUrl(album.artwork_id)} alt={album.title} loading="lazy" decoding="async"/>
             {:else}
               <div class="placeholder">♫</div>
             {/if}

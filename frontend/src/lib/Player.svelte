@@ -329,7 +329,7 @@
     on:loadedmetadata={onLoadedMetadata}
     on:durationchange={onDurationChange}
     preload="metadata"
-  />
+ ></audio>
   <!-- Left: album art + track info -->
   <div class="now-playing">
     <div class="art">

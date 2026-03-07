@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { searchResults, searchTracks } from "../stores/library"
+  import { searchResults, searchTracks, clearSearch } from "../stores/library"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import type { Track } from "../stores/player"
@@ -13,7 +13,7 @@
     clearTimeout(debounce)
     debounce = window.setTimeout(() => {
       if (query.trim().length >= 2) searchTracks(query.trim())
-      else searchResults.set([])
+      else clearSearch()
     }, 300)
   }
 

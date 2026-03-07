@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { searchResults, searchTracks } from "../stores/library"
+  import { searchResults, searchTracks, clearSearch as clearSearchStore } from "../stores/library"
   import { localTracks } from "../stores/localLibrary"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
@@ -19,7 +19,7 @@
     debounce = window.setTimeout(async () => {
       const q = query.trim()
       if (q.length < 2) {
-        searchResults.set([])
+        clearSearchStore()
         combinedResults = []
         return
       }
@@ -64,7 +64,7 @@
 
   function clearSearch() {
     query = ""
-    searchResults.set([])
+    clearSearchStore()
     combinedResults = []
   }
 
