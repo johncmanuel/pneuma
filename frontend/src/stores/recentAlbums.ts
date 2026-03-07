@@ -11,7 +11,6 @@ export interface RecentAlbum {
   firstLocalPath: string // for local artwork
 }
 
-const MAX_RECENT = 10
 const DB_KEY = "recent_albums"
 const LS_KEY  = "pneuma_recent_albums"
 
@@ -46,7 +45,7 @@ export async function initRecentAlbums(): Promise<void> {
 export function recordRecentAlbum(album: RecentAlbum) {
   recentAlbums.update(list => {
     const filtered = list.filter(a => a.key !== album.key)
-    return [album, ...filtered].slice(0, MAX_RECENT)
+    return [album, ...filtered]
   })
 }
 
