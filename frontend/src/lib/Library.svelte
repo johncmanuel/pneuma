@@ -409,7 +409,9 @@
   }
 
   function handlePlay(e: CustomEvent<Track>) {
-    playTrack(e.detail, filteredAlbumDetailTracks)
+    // Always build the queue from the full unfiltered album tracks so that
+    // clicking a filtered song still produces the correct album order queue.
+    playTrack(e.detail, albumDetailTracks)
   }
 
   function handleQueue(e: CustomEvent<Track>) {

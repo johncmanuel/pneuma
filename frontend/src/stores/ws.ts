@@ -75,12 +75,35 @@ export function connectWS() {
           const isLocalId = (id: string) => id.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(id)
           const queueHasLocalTracks = s.queue.some(isLocalId)
 
+          // Resolve the effective queue (prefer server's if we can use it)
+          const effectiveQueue = (msg.payload.queue != null && !queueHasLocalTracks)
+            ? msg.payload.queue as string[]
+            : s.queue
+
+          // Validate the server's queue_index against the track_id it claims is
+          // playing. Seek/pause broadcasts can carry a stale index (e.g. 0) even
+          // after the client has already advanced via skipNext. Recompute from
+          // the queue when the index doesn't match.
+          let resolvedIndex = s.queueIndex
+          if (!queueHasLocalTracks && msg.payload.queue_index != null) {
+            const serverIdx: number = msg.payload.queue_index
+            const serverTrackId: string = msg.payload.track_id ?? s.trackId
+            if (effectiveQueue[serverIdx] === serverTrackId) {
+              // Server's index is consistent — trust it.
+              resolvedIndex = serverIdx
+            } else {
+              // Server's index is stale; recalculate from the track_id.
+              const computed = effectiveQueue.indexOf(serverTrackId)
+              resolvedIndex = computed >= 0 ? computed : s.queueIndex
+            }
+          }
+
           return {
             ...s,
             trackId: msg.payload.track_id ?? s.trackId,
             track: trackObj ?? s.track,
-            queue: (msg.payload.queue != null && !queueHasLocalTracks) ? msg.payload.queue : s.queue,
-            queueIndex: (msg.payload.queue_index != null && !queueHasLocalTracks) ? msg.payload.queue_index : s.queueIndex,
+            queue: effectiveQueue,
+            queueIndex: resolvedIndex,
             positionMs: msg.payload.position_ms ?? s.positionMs,
             paused: msg.payload.playing != null ? !msg.payload.playing : s.paused,
             shuffle: msg.payload.shuffle ?? s.shuffle,

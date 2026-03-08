@@ -77,7 +77,18 @@ func (e *Engine) Play(ctx context.Context, deviceID, userID, trackID string, pos
 	defer e.mu.Unlock()
 	s := e.getOrCreate(deviceID, userID)
 	s.Playing = true
-	if trackID != "" {
+	if trackID != "" && trackID != s.TrackID {
+		s.TrackID = trackID
+		s.PositionMS = 0
+		// Keep the server's queue_index in sync with the new track so that
+		// playback.changed echoes the correct index back to all clients.
+		for i, id := range s.Queue {
+			if id == trackID {
+				s.QueueIndex = i
+				break
+			}
+		}
+	} else if trackID != "" {
 		s.TrackID = trackID
 	}
 	if positionMS > 0 {
