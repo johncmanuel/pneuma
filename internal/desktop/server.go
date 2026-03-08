@@ -47,6 +47,11 @@ func (a *App) RestoreSession(serverURL, token string) error {
 	}
 
 	a.mu.Lock()
+
+	if a.stopRefresh != nil {
+		a.stopRefresh() // cancel any running refresh goroutine before replacing
+	}
+
 	a.serverURL = serverURL
 	a.token = result.Token
 	refreshCtx, cancel := context.WithCancel(a.ctx)
@@ -82,6 +87,9 @@ func (a *App) ConnectToServer(serverURL, username, password string) (*ConnectRes
 	}
 
 	a.mu.Lock()
+	if a.stopRefresh != nil {
+		a.stopRefresh() // cancel any running refresh goroutine before replacing
+	}
 	a.serverURL = serverURL
 	a.token = result.Token
 	refreshCtx, cancel := context.WithCancel(a.ctx)
@@ -141,24 +149,32 @@ func (a *App) UploadLocalFile(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	// Stream the multipart body via io.Pipe — the file is never fully buffered
+	// in memory, which is important for large audio files.
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+	go func() {
+		part, err := mw.CreateFormFile("file", filepath.Base(filePath))
+		if err != nil {
+			f.Close()
+			pw.CloseWithError(err)
+			return
+		}
+		if _, err := io.Copy(part, f); err != nil {
+			f.Close()
+			pw.CloseWithError(err)
+			return
+		}
+		f.Close()
+		pw.CloseWithError(mw.Close())
+	}()
 
-	var buf bytes.Buffer
-	writer := multipart.NewWriter(&buf)
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	req, err := http.NewRequest("POST", url+"/api/library/tracks/upload", pr)
 	if err != nil {
+		pr.CloseWithError(err)
 		return "", err
 	}
-	if _, err := io.Copy(part, f); err != nil {
-		return "", err
-	}
-	writer.Close()
-
-	req, err := http.NewRequest("POST", url+"/api/library/tracks/upload", &buf)
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Content-Type", mw.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer "+tok)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -185,41 +201,49 @@ func (a *App) refreshLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			a.mu.RLock()
-			url := a.serverURL
-			tok := a.token
-			a.mu.RUnlock()
-			if url == "" || tok == "" {
-				return
-			}
-
-			req, err := http.NewRequest("POST", url+"/api/auth/refresh", nil)
-			if err != nil {
-				continue
-			}
-			req.Header.Set("Authorization", "Bearer "+tok)
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				slog.Warn("token refresh failed", "err", err)
-				continue
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode != http.StatusOK {
-				slog.Warn("token refresh returned", "status", resp.StatusCode)
-				continue
-			}
-
-			var result struct {
-				Token string `json:"token"`
-			}
-			if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-				continue
-			}
-
-			a.mu.Lock()
-			a.token = result.Token
-			a.mu.Unlock()
+			a.doTokenRefresh()
 		}
 	}
+}
+
+// doTokenRefresh performs a single token refresh round-trip.
+// Extracted from refreshLoop so that defer resp.Body.Close() is scoped to one
+// call frame and fires on every exit path instead of accumulating across loop
+// iterations.
+func (a *App) doTokenRefresh() {
+	a.mu.RLock()
+	url := a.serverURL
+	tok := a.token
+	a.mu.RUnlock()
+	if url == "" || tok == "" {
+		return
+	}
+
+	req, err := http.NewRequest("POST", url+"/api/auth/refresh", nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Warn("token refresh failed", "err", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Warn("token refresh returned", "status", resp.StatusCode)
+		return
+	}
+
+	var result struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return
+	}
+
+	a.mu.Lock()
+	a.token = result.Token
+	a.mu.Unlock()
 }

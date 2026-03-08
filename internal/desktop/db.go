@@ -32,6 +32,26 @@ func openAppDB() (*sql.DB, error) {
 		return nil, err
 	}
 
+	// want to keep connections low to optimize for memory usage, but if general performance bottlenecks,
+	// look here first and modify as needed.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	// Memory-conscious SQLite settings:
+	//   WAL mode   – readers don't block the writer; safer than DELETE journal.
+	//   cache_size – cap the page cache to ~2 MB (default is -2000 KiB pages).
+	//   synchronous NORMAL – safe for WAL; skips the extra fsync on each commit.
+	for _, pragma := range []string{
+		`PRAGMA journal_mode=WAL`,
+		`PRAGMA cache_size=-2000`,
+		`PRAGMA synchronous=NORMAL`,
+	} {
+		if _, err = db.Exec(pragma); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("appdb pragma (%s): %w", pragma, err)
+		}
+	}
+
 	// Generic key-value table (settings, small blobs, etc.).
 	if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)`); err != nil {
 		db.Close()
