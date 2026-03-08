@@ -16,6 +16,7 @@
   import DisconnectBanner from "./lib/DisconnectBanner.svelte"
 
   let wasConnected = false
+  let searchBar: SearchBar
 
   onMount(async () => {
     await initApi()
@@ -39,7 +40,21 @@
   function handleNavigate(e: CustomEvent<string>) {
     pushNav({ view: e.detail, tab: "library", subTab: "albums", albumKey: null })
   }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+      e.preventDefault()
+      searchBar?.focus()
+    }
+  }
+
+  function handleMouseUp(e: MouseEvent) {
+    if (e.button === 3) { e.preventDefault(); goBack() }
+    else if (e.button === 4) { e.preventDefault(); goForward() }
+  }
 </script>
+
+<svelte:window on:keydown={handleKeydown} on:mouseup={handleMouseUp} />
 
 <div class="shell" class:panel-open={$activePanel !== null}>
   <div class="sidebar-area">
@@ -56,7 +71,7 @@
       </button>
     </div>
     <div class="search-wrapper">
-      <SearchBar />
+      <SearchBar bind:this={searchBar} />
     </div>
   </header>
 

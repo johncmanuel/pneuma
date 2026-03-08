@@ -6,9 +6,62 @@
   import { connected, serverFetch, artworkUrl, localBase } from "../utils/api"
   import { wsSend } from "../stores/ws"
   import { pushNav } from "../stores/ui"
+  import { tick } from "svelte"
+  import { onDestroy } from "svelte"
 
+  // ── Public API ──────────────────────────────────────────────────────────────
   export let query = ""
+  export function focus() { inputEl?.focus(); inputEl?.select() }
+  export const hasResults = () => query.trim().length >= 2
+
+  // ── State ───────────────────────────────────────────────────────────────────
   let debounce: number
+  let reqSeq = 0           // monotonic token — stale async responses are dropped
+  let inputEl: HTMLInputElement
+  let resultsEl: HTMLDivElement
+  let focused = false
+  let activeResultKey: string | null = null
+
+  // Minimum ms between successive nav moves while a key is held down.
+  const NAV_INTERVAL_MS = 80
+  let lastNavAt = 0
+
+  // ── Context menu ────────────────────────────────────────────────────────────
+  let menuTrack: TaggedTrack | null = null
+  let menuX = 0
+  let menuY = 0
+  let showMenu = false
+  let closeMenuListener: (() => void) | null = null
+
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node)
+    return { destroy() { node.remove() } }
+  }
+
+  function onTrackContext(e: MouseEvent, track: TaggedTrack) {
+    e.preventDefault()
+    menuTrack = track
+    menuX = e.clientX
+    menuY = e.clientY
+    showMenu = true
+    if (closeMenuListener) window.removeEventListener("click", closeMenuListener)
+    closeMenuListener = () => { showMenu = false; window.removeEventListener("click", closeMenuListener!); closeMenuListener = null }
+    // defer so this very click doesn't immediately close it
+    setTimeout(() => window.addEventListener("click", closeMenuListener!), 0)
+  }
+
+  function handleMenuAddToQueue() {
+    if (menuTrack) addToQueue(menuTrack)
+    showMenu = false
+    // Clicking the portal menu moves focus outside the container, collapsing
+    // results. Refocus the input so the user can keep adding songs.
+    inputEl?.focus()
+  }
+
+  onDestroy(() => {
+    showMenu = false
+    if (closeMenuListener) window.removeEventListener("click", closeMenuListener)
+  })
 
   interface TaggedTrack extends Track { _source: "remote" | "local" }
 
@@ -27,6 +80,7 @@
         localAlbumResults = []
         return
       }
+      const id = ++reqSeq
       try {
         const [remoteResults, localResults, remoteAlbums, localAlbums] = await Promise.all([
           searchTracks(q),
@@ -34,6 +88,8 @@
           searchAlbumGroups(q),
           searchLocalAlbumGroups(q),
         ])
+        // Discard results from a superseded request
+        if (id !== reqSeq) return
         buildCombined(remoteResults ?? [], localResults ?? [])
         remoteAlbumResults = remoteAlbums ?? []
         localAlbumResults = localAlbums ?? []
@@ -75,6 +131,7 @@
     combinedResults = []
     remoteAlbumResults = []
     localAlbumResults = []
+    activeResultKey = null
   }
 
   function localTrackToTrack(t: LocalTrack): Track {
@@ -98,16 +155,11 @@
           .sort((a, b) => (a.disc_number ?? 0) - (b.disc_number ?? 0) || (a.track_number ?? 0) - (b.track_number ?? 0))
           .map(localTrackToTrack)
       } catch {}
-      if (albumTracks.length === 0) {
-        albumTracks = combinedResults.filter(t => t._source === "local")
-      }
+      if (albumTracks.length === 0) albumTracks = combinedResults.filter(t => t._source === "local")
       const idx = albumTracks.findIndex(t => t.id === track.id)
-      const startIdx = Math.max(0, idx)
-      const queue = albumTracks.slice(startIdx).map(t => t.id)
+      const queue = albumTracks.slice(Math.max(0, idx)).map(t => t.id)
       const baseQueue = albumTracks.map(t => t.id)
-      playerState.update(s => ({
-        ...s, trackId: track.id, track, queue, baseQueue, queueIndex: 0, positionMs: 0, paused: false,
-      }))
+      playerState.update(s => ({ ...s, trackId: track.id, track, queue, baseQueue, queueIndex: 0, positionMs: 0, paused: false }))
       return
     }
 
@@ -127,16 +179,11 @@
         )
       }
     } catch {}
-    if (albumTracks.length === 0) {
-      albumTracks = combinedResults.filter(t => t._source === "remote")
-    }
+    if (albumTracks.length === 0) albumTracks = combinedResults.filter(t => t._source === "remote")
     const idx = albumTracks.findIndex(t => t.id === track.id)
-    const startIdx = Math.max(0, idx)
-    const queue = albumTracks.slice(startIdx).map(t => t.id)
+    const queue = albumTracks.slice(Math.max(0, idx)).map(t => t.id)
     const baseQueue = albumTracks.map(t => t.id)
-    playerState.update(s => ({
-      ...s, trackId: track.id, track, queue, baseQueue, queueIndex: 0, positionMs: 0, paused: false,
-    }))
+    playerState.update(s => ({ ...s, trackId: track.id, track, queue, baseQueue, queueIndex: 0, positionMs: 0, paused: false }))
     wsSend("playback.queue", { device_id: "desktop", track_ids: queue, start_index: 0 })
     wsSend("playback.play",  { device_id: "desktop", track_id: track.id, position_ms: 0 })
   }
@@ -144,12 +191,7 @@
   function addToQueue(track: TaggedTrack) {
     playerState.update(s => {
       const insertAt = s.queueIndex + 1
-      const newQueue = [
-        ...s.queue.slice(0, insertAt),
-        track.id,
-        ...s.queue.slice(insertAt),
-      ]
-      return { ...s, queue: newQueue }
+      return { ...s, queue: [...s.queue.slice(0, insertAt), track.id, ...s.queue.slice(insertAt)] }
     })
   }
 
@@ -172,77 +214,197 @@
   $: hasAlbumResults = remoteAlbumResults.length > 0 || localAlbumResults.length > 0
   $: hasTrackResults = combinedResults.length > 0
   $: hasAnyResults = hasAlbumResults || hasTrackResults
+  $: showResults = focused && query.trim().length >= 2
 
-  export const hasResults = () => query.trim().length >= 2
+  // After results refresh, restore focus to the same item if the user was
+  // navigating and it still exists; otherwise release the active key.
+  $: if (combinedResults || remoteAlbumResults || localAlbumResults) {
+    const key = activeResultKey
+    if (key) {
+      tick().then(() => {
+        const el = resultsEl?.querySelector(`[data-result-key="${CSS.escape(key)}"]`) as HTMLElement | null
+        if (el) { el.focus({ preventScroll: true }); scrollResultIntoView(el) }
+        else activeResultKey = null
+      })
+    }
+  }
+
+  // ── Focus-driven navigation ──────────────────────────────────────────────────
+
+  /** All navigable result buttons in the dropdown. */
+  function resultButtons(): HTMLElement[] {
+    if (!resultsEl) return []
+    return Array.from(resultsEl.querySelectorAll<HTMLElement>('button[data-result-key]'))
+  }
+
+  /** Scroll a button into view within the results container only (no page scroll). */
+  function scrollResultIntoView(el: HTMLElement) {
+    if (!resultsEl) return
+    const top = el.offsetTop
+    const bottom = top + el.offsetHeight
+    if (top < resultsEl.scrollTop) {
+      resultsEl.scrollTop = top
+    } else if (bottom > resultsEl.scrollTop + resultsEl.clientHeight) {
+      resultsEl.scrollTop = bottom - resultsEl.clientHeight
+    }
+  }
+
+  function navDown() {
+    const now = Date.now()
+    if (now - lastNavAt < NAV_INTERVAL_MS) return
+    lastNavAt = now
+    const btns = resultButtons()
+    if (!btns.length) return
+    const idx = btns.indexOf(document.activeElement as HTMLElement)
+    const next = idx < btns.length - 1 ? btns[idx + 1] : btns[btns.length - 1]
+    next.focus({ preventScroll: true })
+    scrollResultIntoView(next)
+  }
+
+  function navUp() {
+    const now = Date.now()
+    if (now - lastNavAt < NAV_INTERVAL_MS) return
+    lastNavAt = now
+    const btns = resultButtons()
+    if (!btns.length) return
+    const idx = btns.indexOf(document.activeElement as HTMLElement)
+    if (idx === 0) {
+      inputEl?.focus()  // back to search input from first result
+    } else if (idx > 0) {
+      const prev = btns[idx - 1]
+      prev.focus({ preventScroll: true })
+      scrollResultIntoView(prev)
+    }
+    // idx === -1 means input is already focused — do nothing
+  }
+
+  function activateFocused() {
+    const active = document.activeElement as HTMLElement | null
+    if (active?.dataset?.resultKey) { active.click(); return }
+    // Nothing focused yet — activate the first result
+    resultButtons()[0]?.click()
+  }
+
+  /** Single keydown handler on the container so input and result buttons share it. */
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === "ArrowDown") { e.preventDefault(); navDown() }
+    else if (e.key === "ArrowUp") { e.preventDefault(); navUp() }
+    else if (e.key === "Enter") { e.preventDefault(); activateFocused() }
+    else if (e.key === "Escape") { clearSearch(); inputEl?.blur() }
+  }
+
+  function handleContainerFocusOut(e: FocusEvent) {
+    // If the context menu is open the focus departure is intentional and
+    // temporary (menu is portalled outside the container). Don't collapse.
+    if (showMenu) return
+    if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+      focused = false
+    }
+  }
 </script>
 
-<div class="search-bar">
-  <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-    <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-  </svg>
-  <input
-    type="search"
-    placeholder="Search tracks, artists, albums…"
-    bind:value={query}
-    on:input={onInput}
-  />
-  {#if query.length > 0}
-    <button class="clear-btn" on:click={clearSearch}>&times;</button>
+<div
+  class="search-container"
+  on:focusin={() => focused = true}
+  on:focusout={handleContainerFocusOut}
+  on:keydown={handleKeydown}
+
+>
+  <div class="search-bar">
+    <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+    </svg>
+    <input
+      type="search"
+      placeholder="Search tracks, artists, albums…"
+      bind:value={query}
+      bind:this={inputEl}
+      on:input={onInput}
+    />
+    {#if query.length > 0}
+      <button class="clear-btn" on:click={clearSearch}>&times;</button>
+    {/if}
+  </div>
+
+  {#if showResults}
+    <div class="search-results" bind:this={resultsEl}>
+      {#if hasAnyResults}
+        {#if hasAlbumResults}
+          <p class="section-label">Albums</p>
+          {#each localAlbumResults as album (album.key + "-local")}
+            {@const key = album.key + "-local"}
+            <button
+              class="album-row"
+              data-result-key={key}
+              on:click={() => openLocalAlbum(album)}
+              on:focus={() => { activeResultKey = key }}
+            >
+              <div class="album-thumb">
+                <img src={localAlbumArtUrl(album)} alt="" on:error={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                <span class="album-thumb-ph">♫</span>
+              </div>
+              <div class="album-info">
+                <span class="album-name">{album.name || "Unorganized"}</span>
+                <span class="album-meta">{album.artist || "Unknown Artist"} · {album.track_count} tracks</span>
+              </div>
+            </button>
+          {/each}
+          {#each remoteAlbumResults as album (album.key + "-remote")}
+            {@const key = album.key + "-remote"}
+            <button
+              class="album-row"
+              data-result-key={key}
+              on:click={() => openRemoteAlbum(album)}
+              on:focus={() => { activeResultKey = key }}
+            >
+              <div class="album-thumb">
+                <img src={artworkUrl(album.first_track_id)} alt="" on:error={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                <span class="album-thumb-ph">♫</span>
+              </div>
+              <div class="album-info">
+                <span class="album-name">{album.name || "Unorganized"}</span>
+                <span class="album-meta">{album.artist || "Unknown Artist"} · {album.track_count} tracks</span>
+              </div>
+            </button>
+          {/each}
+        {/if}
+
+        {#if hasTrackResults}
+          {#if hasAlbumResults}<p class="section-label">Tracks</p>{/if}
+          {#each combinedResults as track (track._source + ':' + track.id)}
+            {@const key = track._source + ':' + track.id}
+            <button
+              class="track-row"
+              class:active={$playerState.trackId === track.id}
+              data-result-key={key}
+              on:click={() => playTrack(track)}
+              on:contextmenu={(e) => onTrackContext(e, track)}
+              on:focus={() => { activeResultKey = key }}
+            >
+              <span class="track-title">{track.title ?? "Unknown"}</span>
+              <span class="track-artist">{track.artist_name || track.album_artist || ""}</span>
+            </button>
+          {/each}
+        {/if}
+      {:else}
+        <p class="no-results">No results for "{query}"</p>
+      {/if}
+    </div>
   {/if}
 </div>
 
-{#if query.trim().length >= 2}
-  <div class="search-results">
-    {#if hasAnyResults}
-      {#if hasAlbumResults}
-        <p class="section-label">Albums</p>
-        {#each localAlbumResults as album (album.key + "-local")}
-          <button class="album-row" on:click={() => openLocalAlbum(album)}>
-            <div class="album-thumb">
-              <img src={localAlbumArtUrl(album)} alt="" on:error={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
-              <span class="album-thumb-ph">♫</span>
-            </div>
-            <div class="album-info">
-              <span class="album-name">{album.name || "Unorganized"}</span>
-              <span class="album-meta">{album.artist || "Unknown Artist"} · {album.track_count} tracks</span>
-            </div>
-          </button>
-        {/each}
-        {#each remoteAlbumResults as album (album.key + "-remote")}
-          <button class="album-row" on:click={() => openRemoteAlbum(album)}>
-            <div class="album-thumb">
-              <img src={artworkUrl(album.first_track_id)} alt="" on:error={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
-              <span class="album-thumb-ph">♫</span>
-            </div>
-            <div class="album-info">
-              <span class="album-name">{album.name || "Unorganized"}</span>
-              <span class="album-meta">{album.artist || "Unknown Artist"} · {album.track_count} tracks</span>
-            </div>
-          </button>
-        {/each}
-      {/if}
-
-      {#if hasTrackResults}
-        {#if hasAlbumResults}<p class="section-label">Tracks</p>{/if}
-        {#each combinedResults as track (track._source + ':' + track.id)}
-          <button
-            class="track-row"
-            class:active={$playerState.trackId === track.id}
-            on:dblclick={() => playTrack(track)}
-            on:contextmenu|preventDefault={(e) => { addToQueue(track) }}
-          >
-            <span class="track-title">{track.title ?? "Unknown"}</span>
-            <span class="track-artist">{track.artist_name || track.album_artist || ""}</span>
-          </button>
-        {/each}
-      {/if}
-    {:else}
-      <p class="no-results">No results for "{query}"</p>
-    {/if}
+{#if showMenu}
+  <div class="sr-ctx-menu" use:portal style="left:{menuX}px;top:{menuY}px">
+    <button on:click={handleMenuAddToQueue}>Add to queue</button>
   </div>
 {/if}
 
 <style>
+  .search-container {
+    position: relative;
+    width: 100%;
+  }
+
   .search-bar {
     display: flex;
     align-items: center;
@@ -286,6 +448,7 @@
     right: 0;
     max-height: calc(100vh - 120px);
     overflow-y: auto;
+    overscroll-behavior: contain;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
@@ -321,9 +484,9 @@
     color: inherit;
     cursor: pointer;
     text-align: left;
-    transition: background 0.1s;
+    outline: none;
   }
-  .album-row:hover { background: var(--surface-hover); }
+  .album-row:hover, .album-row:focus { background: var(--surface-hover); outline: none; }
 
   .album-thumb {
     width: 36px;
@@ -355,10 +518,33 @@
     color: inherit;
     cursor: pointer;
     text-align: left;
-    transition: background 0.1s;
+    outline: none;
   }
-  .track-row:hover, .track-row.active { background: var(--surface-hover); }
-  .track-row.active .track-title { color: var(--accent); }
+  .track-row:hover, .track-row:focus, .track-row.active { background: var(--surface-hover); outline: none; }
+  .track-row.active .track-title, .track-row:focus .track-title { color: var(--accent); }
   .track-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .track-artist { font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  :global(.sr-ctx-menu) {
+    position: fixed;
+    z-index: 9999;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md, 6px);
+    padding: 4px 0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    min-width: 160px;
+  }
+  :global(.sr-ctx-menu button) {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-1);
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
+  :global(.sr-ctx-menu button:hover) { background: var(--surface-hover); }
 </style>
