@@ -303,12 +303,12 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions: would like to fix this later -->
 <div
   class="search-container"
   on:focusin={() => focused = true}
   on:focusout={handleContainerFocusOut}
   on:keydown={handleKeydown}
-
 >
   <div class="search-bar">
     <svg class="search-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
