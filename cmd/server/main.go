@@ -77,6 +77,7 @@ func main() {
 		Fingerprinter: fpcalcSvc,
 		JWTSecret:     cfg.Auth.SecretKey,
 		UploadsDir:    cfg.Upload.Dir,
+		UploadMaxMB:   cfg.Upload.MaxSizeMB,
 		WebUI:         web.FS(),
 	})
 

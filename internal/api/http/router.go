@@ -3,6 +3,7 @@ package pneumahttp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -37,9 +38,10 @@ type Services struct {
 		Available() bool
 		FingerprintString(ctx context.Context, path string) (string, error)
 	} // *chromaprint.Service; nil disables acoustic dedup on upload
-	JWTSecret  string
-	UploadsDir string
-	WebUI      fs.FS // embedded web UI assets (nil = disabled)
+	JWTSecret   string
+	UploadsDir  string
+	UploadMaxMB int   // max upload body size in MB (0 = default 500 MB)
+	WebUI       fs.FS // embedded web UI assets (nil = disabled)
 }
 
 // NewRouter builds and returns the configured Echo router.
@@ -101,7 +103,12 @@ func NewRouter(svc Services) *echo.Echo {
 	lib.GET("/tracks/:id/stream", lh.StreamTrack)
 	lib.GET("/tracks/:id/art", lh.ServeTrackArt)
 	lib.PATCH("/tracks/:id", lh.UpdateTrackMeta, middleware.RequirePerm(secret, "can_edit"))
-	lib.POST("/tracks/upload", lh.UploadTrack, middleware.RequirePerm(secret, "can_upload"))
+	uploadMaxMB := svc.UploadMaxMB
+	if uploadMaxMB <= 0 {
+		uploadMaxMB = 500
+	}
+	uploadBodyLimit := echomw.BodyLimit(fmt.Sprintf("%dM", uploadMaxMB))
+	lib.POST("/tracks/upload", lh.UploadTrack, middleware.RequirePerm(secret, "can_upload"), uploadBodyLimit)
 	lib.DELETE("/tracks/:id", lh.DeleteTrack, middleware.RequirePerm(secret, "can_delete"))
 	lib.GET("/albums", lh.ListAlbums)
 	lib.GET("/albumgroups", lh.ListAlbumGroups)

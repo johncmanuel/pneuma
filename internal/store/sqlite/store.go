@@ -25,12 +25,25 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("sqlite open %s: %w", path, err)
 	}
 
-	// Performance pragmas.
+	// Limit to a single connection so that all goroutines serialise through
+	// the same underlying SQLite handle. This prevents SQLITE_BUSY / "database
+	// is locked" errors that occur when database/sql opens multiple concurrent
+	// connections and the per-connection pragmas (especially busy_timeout) are
+	// not applied to every new connection from the pool.
+	// With WAL mode, reads and writes can overlap efficiently even through one
+	// connection because Go's database/sql queues callers in-process.
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	// Pragmas must be set on the single connection before any other use.
+	// Order matters: WAL must be enabled before synchronous/timeout settings.
 	for _, pragma := range []string{
-		"PRAGMA journal_mode=WAL",
+		"PRAGMA journal_mode=WAL",   // WAL: readers never block writers
+		"PRAGMA synchronous=NORMAL", // safe with WAL, faster than FULL
 		"PRAGMA foreign_keys=ON",
-		"PRAGMA busy_timeout=5000",
-		"PRAGMA cache_size=-32000",
+		"PRAGMA busy_timeout=10000", // 10 s retry window (belt-and-suspenders)
+		"PRAGMA cache_size=-32000",  // ~32 MB page cache
+		"PRAGMA temp_store=MEMORY",  // temp tables in memory
 	} {
 		if _, err := db.Exec(pragma); err != nil {
 			return nil, fmt.Errorf("pragma: %w", err)

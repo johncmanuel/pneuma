@@ -8,6 +8,12 @@ import { authToken, wsBase } from "./api"
  */
 export const libraryVersion = writable(0)
 
+/** True while the server is running a library scan. */
+export const scanRunning = writable(false)
+
+/** Result payload from the last completed scan, or null. */
+export const scanResult = writable<{ added: number; updated: number; removed: number } | null>(null)
+
 let socket: WebSocket | null = null
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -74,6 +80,17 @@ function handleMessage(msg: { type: string; payload: any }) {
     case "track.updated":
     case "track.removed":
     case "library.deduped":
+      libraryVersion.update((n) => n + 1)
+      break
+    case "scan.started":
+      scanRunning.set(true)
+      scanResult.set(null)
+      break
+    case "scan.completed":
+      scanRunning.set(false)
+      if (msg.payload && typeof msg.payload === "object") {
+        scanResult.set(msg.payload as { added: number; updated: number; removed: number })
+      }
       libraryVersion.update((n) => n + 1)
       break
   }
