@@ -1,4 +1,4 @@
-import { AppDBGet, AppDBSet, AppDBDelete } from "../../wailsjs/go/main/App"
+import { AppDBGet, AppDBSet, AppDBDelete } from "../../wailsjs/go/desktop/App"
 
 /**
  * Async key-value store backed by the app's local SQLite database.

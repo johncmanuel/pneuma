@@ -1,5 +1,5 @@
 import { writable, get } from "svelte/store"
-import { ScanLocalFolderStream, ChooseLocalFolder, ClearLocalFolder, FindLocalDuplicates, GetLocalAlbumGroups, GetLocalAlbumTracks, SearchLocalTracks, GetLocalTracksByPaths } from "../../wailsjs/go/main/App"
+import { ScanLocalFolderStream, ChooseLocalFolder, ClearLocalFolder, FindLocalDuplicates, GetLocalAlbumGroups, GetLocalAlbumTracks, SearchLocalTracks, GetLocalTracksByPaths } from "../../wailsjs/go/desktop/App"
 import { EventsOn } from "../../wailsjs/runtime/runtime"
 import { db } from "../utils/db"
 

@@ -3,6 +3,8 @@ package main
 import (
 	"embed"
 
+	"pneuma/internal/desktop"
+
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -12,7 +14,7 @@ import (
 var assets embed.FS
 
 func main() {
-	app := NewApp()
+	app := desktop.NewApp()
 
 	err := wails.Run(&options.App{
 		Title:            "pneuma",
@@ -26,13 +28,13 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		OnStartup:  app.startup,
-		OnShutdown: app.shutdown,
+		OnStartup:  app.Startup,
+		OnShutdown: app.Shutdown,
 		// prevent multiple instances of the app from running at the same time
 		// https://wails.io/docs/guides/single-instance-lock/
 		SingleInstanceLock: &options.SingleInstanceLock{
 			UniqueId:               "c0d0b46b-2b5c-43bb-9f1c-c4b0b5c3eaff",
-			OnSecondInstanceLaunch: app.onSecondInstanceLaunch,
+			OnSecondInstanceLaunch: app.SecondInstanceLaunch,
 		},
 		Bind: []interface{}{
 			app,

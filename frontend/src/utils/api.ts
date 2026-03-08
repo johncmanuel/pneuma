@@ -7,7 +7,7 @@ import {
   GetToken,
   GetLocalPort,
   RestoreSession,
-} from "../../wailsjs/go/main/App"
+} from "../../wailsjs/go/desktop/App"
 
 /* ── Reactive state ─────────────────────────────────────────────── */
 
