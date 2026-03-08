@@ -192,12 +192,6 @@ func (a *App) ClearLocalFolder(folder string) error {
 	return a.deleteLocalTracksByFolder(folder)
 }
 
-// FindLocalDuplicates returns groups of local tracks that share the same
-// title, album, and album_artist (metadata-only duplicate detection via SQL).
-func (a *App) FindLocalDuplicates(folders []string) ([]LocalDuplicateGroup, error) {
-	return a.findLocalDuplicates(folders)
-}
-
 // ChooseLocalFolder opens a directory picker and returns only the chosen path.
 // Does NOT scan; the frontend stores the path and calls ScanLocalFolderStream separately.
 func (a *App) ChooseLocalFolder() (string, error) {

@@ -19,8 +19,6 @@ export function ConnectToServer(arg1:string,arg2:string,arg3:string):Promise<des
 
 export function DisconnectFromServer():Promise<void>;
 
-export function FindLocalDuplicates(arg1:Array<string>):Promise<Array<desktop.LocalDuplicateGroup>>;
-
 export function GetLocalAlbumGroups(arg1:Array<string>,arg2:string,arg3:number,arg4:number):Promise<desktop.LocalAlbumGroupsResult>;
 
 export function GetLocalAlbumTracks(arg1:Array<string>,arg2:string,arg3:string):Promise<Array<desktop.LocalTrack>>;

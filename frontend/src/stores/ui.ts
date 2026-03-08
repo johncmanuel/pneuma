@@ -25,7 +25,7 @@ export function closePanel() {
 /* ── Library sub-navigation state ──────────────────────────────── */
 
 export type LibTab = "library" | "local"
-export type LocalSubTab = "albums" | "duplicates"
+export type LocalSubTab = "albums"
 
 export const activeTab = writable<LibTab>("library")
 export const localSubTab = writable<LocalSubTab>("albums")

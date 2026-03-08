@@ -34,10 +34,6 @@ export function DisconnectFromServer() {
   return window['go']['desktop']['App']['DisconnectFromServer']();
 }
 
-export function FindLocalDuplicates(arg1) {
-  return window['go']['desktop']['App']['FindLocalDuplicates'](arg1);
-}
-
 export function GetLocalAlbumGroups(arg1, arg2, arg3, arg4) {
   return window['go']['desktop']['App']['GetLocalAlbumGroups'](arg1, arg2, arg3, arg4);
 }

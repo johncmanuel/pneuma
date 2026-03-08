@@ -3,16 +3,16 @@
            remoteAlbumGroups, remoteAlbumGroupsTotal, remoteAlbumGroupsOffset,
            loadRemoteAlbumGroupsPage, loadMoreRemoteAlbumGroups,
            type RemoteAlbumGroup } from "../stores/library"
-  import { localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, checkLocalDuplicates, localDuplicates, scanningDuplicates, autoDupeCheck, localAlbumGroups, localAlbumGroupsTotal, localAlbumGroupsOffset, localAlbumFilter, loadLocalAlbumGroups, loadMoreLocalAlbumGroups, fetchLocalAlbumTracks, localChangeSeq, type LocalAlbumGroup } from "../stores/localLibrary"
+  import { localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, localAlbumGroups, localAlbumGroupsTotal, localAlbumGroupsOffset, localAlbumFilter, loadLocalAlbumGroups, loadMoreLocalAlbumGroups, fetchLocalAlbumTracks, localChangeSeq, type LocalAlbumGroup } from "../stores/localLibrary"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
-  import Duplicates from "./Duplicates.svelte"
+
   import type { Track } from "../stores/player"
   import type { LocalTrack } from "../stores/localLibrary"
   import { serverFetch, artworkUrl, connected, isReconnecting, localBase } from "../utils/api"
   import { wsSend } from "../stores/ws"
   import { onMount } from "svelte"
-  import { activeTab, localSubTab, selectedAlbum, pushNav, type LibTab } from "../stores/ui"
+  import { activeTab, selectedAlbum, pushNav, type LibTab } from "../stores/ui"
   import { get, derived } from "svelte/store"
   import { recordRecentAlbum } from "../stores/recentAlbums"
   import { createVirtualizer } from "@tanstack/svelte-virtual"
@@ -114,7 +114,6 @@
     ? remoteGroupsAsAlbumGroups($remoteAlbumGroups)
     : localGroupsAsAlbumGroups($localAlbumGroups)
   $: isLoading = $activeTab === "library" ? $loading : $localLoading
-  $: localDupeCount = $localDuplicates.length
   $: currentTotal = $activeTab === "library" ? $remoteAlbumGroupsTotal : $localAlbumGroupsTotal
   $: currentOffset = $activeTab === "library" ? $remoteAlbumGroupsOffset : $localAlbumGroupsOffset
   $: hasMore = displayedGroups.length < currentTotal
@@ -255,7 +254,7 @@
     overscan: 5,
   })
 
-  // On mount, load album groups and optionally check duplicates.
+  // On mount, load album groups.
   // Library is destroyed/re-created on every view switch (App.svelte uses {#if}),
   // so onMount fires each time the user navigates back. Only do a full
   // scanLocalFolders() on the first ever mount (store still empty); on return
@@ -269,7 +268,6 @@
       if (get(localAlbumGroups).length === 0) {
         // First mount — populate the SQLite cache with a full scan.
         scanLocalFolders()
-        if ($autoDupeCheck) checkLocalDuplicates()
       } else {
         // Returning from another view — data is in memory, just reload the page.
         loadLocalAlbumGroups(0, get(localAlbumFilter))
@@ -474,33 +472,10 @@
     </button>
   </div>
 
-  <!-- Sub-tab bar (Local Files only) — always visible, never scrolls away -->
-  {#if $activeTab === "local"}
-    <div class="subtab-bar">
-      <button
-        class="subtab"
-        class:active={$localSubTab === "albums"}
-        on:click={() => pushNav({ subTab: "albums", albumKey: null })}
-      >Albums</button>
-      <button
-        class="subtab"
-        class:active={$localSubTab === "duplicates"}
-        on:click={() => pushNav({ subTab: "duplicates" })}
-      >
-        Duplicates
-        {#if localDupeCount > 0}<span class="dupe-badge">{localDupeCount}</span>{/if}
-        {#if $scanningDuplicates}<span class="scan-dot" title="Scanning…"></span>{/if}
-      </button>
-    </div>
-  {/if}
-
   <!-- Scrollable body -->
   <div class="scroll-body">
 
-    {#if $activeTab === "local" && $localSubTab === "duplicates"}
-      <Duplicates />
-
-    {:else if currentAlbumGroup}
+    {#if currentAlbumGroup}
       <!-- Album detail view -->
       <div class="album-detail-view">
         <div class="album-detail-header">
@@ -672,55 +647,6 @@
   .lib-tab.active {
     color: var(--accent);
     border-bottom-color: var(--accent);
-  }
-
-  /* Sub-tab bar (Local Files) */
-  .subtab-bar {
-    display: flex;
-    gap: 0;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    flex-shrink: 0;
-    padding: 0 4px;
-  }
-
-  .subtab {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    font-size: 12px;
-    color: var(--text-2);
-    border-bottom: 2px solid transparent;
-    transition: color 0.1s, border-color 0.1s;
-  }
-  .subtab:hover { color: var(--text-1); }
-  .subtab.active { color: var(--text-1); border-bottom-color: var(--accent); }
-
-  .dupe-badge {
-    display: inline-block;
-    min-width: 16px;
-    padding: 0 4px;
-    font-size: 10px;
-    font-weight: 700;
-    line-height: 16px;
-    text-align: center;
-    border-radius: 8px;
-    background: var(--danger);
-    color: #fff;
-  }
-
-  .scan-dot {
-    display: inline-block;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--accent);
-    animation: pulse 1s ease-in-out infinite;
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
   }
 
   /* Scrollable body — flex container for album detail or grid */

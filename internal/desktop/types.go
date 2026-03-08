@@ -67,9 +67,3 @@ type ConnectResult struct {
 	User  json.RawMessage `json:"user"`
 	Token string          `json:"token"`
 }
-
-// LocalDuplicateGroup is a set of local tracks that share the same metadata.
-type LocalDuplicateGroup struct {
-	Key    string       `json:"key"`
-	Tracks []LocalTrack `json:"tracks"`
-}

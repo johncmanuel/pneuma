@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ConnectToServer, DisconnectFromServer, ClearArtworkCache } from "../../wailsjs/go/desktop/App"
   import { connected, serverURL, authToken, refreshConnection, saveSession, clearSession, isReconnecting, stopAutoReconnect } from "../utils/api"
-  import { autoDupeCheck, scanProgress, localLoading } from "../stores/localLibrary"
+  import { scanProgress, localLoading } from "../stores/localLibrary"
 
   // Connect form state
   let connectURL = "http://127.0.0.1:8989"
@@ -138,11 +138,6 @@
     {:else if $localLoading}
       <p class="text-3 muted">Loading local library…</p>
     {/if}
-    <label class="toggle-row">
-      <input type="checkbox" bind:checked={$autoDupeCheck} />
-      <span>Auto-check for duplicates on startup</span>
-    </label>
-    <p class="text-3 muted">When disabled, use the "Check Now" button in Library → Local Files → Duplicates.</p>
   </div>
 
   <!-- ── Cache ── -->
@@ -201,20 +196,6 @@
   .msg { font-size: 13px; margin: 0; color: var(--accent); }
   .msg.error { color: #ef4444; }
   .muted { opacity: 0.5; }
-
-  .toggle-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  .toggle-row input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-    accent-color: var(--accent);
-  }
 
   code {
     background: var(--surface);

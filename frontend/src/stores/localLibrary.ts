@@ -1,5 +1,5 @@
 import { writable, get } from "svelte/store"
-import { ScanLocalFolderStream, ChooseLocalFolder, ClearLocalFolder, FindLocalDuplicates, GetLocalAlbumGroups, GetLocalAlbumTracks, SearchLocalTracks, GetLocalTracksByPaths, WatchLocalFolder, UnwatchLocalFolder } from "../../wailsjs/go/desktop/App"
+import { ScanLocalFolderStream, ChooseLocalFolder, ClearLocalFolder, GetLocalAlbumGroups, GetLocalAlbumTracks, SearchLocalTracks, GetLocalTracksByPaths, WatchLocalFolder, UnwatchLocalFolder } from "../../wailsjs/go/desktop/App"
 import { EventsOn } from "../../wailsjs/runtime/runtime"
 import { db } from "../utils/db"
 import { playerState } from "./player"
@@ -21,16 +21,9 @@ export interface LocalTrack {
   has_artwork: boolean
 }
 
-export interface DuplicateGroup {
-  key: string             // "title|album|album_artist" (lower-cased)
-  tracks: LocalTrack[]    // 2+ copies
-}
-
 /* ── DB keys (KV table — settings only, tracks are relational now) ── */
 
 const KEY_FOLDERS    = "local_folders"
-const KEY_DISMISSED  = "dismissed_duplicates"
-const KEY_AUTO_DUPE  = "auto_dupe_check"
 
 /* ── Stores ─────────────────────────────────────────────────────── */
 
@@ -51,23 +44,7 @@ export const localLoading = writable(false)
 /** Per-file scan progress: null when idle. */
 export const scanProgress = writable<{ folder: string; done: number; total: number } | null>(null)
 
-/** Paths the user has dismissed from the duplicates view. */
-export const dismissedDuplicates = writable<Set<string>>(new Set())
-dismissedDuplicates.subscribe((v) => {
-  if (_initialized) void db.set(KEY_DISMISSED, JSON.stringify([...v]))
-})
 
-/** Detected duplicate groups, computed after each scan. */
-export const localDuplicates = writable<DuplicateGroup[]>([])
-
-/** True while a duplicate check is in progress. */
-export const scanningDuplicates = writable(false)
-
-/** User preference: auto-run duplicate checks on startup. */
-export const autoDupeCheck = writable<boolean>(true)
-autoDupeCheck.subscribe((v) => {
-  if (_initialized) void db.set(KEY_AUTO_DUPE, String(v))
-})
 
 /**
  * Remove all queue entries whose path matches removedPath exactly (single file)
@@ -313,11 +290,7 @@ export async function resolveLocalTracksByPaths(paths: string[]): Promise<LocalT
  * Tracks are loaded from the relational `local_tracks` table (indexed, fast).
  */
 export async function initLocalLibrary(): Promise<void> {
-  const [foldersRaw, dismissedRaw, autoDupeRaw] = await Promise.all([
-    db.get(KEY_FOLDERS),
-    db.get(KEY_DISMISSED),
-    db.get(KEY_AUTO_DUPE),
-  ])
+  const foldersRaw = await db.get(KEY_FOLDERS)
 
   _initialized = true
 
@@ -326,12 +299,6 @@ export async function initLocalLibrary(): Promise<void> {
     if (foldersRaw) folders = JSON.parse(foldersRaw)
   } catch { /* corrupt — keep default */ }
   localFolders.set(folders)
-
-  try {
-    if (dismissedRaw) dismissedDuplicates.set(new Set(JSON.parse(dismissedRaw)))
-  } catch { /* corrupt */ }
-
-  if (autoDupeRaw !== null) autoDupeCheck.set(autoDupeRaw !== "false")
 
   // Hydrate the track list from the indexed relational table — instant.
   // Now we only load album groups (paginated) instead of all tracks.
@@ -386,26 +353,6 @@ export async function initLocalLibrary(): Promise<void> {
 }
 
 /* ── Actions ────────────────────────────────────────────────────── */
-
-export function dismissDuplicate(path: string) {
-  dismissedDuplicates.update((s) => new Set([...s, path]))
-  localTracks.update((tracks) => tracks.filter((t) => t.path !== path))
-}
-
-export function restoreDuplicate(path: string) {
-  dismissedDuplicates.update((s) => {
-    const next = new Set(s)
-    next.delete(path)
-    return next
-  })
-}
-
-export function cancelDuplicateScan() {
-  scanGeneration++
-  scanningDuplicates.set(false)
-  localLoading.set(false)
-  scanProgress.set(null)
-}
 
 export async function addLocalFolder(): Promise<string | null> {
   try {
@@ -494,31 +441,4 @@ export async function scanLocalFolders() {
   }
 }
 
-/**
- * Check for duplicate local tracks using metadata-only SQL query.
- * Fast — all grouping done in SQLite via CTE.
- */
-export async function checkLocalDuplicates() {
-  const dirs = get(localFolders)
-  if (dirs.length === 0) {
-    localDuplicates.set([])
-    return
-  }
-
-  scanningDuplicates.set(true)
-  try {
-    const groups = await FindLocalDuplicates(dirs)
-    localDuplicates.set(
-      (groups || []).map((g: any) => ({
-        key: g.key,
-        tracks: g.tracks as LocalTrack[],
-      }))
-    )
-  } catch (e) {
-    console.warn("Failed to check local duplicates:", e)
-    localDuplicates.set([])
-  } finally {
-    scanningDuplicates.set(false)
-  }
-}
 
