@@ -3,7 +3,7 @@
            remoteAlbumGroups, remoteAlbumGroupsTotal, remoteAlbumGroupsOffset,
            loadRemoteAlbumGroupsPage, loadMoreRemoteAlbumGroups,
            type RemoteAlbumGroup } from "../stores/library"
-  import { localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, checkLocalDuplicates, localDuplicates, scanningDuplicates, autoDupeCheck, localAlbumGroups, localAlbumGroupsTotal, localAlbumGroupsOffset, localAlbumFilter, loadLocalAlbumGroups, loadMoreLocalAlbumGroups, fetchLocalAlbumTracks, type LocalAlbumGroup } from "../stores/localLibrary"
+  import { localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, checkLocalDuplicates, localDuplicates, scanningDuplicates, autoDupeCheck, localAlbumGroups, localAlbumGroupsTotal, localAlbumGroupsOffset, localAlbumFilter, loadLocalAlbumGroups, loadMoreLocalAlbumGroups, fetchLocalAlbumTracks, localChangeSeq, type LocalAlbumGroup } from "../stores/localLibrary"
   import { playerState } from "../stores/player"
   import TrackRow from "./TrackRow.svelte"
   import Duplicates from "./Duplicates.svelte"
@@ -134,6 +134,33 @@
     albumFilter = ""
     albumSortField = "default"
     albumSortDir = "asc"
+  }
+
+  // Re-fetch the open local album's track list whenever a file change is detected.
+  $: if ($localChangeSeq && currentAlbumGroup?.isLocal) {
+    refreshCurrentAlbumDetail()
+  }
+
+  async function refreshCurrentAlbumDetail() {
+    if (!currentAlbumGroup?.isLocal) return
+    let albumName: string, albumArtist: string
+    if (currentAlbumGroup.key === UNORGANIZED_KEY) {
+      albumName = ""
+      albumArtist = ""
+    } else {
+      const parts = currentAlbumGroup.key.split("|||")
+      albumName = parts[0] ?? ""
+      albumArtist = parts[1] ?? ""
+    }
+    try {
+      const locals = await fetchLocalAlbumTracks(albumName, albumArtist)
+      albumDetailTracks = locals.map(localTrackToTrack)
+      if (currentAlbumGroup) {
+        currentAlbumGroup = { ...currentAlbumGroup, trackCount: albumDetailTracks.length }
+      }
+    } catch (e) {
+      console.warn("Failed to refresh album detail:", e)
+    }
   }
 
   async function loadAlbumDetail(group: AlbumGroup) {
@@ -532,7 +559,7 @@
     <!-- Album grid view -->
     <div class="grid-scroll-wrapper" bind:this={gridScrollEl} on:scroll={handleGridScroll}>
     <div class="toolbar">
-      <h2>{$activeTab === "library" ? "Library" : "Local Files"}</h2>
+      <h2>{$activeTab === "library" ? "Library" : "Local Albums"}</h2>
       <div class="toolbar-actions">
         {#if $activeTab === "library"}
           <button on:click={scanLibrary} title="Rescan watch folders">↺ Scan</button>

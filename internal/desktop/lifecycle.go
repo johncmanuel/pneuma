@@ -53,6 +53,9 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}()
 
+	// Start the fsnotify watcher for local music folders.
+	a.initLocalWatcher()
+
 	slog.Info("pneuma desktop started", "local_stream_port", a.localPort)
 }
 
@@ -63,6 +66,7 @@ func (a *App) Shutdown(_ context.Context) {
 		a.stopRefresh()
 	}
 	a.mu.Unlock()
+	a.stopLocalWatcher()
 	if a.localSrv != nil {
 		a.localSrv.Close() //nolint:errcheck
 	}

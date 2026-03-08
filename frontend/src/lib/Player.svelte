@@ -318,6 +318,14 @@
     else if ($playerState.paused) audio.pause()
   }
 
+  // When the track is forcefully cleared (e.g. file removed from disk),
+  // stop and reset the audio element immediately.
+  $: if (audio && !$playerState.trackId && currentAudioSrc) {
+    audio.pause()
+    audio.src = ""
+    currentAudioSrc = ""
+  }
+
   function onEnded() {
     skipNext()
   }

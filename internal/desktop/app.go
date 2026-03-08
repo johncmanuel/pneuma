@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"net/http"
 	"sync"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 // App holds all desktop application state. It acts as a thin client —
@@ -27,6 +30,14 @@ type App struct {
 	serverURL   string
 	token       string
 	stopRefresh context.CancelFunc
+
+	// fsnotify watcher for local music folders.
+	localWatcher *fsnotify.Watcher
+	watchedRoots []string // root folders registered with the watcher; guarded by mu
+	// pendingCreates debounces rapid Create events for the same path (Linux
+	// inotify routinely fires Create+Write+Chmod in quick succession for a
+	// single file move). Guarded by mu.
+	pendingCreates map[string]*time.Timer
 }
 
 // NewApp creates a new App.

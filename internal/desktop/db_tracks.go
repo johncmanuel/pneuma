@@ -3,6 +3,7 @@ package desktop
 import (
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"strings"
 )
 
@@ -39,6 +40,77 @@ func (a *App) deleteLocalTracksByFolder(folder string) error {
 	}
 	_, err := a.appDB.Exec(`DELETE FROM local_tracks WHERE folder=?`, folder)
 	return err
+}
+
+// deleteLocalTrackByPath removes a single track by its absolute file path.
+func (a *App) deleteLocalTrackByPath(path string) error {
+	if a.appDB == nil {
+		return nil
+	}
+	_, err := a.appDB.Exec(`DELETE FROM local_tracks WHERE path=?`, path)
+	return err
+}
+
+// pruneStaleLocalTracks removes rows for the given folder whose paths are NOT
+// in livePaths. Returns the slice of deleted paths.
+func (a *App) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}) ([]string, error) {
+	if a.appDB == nil || len(livePaths) == 0 {
+		return nil, nil
+	}
+	// Fetch all stored paths for this folder.
+	rows, err := a.appDB.Query(`SELECT path FROM local_tracks WHERE folder=?`, folder)
+	if err != nil {
+		return nil, err
+	}
+	var staleAny []any
+	var stalePaths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			continue
+		}
+		if _, exists := livePaths[p]; !exists {
+			staleAny = append(staleAny, p)
+			stalePaths = append(stalePaths, p)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(staleAny) == 0 {
+		return nil, nil
+	}
+	placeholders := make([]string, len(staleAny))
+	for i := range staleAny {
+		placeholders[i] = "?"
+	}
+	_, err = a.appDB.Exec(
+		`DELETE FROM local_tracks WHERE path IN (`+strings.Join(placeholders, ",")+`)`,
+		staleAny...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return stalePaths, nil
+}
+
+// deleteLocalTracksByPathPrefix removes all tracks whose path starts with
+// prefix+"/" — used when an entire directory is moved or deleted.
+// Returns the number of rows deleted.
+func (a *App) deleteLocalTracksByPathPrefix(prefix string) (int64, error) {
+	if a.appDB == nil {
+		return 0, nil
+	}
+	// Match the directory itself (exact) or any file inside it.
+	res, err := a.appDB.Exec(
+		`DELETE FROM local_tracks WHERE path = ? OR path LIKE ?`,
+		prefix, prefix+string(filepath.Separator)+"%",
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 // getLocalTracks returns all tracks whose folder is in the given list.

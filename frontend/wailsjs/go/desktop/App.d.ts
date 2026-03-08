@@ -53,4 +53,8 @@ export function SearchLocalTracks(arg1:Array<string>,arg2:string):Promise<Array<
 
 export function SecondInstanceLaunch(arg1:options.SecondInstanceData):Promise<void>;
 
+export function UnwatchLocalFolder(arg1:string):Promise<void>;
+
 export function UploadLocalFile(arg1:string):Promise<string>;
+
+export function WatchLocalFolder(arg1:string):Promise<void>;

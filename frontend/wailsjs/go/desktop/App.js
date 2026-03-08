@@ -102,6 +102,14 @@ export function SecondInstanceLaunch(arg1) {
   return window['go']['desktop']['App']['SecondInstanceLaunch'](arg1);
 }
 
+export function UnwatchLocalFolder(arg1) {
+  return window['go']['desktop']['App']['UnwatchLocalFolder'](arg1);
+}
+
 export function UploadLocalFile(arg1) {
   return window['go']['desktop']['App']['UploadLocalFile'](arg1);
+}
+
+export function WatchLocalFolder(arg1) {
+  return window['go']['desktop']['App']['WatchLocalFolder'](arg1);
 }
