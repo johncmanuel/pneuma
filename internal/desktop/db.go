@@ -1,11 +1,15 @@
 package desktop
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+
+	"pneuma/internal/store/sqlite"
+	"pneuma/internal/store/sqlite/desktopdb"
 
 	_ "modernc.org/sqlite"
 )
@@ -14,10 +18,6 @@ import (
 // desktop client state: local folder list, track cache, recent albums, etc.
 // The database is stored in the OS user-cache directory so it survives app
 // updates but is clearly separate from user documents.
-//
-// Linux:   ~/.cache/pneuma/app.db
-// macOS:   ~/Library/Caches/pneuma/app.db
-// Windows: %LocalAppData%\pneuma\app.db
 func openAppDB() (*sql.DB, error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
@@ -52,12 +52,6 @@ func openAppDB() (*sql.DB, error) {
 		}
 	}
 
-	// Generic key-value table (settings, small blobs, etc.).
-	if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)`); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("create kv table: %w", err)
-	}
-
 	// Migration: drop the old local_tracks table if it still has the
 	// now-removed fingerprint / acoustic_fingerprint columns.  The table
 	// is a pure scan cache so data loss is safe — next scan repopulates it.
@@ -69,35 +63,11 @@ func openAppDB() (*sql.DB, error) {
 		_, _ = db.Exec(`DROP TABLE IF EXISTS local_tracks`)
 		_, _ = db.Exec(`DELETE FROM kv WHERE key = 'local_dupes_cache'`)
 	}
-	// Also drop the old fingerprint indexes if they somehow survived.
-	_, _ = db.Exec(`DROP INDEX IF EXISTS idx_lt_fp`)
-	_, _ = db.Exec(`DROP INDEX IF EXISTS idx_lt_afp`)
 
-	// Relational table for locally-scanned tracks (metadata only, no hashes).
-	const createLocalTracks = `
-CREATE TABLE IF NOT EXISTS local_tracks (
-path         TEXT PRIMARY KEY,
-folder       TEXT NOT NULL,
-title        TEXT NOT NULL DEFAULT '',
-artist       TEXT NOT NULL DEFAULT '',
-album        TEXT NOT NULL DEFAULT '',
-album_artist TEXT NOT NULL DEFAULT '',
-genre        TEXT NOT NULL DEFAULT '',
-year         INTEGER NOT NULL DEFAULT 0,
-track_number INTEGER NOT NULL DEFAULT 0,
-disc_number  INTEGER NOT NULL DEFAULT 0,
-duration_ms  INTEGER NOT NULL DEFAULT 0,
-has_artwork  INTEGER NOT NULL DEFAULT 0
-)`
-	if _, err = db.Exec(createLocalTracks); err != nil {
+	// Create/ensure all tables and indexes from the canonical schema.
+	if _, err = db.Exec(sqlite.DesktopSchema); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("create local_tracks table: %w", err)
-	}
-
-	// Index for fast per-folder deletion and loading.
-	if _, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_lt_folder ON local_tracks(folder)`); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("create index: %w", err)
+		return nil, fmt.Errorf("apply desktop schema: %w", err)
 	}
 
 	// One-time migration: clean up old KV-blob track cache if present.
@@ -113,16 +83,17 @@ func (a *App) closeAppDB() {
 			slog.Warn("appDB close error", "err", err)
 		}
 		a.appDB = nil
+		a.dq = nil
 	}
 }
 
 // AppDBGet returns the stored value for key, or "" if the key does not exist.
 func (a *App) AppDBGet(key string) string {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return ""
 	}
-	var val string
-	if err := a.appDB.QueryRow(`SELECT value FROM kv WHERE key=?`, key).Scan(&val); err != nil {
+	val, err := a.dq.GetKV(context.Background(), key)
+	if err != nil {
 		return ""
 	}
 	return val
@@ -130,21 +101,16 @@ func (a *App) AppDBGet(key string) string {
 
 // AppDBSet stores or replaces value for key (upsert).
 func (a *App) AppDBSet(key, value string) error {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return fmt.Errorf("appDB not initialised")
 	}
-	_, err := a.appDB.Exec(
-		`INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
-		key, value,
-	)
-	return err
+	return a.dq.SetKV(context.Background(), desktopdb.SetKVParams{Key: key, Value: value})
 }
 
 // AppDBDelete removes key from the store. It is a no-op when the key does not exist.
 func (a *App) AppDBDelete(key string) error {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return nil
 	}
-	_, err := a.appDB.Exec(`DELETE FROM kv WHERE key=?`, key)
-	return err
+	return a.dq.DeleteKV(context.Background(), key)
 }

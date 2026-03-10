@@ -1,82 +1,106 @@
 package desktop
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	"pneuma/internal/store/sqlite/desktopdb"
 )
+
+// localTrackFromDB converts a desktopdb.LocalTrack to a desktop.LocalTrack.
+func localTrackFromDB(row desktopdb.LocalTrack) LocalTrack {
+	return LocalTrack{
+		Path:        row.Path,
+		Title:       row.Title,
+		Artist:      row.Artist,
+		Album:       row.Album,
+		AlbumArtist: row.AlbumArtist,
+		Genre:       row.Genre,
+		Year:        int(row.Year),
+		TrackNumber: int(row.TrackNumber),
+		DiscNumber:  int(row.DiscNumber),
+		DurationMs:  row.DurationMs,
+		HasArtwork:  row.HasArtwork != 0,
+	}
+}
+
+// localTracksFromDB converts a slice of desktopdb.LocalTrack to []LocalTrack.
+func localTracksFromDB(rows []desktopdb.LocalTrack) []LocalTrack {
+	out := make([]LocalTrack, len(rows))
+	for i, r := range rows {
+		out[i] = localTrackFromDB(r)
+	}
+	return out
+}
+
+// boolToInt64 converts a bool to int64 (0/1) for SQLite storage.
+func boolToInt64(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
+}
 
 // upsertLocalTrack inserts or replaces a single track row.
 func (a *App) upsertLocalTrack(lt LocalTrack, folder string) error {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return fmt.Errorf("appDB not initialised")
 	}
-	hasArt := 0
-	if lt.HasArtwork {
-		hasArt = 1
-	}
-	_, err := a.appDB.Exec(`
-INSERT INTO local_tracks (
-path, folder, title, artist, album, album_artist, genre,
-year, track_number, disc_number, duration_ms, has_artwork
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
-ON CONFLICT(path) DO UPDATE SET
-folder=excluded.folder, title=excluded.title, artist=excluded.artist,
-album=excluded.album, album_artist=excluded.album_artist, genre=excluded.genre,
-year=excluded.year, track_number=excluded.track_number,
-disc_number=excluded.disc_number, duration_ms=excluded.duration_ms,
-has_artwork=excluded.has_artwork`,
-		lt.Path, folder, lt.Title, lt.Artist, lt.Album, lt.AlbumArtist, lt.Genre,
-		lt.Year, lt.TrackNumber, lt.DiscNumber, lt.DurationMs, hasArt,
-	)
-	return err
+	return a.dq.UpsertLocalTrack(context.Background(), desktopdb.UpsertLocalTrackParams{
+		Path:        lt.Path,
+		Folder:      folder,
+		Title:       lt.Title,
+		Artist:      lt.Artist,
+		Album:       lt.Album,
+		AlbumArtist: lt.AlbumArtist,
+		Genre:       lt.Genre,
+		Year:        int64(lt.Year),
+		TrackNumber: int64(lt.TrackNumber),
+		DiscNumber:  int64(lt.DiscNumber),
+		DurationMs:  lt.DurationMs,
+		HasArtwork:  boolToInt64(lt.HasArtwork),
+	})
 }
 
 // deleteLocalTracksByFolder removes every track whose folder column matches.
 func (a *App) deleteLocalTracksByFolder(folder string) error {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return nil
 	}
-	_, err := a.appDB.Exec(`DELETE FROM local_tracks WHERE folder=?`, folder)
-	return err
+	return a.dq.DeleteLocalTracksByFolder(context.Background(), folder)
 }
 
 // deleteLocalTrackByPath removes a single track by its absolute file path.
 func (a *App) deleteLocalTrackByPath(path string) error {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return nil
 	}
-	_, err := a.appDB.Exec(`DELETE FROM local_tracks WHERE path=?`, path)
-	return err
+	return a.dq.DeleteLocalTrackByPath(context.Background(), path)
 }
 
 // pruneStaleLocalTracks removes rows for the given folder whose paths are NOT
 // in livePaths. Returns the slice of deleted paths.
+// NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
+// cannot be used to update this method.
 func (a *App) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}) ([]string, error) {
-	if a.appDB == nil || len(livePaths) == 0 {
+	if a.dq == nil || len(livePaths) == 0 {
 		return nil, nil
 	}
 	// Fetch all stored paths for this folder.
-	rows, err := a.appDB.Query(`SELECT path FROM local_tracks WHERE folder=?`, folder)
+	stored, err := a.dq.ListPathsByFolder(context.Background(), folder)
 	if err != nil {
 		return nil, err
 	}
 	var staleAny []any
 	var stalePaths []string
-	for rows.Next() {
-		var p string
-		if err := rows.Scan(&p); err != nil {
-			continue
-		}
+	for _, p := range stored {
 		if _, exists := livePaths[p]; !exists {
 			staleAny = append(staleAny, p)
 			stalePaths = append(stalePaths, p)
 		}
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	if len(staleAny) == 0 {
 		return nil, nil
@@ -99,45 +123,42 @@ func (a *App) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}
 // prefix+"/" — used when an entire directory is moved or deleted.
 // Returns the number of rows deleted.
 func (a *App) deleteLocalTracksByPathPrefix(prefix string) (int64, error) {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return 0, nil
 	}
-	// Match the directory itself (exact) or any file inside it.
-	res, err := a.appDB.Exec(
-		`DELETE FROM local_tracks WHERE path = ? OR path LIKE ?`,
-		prefix, prefix+string(filepath.Separator)+"%",
-	)
-	if err != nil {
-		return 0, err
-	}
-	return res.RowsAffected()
+	return a.dq.DeleteLocalTracksByPathPrefix(context.Background(), desktopdb.DeleteLocalTracksByPathPrefixParams{
+		Path:   prefix,
+		Path_2: prefix + string(filepath.Separator) + "%",
+	})
 }
 
 // getLocalTracks returns all tracks whose folder is in the given list.
 // If folders is empty it returns all rows.
 func (a *App) getLocalTracks(folders []string) ([]LocalTrack, error) {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return nil, nil
+	}
+
+	if len(folders) == 0 {
+		rows, err := a.dq.ListAllLocalTracks(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		return localTracksFromDB(rows), nil
 	}
 
 	const cols = `path, folder, title, artist, album, album_artist, genre,
 year, track_number, disc_number, duration_ms, has_artwork`
 
-	var rows *sql.Rows
-	var err error
-	if len(folders) == 0 {
-		rows, err = a.appDB.Query(`SELECT ` + cols + ` FROM local_tracks ORDER BY folder, path`)
-	} else {
-		placeholders := make([]string, len(folders))
-		args := make([]any, len(folders))
-		for i, f := range folders {
-			placeholders[i] = "?"
-			args[i] = f
-		}
-		query := `SELECT ` + cols + ` FROM local_tracks WHERE folder IN (` +
-			strings.Join(placeholders, ",") + `) ORDER BY folder, path`
-		rows, err = a.appDB.Query(query, args...)
+	placeholders := make([]string, len(folders))
+	args := make([]any, len(folders))
+	for i, f := range folders {
+		placeholders[i] = "?"
+		args[i] = f
 	}
+	query := `SELECT ` + cols + ` FROM local_tracks WHERE folder IN (` +
+		strings.Join(placeholders, ",") + `) ORDER BY folder, path`
+	rows, err := a.appDB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +188,7 @@ func scanLocalTrackRows(rows *sql.Rows) ([]LocalTrack, error) {
 
 // getLocalTracksPage returns a paginated slice of tracks from the given folders.
 func (a *App) getLocalTracksPage(folders []string, offset, limit int) ([]LocalTrack, int, error) {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return nil, 0, nil
 	}
 	if limit <= 0 {
@@ -180,40 +201,38 @@ func (a *App) getLocalTracksPage(folders []string, offset, limit int) ([]LocalTr
 		offset = 0
 	}
 
+	if len(folders) == 0 {
+		total, err := a.dq.CountAllLocalTracks(context.Background())
+		if err != nil {
+			return nil, 0, err
+		}
+		rows, err := a.dq.AllLocalTracksPage(context.Background(), desktopdb.AllLocalTracksPageParams{
+			Limit:  int64(limit),
+			Offset: int64(offset),
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		return localTracksFromDB(rows), int(total), nil
+	}
+
 	const cols = `path, folder, title, artist, album, album_artist, genre,
 year, track_number, disc_number, duration_ms, has_artwork`
 
-	var countQuery, dataQuery string
-	var args []any
-
-	if len(folders) == 0 {
-		countQuery = `SELECT COUNT(*) FROM local_tracks`
-		dataQuery = `SELECT ` + cols + ` FROM local_tracks ORDER BY album COLLATE NOCASE, disc_number, track_number LIMIT ? OFFSET ?`
-		args = []any{limit, offset}
-	} else {
-		placeholders := make([]string, len(folders))
-		folderArgs := make([]any, len(folders))
-		for i, f := range folders {
-			placeholders[i] = "?"
-			folderArgs[i] = f
-		}
-		in := strings.Join(placeholders, ",")
-		countQuery = `SELECT COUNT(*) FROM local_tracks WHERE folder IN (` + in + `)`
-		dataQuery = `SELECT ` + cols + ` FROM local_tracks WHERE folder IN (` + in + `) ORDER BY album COLLATE NOCASE, disc_number, track_number LIMIT ? OFFSET ?`
-		args = append(folderArgs, limit, offset)
+	placeholders := make([]string, len(folders))
+	folderArgs := make([]any, len(folders))
+	for i, f := range folders {
+		placeholders[i] = "?"
+		folderArgs[i] = f
 	}
+	in := strings.Join(placeholders, ",")
+	countQuery := `SELECT COUNT(*) FROM local_tracks WHERE folder IN (` + in + `)`
+	dataQuery := `SELECT ` + cols + ` FROM local_tracks WHERE folder IN (` + in + `) ORDER BY album COLLATE NOCASE, disc_number, track_number LIMIT ? OFFSET ?`
 
 	var total int
-	if len(folders) == 0 {
-		_ = a.appDB.QueryRow(countQuery).Scan(&total)
-	} else {
-		folderArgs := make([]any, len(folders))
-		for i, f := range folders {
-			folderArgs[i] = f
-		}
-		_ = a.appDB.QueryRow(countQuery, folderArgs...).Scan(&total)
-	}
+	_ = a.appDB.QueryRow(countQuery, folderArgs...).Scan(&total)
 
+	args := append(folderArgs, limit, offset)
 	rows, err := a.appDB.Query(dataQuery, args...)
 	if err != nil {
 		return nil, 0, err
@@ -226,40 +245,43 @@ year, track_number, disc_number, duration_ms, has_artwork`
 
 // searchLocalTracks performs a LIKE search on local tracks.
 func (a *App) searchLocalTracks(folders []string, query string) ([]LocalTrack, error) {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return nil, nil
 	}
 	if query == "" {
 		return nil, nil
 	}
 
+	like := "%" + query + "%"
+
+	if len(folders) == 0 {
+		rows, err := a.dq.SearchAllLocalTracks(context.Background(), desktopdb.SearchAllLocalTracksParams{
+			Title:  like,
+			Artist: like,
+			Album:  like,
+			Path:   like,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return localTracksFromDB(rows), nil
+	}
+
 	const cols = `path, folder, title, artist, album, album_artist, genre,
 year, track_number, disc_number, duration_ms, has_artwork`
 
-	like := "%" + query + "%"
-
-	var q string
-	var args []any
-
-	if len(folders) == 0 {
-		q = `SELECT ` + cols + ` FROM local_tracks
-		     WHERE (title LIKE ? OR artist LIKE ? OR album LIKE ? OR path LIKE ?)
-		     ORDER BY title COLLATE NOCASE LIMIT 50`
-		args = []any{like, like, like, like}
-	} else {
-		placeholders := make([]string, len(folders))
-		folderArgs := make([]any, len(folders))
-		for i, f := range folders {
-			placeholders[i] = "?"
-			folderArgs[i] = f
-		}
-		in := strings.Join(placeholders, ",")
-		q = `SELECT ` + cols + ` FROM local_tracks
-		     WHERE folder IN (` + in + `)
-		       AND (title LIKE ? OR artist LIKE ? OR album LIKE ? OR path LIKE ?)
-		     ORDER BY title COLLATE NOCASE LIMIT 50`
-		args = append(folderArgs, like, like, like, like)
+	placeholders := make([]string, len(folders))
+	folderArgs := make([]any, len(folders))
+	for i, f := range folders {
+		placeholders[i] = "?"
+		folderArgs[i] = f
 	}
+	in := strings.Join(placeholders, ",")
+	q := `SELECT ` + cols + ` FROM local_tracks
+	     WHERE folder IN (` + in + `)
+	       AND (title LIKE ? OR artist LIKE ? OR album LIKE ? OR path LIKE ?)
+	     ORDER BY title COLLATE NOCASE LIMIT 50`
+	args := append(folderArgs, like, like, like, like)
 
 	rows, err := a.appDB.Query(q, args...)
 	if err != nil {
@@ -271,8 +293,10 @@ year, track_number, disc_number, duration_ms, has_artwork`
 }
 
 // getLocalTracksByPaths returns tracks for the given exact paths.
+// NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
+// cannot be used to update this method.
 func (a *App) getLocalTracksByPaths(paths []string) ([]LocalTrack, error) {
-	if a.appDB == nil || len(paths) == 0 {
+	if a.dq == nil || len(paths) == 0 {
 		return nil, nil
 	}
 
@@ -297,8 +321,10 @@ year, track_number, disc_number, duration_ms, has_artwork`
 }
 
 // getLocalAlbumGroups returns paginated album groups computed via SQL GROUP BY.
+// NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
+// cannot be used to update this method.
 func (a *App) getLocalAlbumGroups(folders []string, filter string, offset, limit int) (*LocalAlbumGroupsResult, error) {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return &LocalAlbumGroupsResult{}, nil
 	}
 	if limit <= 0 {
@@ -375,8 +401,10 @@ func (a *App) getLocalAlbumGroups(folders []string, filter string, offset, limit
 }
 
 // getLocalAlbumTracks returns tracks for a specific album group.
+// NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
+// cannot be used to update this method.
 func (a *App) getLocalAlbumTracks(folders []string, albumName, albumArtist string) ([]LocalTrack, error) {
-	if a.appDB == nil {
+	if a.dq == nil {
 		return nil, nil
 	}
 

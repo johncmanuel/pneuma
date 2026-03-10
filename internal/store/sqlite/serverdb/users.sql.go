@@ -21,7 +21,17 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 }
 
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (id, username, password_hash, is_admin, can_upload, can_edit, can_delete, created_at, updated_at)
+INSERT INTO users (
+    id,
+    username,
+    password_hash,
+    is_admin,
+    can_upload,
+    can_edit,
+    can_delete,
+    created_at,
+    updated_at
+)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
@@ -53,7 +63,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 }
 
 const deleteUser = `-- name: DeleteUser :exec
-DELETE FROM users WHERE id = ?
+DELETE FROM users
+WHERE id = ?
 `
 
 func (q *Queries) DeleteUser(ctx context.Context, id string) error {
@@ -62,8 +73,18 @@ func (q *Queries) DeleteUser(ctx context.Context, id string) error {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, password_hash, is_admin, can_upload, can_edit, can_delete, created_at, updated_at
-FROM users ORDER BY created_at
+SELECT
+    id,
+    username,
+    password_hash,
+    is_admin,
+    can_upload,
+    can_edit,
+    can_delete,
+    created_at,
+    updated_at
+FROM users
+ORDER BY created_at
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -100,7 +121,8 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec
-UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?
+UPDATE users SET password_hash = ?, updated_at = ?
+WHERE id = ?
 `
 
 type UpdateUserPasswordParams struct {
@@ -115,7 +137,8 @@ func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPassword
 }
 
 const updateUserPermissions = `-- name: UpdateUserPermissions :exec
-UPDATE users SET can_upload = ?, can_edit = ?, can_delete = ?, updated_at = ? WHERE id = ?
+UPDATE users SET can_upload = ?, can_edit = ?, can_delete = ?, updated_at = ?
+WHERE id = ?
 `
 
 type UpdateUserPermissionsParams struct {
@@ -138,8 +161,18 @@ func (q *Queries) UpdateUserPermissions(ctx context.Context, arg UpdateUserPermi
 }
 
 const userByID = `-- name: UserByID :one
-SELECT id, username, password_hash, is_admin, can_upload, can_edit, can_delete, created_at, updated_at
-FROM users WHERE id = ? LIMIT 1
+SELECT
+    id,
+    username,
+    password_hash,
+    is_admin,
+    can_upload,
+    can_edit,
+    can_delete,
+    created_at,
+    updated_at
+FROM users
+WHERE id = ? LIMIT 1
 `
 
 func (q *Queries) UserByID(ctx context.Context, id string) (User, error) {
@@ -160,8 +193,18 @@ func (q *Queries) UserByID(ctx context.Context, id string) (User, error) {
 }
 
 const userByUsername = `-- name: UserByUsername :one
-SELECT id, username, password_hash, is_admin, can_upload, can_edit, can_delete, created_at, updated_at
-FROM users WHERE username = ? LIMIT 1
+SELECT
+    id,
+    username,
+    password_hash,
+    is_admin,
+    can_upload,
+    can_edit,
+    can_delete,
+    created_at,
+    updated_at
+FROM users
+WHERE username = ? LIMIT 1
 `
 
 func (q *Queries) UserByUsername(ctx context.Context, username string) (User, error) {

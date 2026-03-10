@@ -2,16 +2,12 @@ package sqlite
 
 import (
 	"database/sql"
-	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	_ "modernc.org/sqlite"
 )
-
-//go:embed sql/schema/main.sql
-var schema string
 
 // Store wraps a SQLite database connection.
 type Store struct {
@@ -72,7 +68,7 @@ func (s *Store) DB() *sql.DB {
 
 func migrate(db *sql.DB) error {
 	// Apply the full canonical schema (idempotent: all CREATE TABLE/INDEX use IF NOT EXISTS).
-	if _, err := db.Exec(schema); err != nil {
+	if _, err := db.Exec(ServerSchema); err != nil {
 		return fmt.Errorf("apply schema: %w", err)
 	}
 	return nil

@@ -11,7 +11,9 @@ import (
 )
 
 const insertAuditEntry = `-- name: InsertAuditEntry :exec
-INSERT INTO audit_log (id, user_id, action, target_type, target_id, detail, created_at)
+INSERT INTO audit_log (
+    id, user_id, action, target_type, target_id, detail, created_at
+)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
@@ -39,8 +41,16 @@ func (q *Queries) InsertAuditEntry(ctx context.Context, arg InsertAuditEntryPara
 }
 
 const listAuditEntries = `-- name: ListAuditEntries :many
-SELECT id, user_id, action, target_type, target_id, detail, created_at
-FROM audit_log ORDER BY created_at DESC LIMIT ?
+SELECT
+    id,
+    user_id,
+    action,
+    target_type,
+    target_id,
+    detail,
+    created_at
+FROM audit_log
+ORDER BY created_at DESC LIMIT ?
 `
 
 func (q *Queries) ListAuditEntries(ctx context.Context, limit int64) ([]AuditLog, error) {

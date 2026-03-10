@@ -1,0 +1,19 @@
+version: "2"
+sql:
+  # Server database 
+  - engine: "sqlite"
+    queries: "internal/store/sqlite/sql/server/query"
+    schema: "internal/store/sqlite/sql/server/schema"
+    gen:
+      go:
+        package: "serverdb"
+        out: "internal/store/sqlite/serverdb"
+
+  # Desktop database (mainly for caching)
+  - engine: "sqlite"
+    queries: "internal/store/sqlite/sql/desktop/query"
+    schema: "internal/store/sqlite/sql/desktop/schema"
+    gen:
+      go:
+        package: "desktopdb"
+        out: "internal/store/sqlite/desktopdb"

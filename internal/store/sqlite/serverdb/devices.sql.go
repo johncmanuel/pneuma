@@ -11,8 +11,15 @@ import (
 )
 
 const devicesByUser = `-- name: DevicesByUser :many
-SELECT id, user_id, name, last_seen_at, created_at
-FROM devices WHERE user_id = ? ORDER BY last_seen_at DESC
+SELECT
+    id,
+    user_id,
+    name,
+    last_seen_at,
+    created_at
+FROM devices
+WHERE user_id = ?
+ORDER BY last_seen_at DESC
 `
 
 func (q *Queries) DevicesByUser(ctx context.Context, userID string) ([]Device, error) {
@@ -45,7 +52,8 @@ func (q *Queries) DevicesByUser(ctx context.Context, userID string) ([]Device, e
 }
 
 const touchDevice = `-- name: TouchDevice :exec
-UPDATE devices SET last_seen_at = ? WHERE id = ?
+UPDATE devices SET last_seen_at = ?
+WHERE id = ?
 `
 
 type TouchDeviceParams struct {
@@ -61,7 +69,8 @@ func (q *Queries) TouchDevice(ctx context.Context, arg TouchDeviceParams) error 
 const upsertDevice = `-- name: UpsertDevice :exec
 INSERT INTO devices (id, user_id, name, last_seen_at, created_at)
 VALUES (?, ?, ?, ?, ?)
-ON CONFLICT(id) DO UPDATE SET name=excluded.name, last_seen_at=excluded.last_seen_at
+ON CONFLICT (id) DO UPDATE SET
+    name = excluded.name, last_seen_at = excluded.last_seen_at
 `
 
 type UpsertDeviceParams struct {

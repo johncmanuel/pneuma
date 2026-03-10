@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"pneuma/internal/store/sqlite/desktopdb"
 )
 
 // App holds all desktop application state. It acts as a thin client —
@@ -17,6 +19,7 @@ type App struct {
 
 	// App-local SQLite database for persisting desktop client state.
 	appDB *sql.DB
+	dq    *desktopdb.Queries
 
 	// Local stream server (serves local audio files to the <audio> element).
 	localPort int

@@ -10,6 +10,8 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"pneuma/internal/store/sqlite/desktopdb"
 )
 
 // Startup is called by Wails when the application starts.
@@ -21,6 +23,7 @@ func (a *App) Startup(ctx context.Context) {
 		slog.Warn("app db open failed — local state will not be persisted", "err", err)
 	} else {
 		a.appDB = db
+		a.dq = desktopdb.New(db)
 	}
 
 	// Initialise thumbnail cache directory.
