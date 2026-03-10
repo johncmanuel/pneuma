@@ -60,19 +60,19 @@ func (h *consoleHandler) Handle(_ context.Context, r slog.Record) error {
 }
 
 func (h *consoleHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	cp := *h
+	cp := h
 	cp.attrs = append(cp.attrs, attrs...)
-	return &cp
+	return cp
 }
 
 func (h *consoleHandler) WithGroup(name string) slog.Handler {
-	cp := *h
+	cp := h
 	if cp.group != "" {
 		cp.group += "." + name
 	} else {
 		cp.group = name
 	}
-	return &cp
+	return cp
 }
 
 func fmtKey(group, key string) string {

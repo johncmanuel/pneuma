@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/desktopdb"
 )
 
@@ -36,14 +37,6 @@ func localTracksFromDB(rows []desktopdb.LocalTrack) []LocalTrack {
 	return out
 }
 
-// boolToInt64 converts a bool to int64 (0/1) for SQLite storage.
-func boolToInt64(b bool) int64 {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // upsertLocalTrack inserts or replaces a single track row.
 func (a *App) upsertLocalTrack(lt LocalTrack, folder string) error {
 	if a.dq == nil {
@@ -61,7 +54,7 @@ func (a *App) upsertLocalTrack(lt LocalTrack, folder string) error {
 		TrackNumber: int64(lt.TrackNumber),
 		DiscNumber:  int64(lt.DiscNumber),
 		DurationMs:  lt.DurationMs,
-		HasArtwork:  boolToInt64(lt.HasArtwork),
+		HasArtwork:  dbconv.BoolInt(lt.HasArtwork),
 	})
 }
 
