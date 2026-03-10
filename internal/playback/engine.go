@@ -2,6 +2,8 @@ package playback
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math/rand"
@@ -11,7 +13,8 @@ import (
 
 	"pneuma/internal/library"
 	"pneuma/internal/models"
-	"pneuma/internal/store/sqlite"
+	"pneuma/internal/store/sqlite/dbconv"
+	"pneuma/internal/store/sqlite/serverdb"
 )
 
 // RepeatMode determines queue repeat behaviour.
@@ -44,17 +47,17 @@ type State struct {
 type Engine struct {
 	mu       sync.Mutex
 	sessions map[string]*State // keyed by device ID
-	store    *sqlite.Store
+	q        *serverdb.Queries
 	lib      *library.Service
 	bus      EventBus
 	log      *slog.Logger
 }
 
 // New creates a playback Engine. bus is used by Handoff to publish events.
-func New(store *sqlite.Store, bus EventBus, lib *library.Service) *Engine {
+func New(q *serverdb.Queries, bus EventBus, lib *library.Service) *Engine {
 	return &Engine{
 		sessions: make(map[string]*State),
-		store:    store,
+		q:        q,
 		lib:      lib,
 		bus:      bus,
 		log:      slog.Default().With("component", "engine"),
@@ -244,13 +247,14 @@ func (e *Engine) SetShuffle(ctx context.Context, deviceID, userID string, enable
 
 // LoadSession restores a session from the database into memory.
 func (e *Engine) LoadSession(ctx context.Context, deviceID, userID string) (State, error) {
-	sess, err := e.store.PlaybackSessionByDevice(ctx, deviceID)
+	row, err := e.q.PlaybackSessionByDevice(ctx, deviceID)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return State{}, nil
+		}
 		return State{}, err
 	}
-	if sess == nil {
-		return State{}, nil
-	}
+	sess := dbconv.SessionByDeviceToModel(row)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	s := &State{
@@ -295,28 +299,31 @@ func (e *Engine) persist(ctx context.Context, deviceID string, s *State) error {
 
 	// Auto-register the device so the FK in playback_sessions is satisfied.
 	now := time.Now()
-	dev := &models.Device{
+	nowStr := dbconv.FormatTime(now)
+	if err := e.q.UpsertDevice(ctx, serverdb.UpsertDeviceParams{
 		ID:         deviceID,
 		UserID:     s.UserID,
 		Name:       deviceID,
-		LastSeenAt: &now,
-		CreatedAt:  now,
-	}
-	if err := e.store.UpsertDevice(ctx, dev); err != nil {
+		LastSeenAt: sql.NullString{String: nowStr, Valid: true},
+		CreatedAt:  nowStr,
+	}); err != nil {
 		e.log.Warn("upsert device", "device", deviceID, "err", err)
 		return err
 	}
 
-	sess := &models.PlaybackSession{
+	queueJSON, err := json.Marshal(s.Queue)
+	if err != nil {
+		return fmt.Errorf("persist session: marshal queue: %w", err)
+	}
+	if err := e.q.UpsertPlaybackSession(ctx, serverdb.UpsertPlaybackSessionParams{
 		ID:         deviceID,
 		DeviceID:   deviceID,
 		UserID:     s.UserID,
-		TrackID:    s.TrackID,
-		PositionMS: s.PositionMS,
-		Queue:      s.Queue,
-		UpdatedAt:  time.Now(),
-	}
-	if err := e.store.UpsertPlaybackSession(ctx, sess); err != nil {
+		TrackID:    dbconv.NullStr(s.TrackID),
+		PositionMs: sql.NullInt64{Int64: s.PositionMS, Valid: true},
+		QueueJson:  sql.NullString{String: string(queueJSON), Valid: true},
+		UpdatedAt:  dbconv.FormatTime(time.Now()),
+	}); err != nil {
 		e.log.Error("persist session", "device", deviceID, "err", err)
 		return err
 	}

@@ -20,7 +20,8 @@ import (
 	"pneuma/internal/api/http/middleware"
 	"pneuma/internal/library"
 	"pneuma/internal/models"
-	"pneuma/internal/store/sqlite"
+	"pneuma/internal/store/sqlite/dbconv"
+	"pneuma/internal/store/sqlite/serverdb"
 )
 
 // scanTrigger is satisfied by *scanner.Scheduler.
@@ -44,7 +45,7 @@ type eventPublisher interface {
 // LibraryHandler serves library-related API routes.
 type LibraryHandler struct {
 	lib           *library.Service
-	store         *sqlite.Store
+	q             *serverdb.Queries
 	scanner       scanTrigger
 	hub           eventPublisher
 	uploadsDir    string
@@ -54,8 +55,8 @@ type LibraryHandler struct {
 // NewLibraryHandler creates a LibraryHandler.
 // fp may be nil — acoustic dedup is silently skipped when the service is
 // unavailable or not configured.
-func NewLibraryHandler(lib *library.Service, store *sqlite.Store, sc scanTrigger, hub eventPublisher, uploadsDir string, fp acousticFingerprinter) *LibraryHandler {
-	return &LibraryHandler{lib: lib, store: store, scanner: sc, hub: hub, uploadsDir: uploadsDir, fingerprinter: fp}
+func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, uploadsDir string, fp acousticFingerprinter) *LibraryHandler {
+	return &LibraryHandler{lib: lib, q: q, scanner: sc, hub: hub, uploadsDir: uploadsDir, fingerprinter: fp}
 }
 
 // ListTracks returns tracks. Supports optional pagination via ?offset=&limit=
@@ -503,14 +504,14 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	}
 
 	// Audit log.
-	_ = h.store.InsertAuditEntry(ctx, &models.AuditEntry{
+	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
 		ID:         uuid.NewString(),
 		UserID:     claims.UserID,
 		Action:     "upload",
 		TargetType: "track",
 		TargetID:   t.ID,
-		Detail:     file.Filename,
-		CreatedAt:  now,
+		Detail:     dbconv.NullStr(file.Filename),
+		CreatedAt:  dbconv.FormatTime(now),
 	})
 
 	h.hub.Publish(string(models.EventTrackAdded), t)
@@ -546,14 +547,14 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 	}
 
 	// Audit log.
-	_ = h.store.InsertAuditEntry(ctx, &models.AuditEntry{
+	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
 		ID:         uuid.NewString(),
 		UserID:     claims.UserID,
 		Action:     "delete",
 		TargetType: "track",
 		TargetID:   track.ID,
-		Detail:     track.Title,
-		CreatedAt:  time.Now(),
+		Detail:     dbconv.NullStr(track.Title),
+		CreatedAt:  dbconv.FormatTime(time.Now()),
 	})
 
 	h.hub.Publish(string(models.EventTrackRemoved), track)

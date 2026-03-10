@@ -9,18 +9,19 @@ import (
 
 	"pneuma/internal/api/http/middleware"
 	"pneuma/internal/models"
-	"pneuma/internal/store/sqlite"
+	"pneuma/internal/store/sqlite/dbconv"
+	"pneuma/internal/store/sqlite/serverdb"
 	"pneuma/internal/user"
 )
 
 // AdminHandler handles /api/admin/* routes.
 type AdminHandler struct {
 	users *user.Service
-	store *sqlite.Store
+	q     *serverdb.Queries
 }
 
-func NewAdminHandler(users *user.Service, store *sqlite.Store) *AdminHandler {
-	return &AdminHandler{users: users, store: store}
+func NewAdminHandler(users *user.Service, q *serverdb.Queries) *AdminHandler {
+	return &AdminHandler{users: users, q: q}
 }
 
 // ListUsers GET /api/admin/users
@@ -55,13 +56,13 @@ func (h *AdminHandler) UpdatePermissions(c echo.Context) error {
 	}
 
 	// Log the action.
-	_ = h.store.InsertAuditEntry(ctx, &models.AuditEntry{
+	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
 		ID:         uuid.NewString(),
 		UserID:     claims.UserID,
 		Action:     "update_permissions",
 		TargetType: "user",
 		TargetID:   targetID,
-		CreatedAt:  time.Now(),
+		CreatedAt:  dbconv.FormatTime(time.Now()),
 	})
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -84,13 +85,13 @@ func (h *AdminHandler) DeleteUser(c echo.Context) error {
 	}
 
 	// Log the action.
-	_ = h.store.InsertAuditEntry(ctx, &models.AuditEntry{
+	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
 		ID:         uuid.NewString(),
 		UserID:     claims.UserID,
 		Action:     "delete_user",
 		TargetType: "user",
 		TargetID:   targetID,
-		CreatedAt:  time.Now(),
+		CreatedAt:  dbconv.FormatTime(time.Now()),
 	})
 
 	return c.NoContent(http.StatusNoContent)
@@ -99,10 +100,11 @@ func (h *AdminHandler) DeleteUser(c echo.Context) error {
 // ListAudit GET /api/admin/audit
 func (h *AdminHandler) ListAudit(c echo.Context) error {
 	ctx := c.Request().Context()
-	entries, err := h.store.ListAuditEntries(ctx, 500)
+	rows, err := h.q.ListAuditEntries(ctx, 500)
 	if err != nil {
 		return internalErr(err)
 	}
+	entries := dbconv.AuditsToModels(rows)
 	if entries == nil {
 		entries = []models.AuditEntry{}
 	}

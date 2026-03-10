@@ -2,26 +2,28 @@ package playback
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log/slog"
 
 	"pneuma/internal/models"
-	"pneuma/internal/store/sqlite"
+	"pneuma/internal/store/sqlite/dbconv"
+	"pneuma/internal/store/sqlite/serverdb"
 )
 
 // Handoff manages cross-device queue state transfer. When a user wants to
 // resume playback on a different device, Handoff reads the source device's
 // persisted session and applies it to the target device's engine.
 type Handoff struct {
-	store  *sqlite.Store
+	q      *serverdb.Queries
 	engine *Engine
 	log    *slog.Logger
 }
 
 // NewHandoff creates a Handoff coordinator.
-func NewHandoff(store *sqlite.Store, engine *Engine) *Handoff {
+func NewHandoff(q *serverdb.Queries, engine *Engine) *Handoff {
 	return &Handoff{
-		store:  store,
+		q:      q,
 		engine: engine,
 		log:    slog.Default().With("component", "handoff"),
 	}
@@ -32,7 +34,7 @@ func NewHandoff(store *sqlite.Store, engine *Engine) *Handoff {
 // which the frontend reads via GetState.
 func (h *Handoff) Transfer(ctx context.Context, userID, sourceDeviceID, targetDeviceID string) error {
 	// Validate both devices belong to the user.
-	devices, err := h.store.DevicesByUser(ctx, userID)
+	devices, err := h.q.DevicesByUser(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -45,10 +47,14 @@ func (h *Handoff) Transfer(ctx context.Context, userID, sourceDeviceID, targetDe
 	}
 
 	// Load source session.
-	src, err := h.store.PlaybackSessionByDevice(ctx, sourceDeviceID)
-	if err != nil || src == nil {
+	srcRow, err := h.q.PlaybackSessionByDevice(ctx, sourceDeviceID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("handoff: no session on source device %q", sourceDeviceID)
+		}
 		return fmt.Errorf("handoff: no session on source device %q", sourceDeviceID)
 	}
+	src := dbconv.SessionByDeviceToModel(srcRow)
 
 	// Ensure target has an engine session slot.
 	if _, err := h.engine.GetState(targetDeviceID); err != nil {
@@ -82,7 +88,11 @@ func (h *Handoff) Transfer(ctx context.Context, userID, sourceDeviceID, targetDe
 // Sessions returns all active playback sessions for a user (for the "resume
 // elsewhere" UI in the client).
 func (h *Handoff) Sessions(ctx context.Context, userID string) ([]*models.PlaybackSession, error) {
-	return h.store.PlaybackSessionsByUser(ctx, userID)
+	rows, err := h.q.PlaybackSessionsByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return dbconv.SessionsByUserToModels(rows), nil
 }
 
 func queueIndexOf(queue []string, trackID string) int {

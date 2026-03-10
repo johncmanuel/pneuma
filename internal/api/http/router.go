@@ -15,9 +15,8 @@ import (
 	"pneuma/internal/api/http/middleware"
 	apws "pneuma/internal/api/ws"
 	"pneuma/internal/library"
-	"pneuma/internal/offline"
 	"pneuma/internal/playback"
-	"pneuma/internal/store/sqlite"
+	"pneuma/internal/store/sqlite/serverdb"
 	"pneuma/internal/user"
 )
 
@@ -27,9 +26,8 @@ type Services struct {
 	User     *user.Service
 	Playback *playback.Engine
 	Handoff  *playback.Handoff
-	Offline  *offline.Packager
 	Hub      *apws.Hub
-	Store    *sqlite.Store
+	Queries  *serverdb.Queries
 	Scanner  interface {
 		ScanAll()
 		ScanPath(path string)
@@ -61,10 +59,10 @@ func NewRouter(svc Services) *echo.Echo {
 	authMW := middleware.RequireAuth(secret)
 	adminMW := middleware.RequireAdmin(secret)
 
-	lh := handlers.NewLibraryHandler(svc.Library, svc.Store, svc.Scanner, svc.Hub, svc.UploadsDir, svc.Fingerprinter)
+	lh := handlers.NewLibraryHandler(svc.Library, svc.Queries, svc.Scanner, svc.Hub, svc.UploadsDir, svc.Fingerprinter)
 	ph := handlers.NewPlaybackHandler(svc.Playback, svc.Handoff)
 	uh := handlers.NewUserHandler(svc.User, secret)
-	ah := handlers.NewAdminHandler(svc.User, svc.Store)
+	ah := handlers.NewAdminHandler(svc.User, svc.Queries)
 
 	// Wire inbound WebSocket messages to the playback engine.
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
@@ -103,11 +101,14 @@ func NewRouter(svc Services) *echo.Echo {
 	lib.GET("/tracks/:id/stream", lh.StreamTrack)
 	lib.GET("/tracks/:id/art", lh.ServeTrackArt)
 	lib.PATCH("/tracks/:id", lh.UpdateTrackMeta, middleware.RequirePerm(secret, "can_edit"))
+
 	uploadMaxMB := svc.UploadMaxMB
 	if uploadMaxMB <= 0 {
 		uploadMaxMB = 500
 	}
+
 	uploadBodyLimit := echomw.BodyLimit(fmt.Sprintf("%dM", uploadMaxMB))
+
 	lib.POST("/tracks/upload", lh.UploadTrack, middleware.RequirePerm(secret, "can_upload"), uploadBodyLimit)
 	lib.DELETE("/tracks/:id", lh.DeleteTrack, middleware.RequirePerm(secret, "can_delete"))
 	lib.GET("/albums", lh.ListAlbums)
@@ -134,30 +135,6 @@ func NewRouter(svc Services) *echo.Echo {
 
 	e.POST("/api/handoff", ph.Transfer, authMW)
 	e.GET("/api/sessions/:user_id", ph.Sessions, authMW)
-
-	// ── Offline (authenticated) ───────────────────────────────────────────────
-	off := e.Group("/api/offline", authMW)
-	off.GET("/:user_id", func(c echo.Context) error {
-		packs, err := svc.Offline.ListPacks(c.Request().Context(), c.Param("user_id"))
-		if err != nil {
-			return echo.ErrInternalServerError
-		}
-		return c.JSON(http.StatusOK, packs)
-	})
-	off.POST("/:user_id/tracks/:track_id", func(c echo.Context) error {
-		t, err := svc.Library.TrackByID(c.Request().Context(), c.Param("track_id"))
-		if err != nil || t == nil {
-			return echo.NewHTTPError(http.StatusNotFound, "track not found")
-		}
-		go svc.Offline.Download(c.Request().Context(), t, c.Param("user_id"))
-		return c.JSON(http.StatusAccepted, map[string]string{"status": "queued"})
-	})
-	off.DELETE("/:user_id/tracks/:track_id", func(c echo.Context) error {
-		if err := svc.Offline.Remove(c.Request().Context(), c.Param("user_id"), c.Param("track_id")); err != nil {
-			return echo.ErrInternalServerError
-		}
-		return c.NoContent(http.StatusNoContent)
-	})
 
 	// ── Web UI (SPA fallback) ────────────────────────────────────────────────
 	if svc.WebUI != nil {

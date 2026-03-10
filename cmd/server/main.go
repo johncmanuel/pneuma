@@ -18,10 +18,10 @@ import (
 	"pneuma/internal/fingerprint/chromaprint"
 	"pneuma/internal/library"
 	"pneuma/internal/metadata/parser"
-	"pneuma/internal/offline"
 	"pneuma/internal/playback"
 	"pneuma/internal/scanner"
 	"pneuma/internal/store/sqlite"
+	"pneuma/internal/store/sqlite/serverdb"
 	"pneuma/internal/user"
 	"pneuma/web"
 )
@@ -45,13 +45,13 @@ func main() {
 	defer store.Close()
 
 	hub := apws.New()
-	libSvc := library.New(store)
-	userSvc := user.New(store)
+	queries := serverdb.New(store.DB())
+	libSvc := library.New(queries, store)
+	userSvc := user.New(queries)
 	metaParser := parser.New(cfg.Transcoding.FFmpegPath)
 	fpcalcSvc := chromaprint.New(cfg.Transcoding.FpcalcPath)
-	playEngine := playback.New(store, hub, libSvc)
-	handoffSvc := playback.NewHandoff(store, playEngine)
-	offlinePkg := offline.New(offlineDir(cfg), store, hub)
+	playEngine := playback.New(queries, hub, libSvc)
+	handoffSvc := playback.NewHandoff(queries, playEngine)
 
 	watcher, err := scanner.NewWatcher(libSvc, metaParser, hub)
 	if err != nil {
@@ -70,9 +70,8 @@ func main() {
 		User:          userSvc,
 		Playback:      playEngine,
 		Handoff:       handoffSvc,
-		Offline:       offlinePkg,
 		Hub:           hub,
-		Store:         store,
+		Queries:       queries,
 		Scanner:       sched,
 		Fingerprinter: fpcalcSvc,
 		JWTSecret:     cfg.Auth.SecretKey,
@@ -104,13 +103,4 @@ func main() {
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutCancel()
 	srv.Shutdown(shutCtx) //nolint:errcheck
-}
-
-func offlineDir(cfg *config.Config) string {
-	dbPath := cfg.Database.Path
-	const suffix = "pneuma.db"
-	if len(dbPath) > len(suffix) {
-		return dbPath[:len(dbPath)-len(suffix)] + "offline"
-	}
-	return dbPath + "-offline"
 }
