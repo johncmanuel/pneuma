@@ -2,14 +2,12 @@
   import { ConnectToServer, DisconnectFromServer, ClearArtworkCache } from "../../wailsjs/go/desktop/App"
   import { connected, serverURL, authToken, refreshConnection, saveSession, clearSession, isReconnecting, stopAutoReconnect } from "../utils/api"
 
-  // Connect form state
   let connectURL = "http://127.0.0.1:8989"
   let connectUser = ""
   let connectPass = ""
   let connectErr = ""
   let connecting = false
 
-  // Cache state
   let cacheCleared = false
 
   async function connect() {
@@ -19,8 +17,10 @@
       await ConnectToServer(connectURL, connectUser, connectPass)
       await refreshConnection()
       stopAutoReconnect()
-      // Persist the URL + fresh token — never the password.
+      
+      // Persist only the URL + fresh token
       saveSession(connectURL, $authToken)
+      
       connectUser = ""
       connectPass = ""
     } catch (e: any) {

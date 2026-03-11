@@ -2,7 +2,7 @@
   import { toasts, dismissToast, type Toast } from "../stores/toasts"
 
   const icons: Record<Toast["type"], string> = {
-    info: "ℹ",
+    info: "i",
     warning: "⚠",
     error: "✕",
     success: "✓",
