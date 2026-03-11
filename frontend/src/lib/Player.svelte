@@ -7,14 +7,17 @@
   import { streamUrl, artworkUrl } from "../utils/api"
   import { wsSend } from "../stores/ws"
   import { onMount } from "svelte"
+  import { shuffle } from "../utils/algos"
 
   let audio: HTMLAudioElement
   let deviceId = "desktop"
   let volume = 1
   let prevVolume = 1  // last non-zero volume, restored on unmute
 
+  const VOLUME_KEY = "pneuma_volume"
+
   onMount(() => {
-    const saved = parseFloat(localStorage.getItem("pneuma_volume") ?? "1")
+    const saved = parseFloat(localStorage.getItem(VOLUME_KEY) ?? "1")
     volume = isNaN(saved) ? 1 : Math.max(0, Math.min(1, saved))
     prevVolume = volume > 0 ? volume : 1
     if (audio) audio.volume = volume
@@ -186,11 +189,8 @@
       if (enabled && s.queue.length > 1) {
         // Pin current track at index 0, Fisher-Yates shuffle the rest
         const current = s.queue[s.queueIndex]
-        const rest = s.queue.filter((_, i) => i !== s.queueIndex)
-        for (let i = rest.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [rest[i], rest[j]] = [rest[j], rest[i]]
-        }
+        let rest = s.queue.filter((_, i) => i !== s.queueIndex)
+        rest = shuffle(rest)
         return { ...s, shuffle: true, queue: [current, ...rest], queueIndex: 0 }
       }
       // Turning shuffle off: restore the original album order from baseQueue
