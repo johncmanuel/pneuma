@@ -576,7 +576,6 @@
         {/if}
       </div>
   {:else}
-    <!-- Album grid view -->
     <div class="grid-scroll-wrapper" bind:this={gridScrollEl} on:scroll={handleGridScroll}>
     <div class="toolbar">
       <h2>{$activeTab === "library" ? "Library" : "Local Albums"}</h2>

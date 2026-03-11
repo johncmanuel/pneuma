@@ -16,6 +16,7 @@ import { playerState, type Track } from "./player"
 import { fetchTracksByIDs } from "./library"
 import { resolveLocalTracksByPaths } from "./localLibrary"
 import { recordRecentPlaylist } from "./recentAlbums"
+import { wsSend } from "./ws"
 
 /* ── Types ──────────────────────────────────────────────────────── */
 
@@ -405,6 +406,19 @@ export async function playPlaylist(items: PlaylistItem[], startIndex: number, pl
     paused: false,
     positionMs: 0,
   }))
+
+  // Notify the server about the new track and queue so the server session
+  // stays in sync with the client. Without this, the server retains stale
+  // state from the previous play, and a subsequent seek causes the server
+  // to echo back the wrong track_id which switches playback to a different
+  // song. Only send for remote tracks (local paths are unknown to the server).
+  if (!isLocalPath(startId)) {
+    const queueAllRemote = validIds.every(id => !isLocalPath(id))
+    if (queueAllRemote) {
+      wsSend("playback.queue", { device_id: "desktop", track_ids: validIds, start_index: adjustedStart })
+    }
+    wsSend("playback.play", { device_id: "desktop", track_id: startId, position_ms: 0 })
+  }
 }
 
 /** Pick and set custom artwork for a playlist (opens file dialog). */

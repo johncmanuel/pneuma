@@ -174,31 +174,33 @@
 
   function toggleShuffle() {
     const enabled = !$playerState.shuffle
-    if (isLocal) {
-      // Local tracks: shuffle/unshuffle queue client-side (no server involved)
-      playerState.update(s => {
-        if (enabled && s.queue.length > 1) {
-          // Pin current track at index 0, Fisher-Yates shuffle the rest
-          const current = s.queue[s.queueIndex]
-          const rest = s.queue.filter((_, i) => i !== s.queueIndex)
-          for (let i = rest.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [rest[i], rest[j]] = [rest[j], rest[i]]
-          }
-          return { ...s, shuffle: true, queue: [current, ...rest], queueIndex: 0 }
+
+    // Shuffle/unshuffle is applied client-side for both local and remote tracks
+    // so the queue reorders immediately. For remote tracks we intentionally do
+    // NOT send playback.shuffle to the server: the server would apply its own
+    // independent random shuffle and echo back a different queue order (via
+    // playback.changed) which would override the order we just computed here.
+    // Individual playback.play messages on each skip keep the server's
+    // current-track pointer accurate without needing the full queue order.
+    playerState.update(s => {
+      if (enabled && s.queue.length > 1) {
+        // Pin current track at index 0, Fisher-Yates shuffle the rest
+        const current = s.queue[s.queueIndex]
+        const rest = s.queue.filter((_, i) => i !== s.queueIndex)
+        for (let i = rest.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [rest[i], rest[j]] = [rest[j], rest[i]]
         }
-        // Turning shuffle off: restore the original album order from baseQueue
-        if (!enabled && s.baseQueue.length > 0) {
-          const currentId = s.queue[s.queueIndex]
-          const restoredIdx = s.baseQueue.indexOf(currentId)
-          return { ...s, shuffle: false, queue: s.baseQueue, queueIndex: restoredIdx >= 0 ? restoredIdx : 0 }
-        }
-        return { ...s, shuffle: enabled }
-      })
-      return
-    }
-    playerState.update(s => ({ ...s, shuffle: enabled }))
-    wsSend("playback.shuffle", { device_id: deviceId, enabled })
+        return { ...s, shuffle: true, queue: [current, ...rest], queueIndex: 0 }
+      }
+      // Turning shuffle off: restore the original album order from baseQueue
+      if (!enabled && s.baseQueue.length > 0) {
+        const currentId = s.queue[s.queueIndex]
+        const restoredIdx = s.baseQueue.indexOf(currentId)
+        return { ...s, shuffle: false, queue: s.baseQueue, queueIndex: restoredIdx >= 0 ? restoredIdx : 0 }
+      }
+      return { ...s, shuffle: enabled }
+    })
   }
 
   function toggleRepeat() {
@@ -367,7 +369,6 @@
     on:durationchange={onDurationChange}
     preload="metadata"
  ></audio>
-  <!-- Left: album art + track info -->
   <div class="now-playing">
     <div class="art">
       {#if track}
@@ -391,7 +392,6 @@
     </div>
   </div>
 
-  <!-- Center: controls + seekbar stacked -->
   <div class="center">
     <div class="controls">
       <button
@@ -429,7 +429,6 @@
     </div>
   </div>
 
-  <!-- Right: volume + queue toggle -->
   <div class="right-controls">
     <button
       class="ctrl-btn devices-toggle"
@@ -481,7 +480,6 @@
     padding: 0 16px;
   }
 
-  /* Left: now playing */
   .now-playing {
     display: flex;
     align-items: center;
@@ -529,7 +527,6 @@
   .title-link:hover { text-decoration: underline; }
   .artist { font-size: 12px; }
 
-  /* Center: controls + seek */
   .center {
     display: flex;
     flex-direction: column;
@@ -601,7 +598,6 @@
     padding: 0;
   }
 
-  /* Right: volume */
   .right-controls {
     display: flex;
     align-items: center;
