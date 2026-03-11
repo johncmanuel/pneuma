@@ -1,7 +1,6 @@
 <script lang="ts">
   import { ConnectToServer, DisconnectFromServer, ClearArtworkCache } from "../../wailsjs/go/desktop/App"
   import { connected, serverURL, authToken, refreshConnection, saveSession, clearSession, isReconnecting, stopAutoReconnect } from "../utils/api"
-  import { scanProgress, localLoading } from "../stores/localLibrary"
 
   // Connect form state
   let connectURL = "http://127.0.0.1:8989"
@@ -9,10 +8,6 @@
   let connectPass = ""
   let connectErr = ""
   let connecting = false
-
-  // Scan state
-  let scanMsg = ""
-  let scanning = false
 
   // Cache state
   let cacheCleared = false
@@ -40,38 +35,15 @@
     await DisconnectFromServer()
     await refreshConnection()
   }
-
-  async function scan() {
-    scanMsg = ""
-    scanning = true
-    try {
-      const res = await fetch(`${$serverURL}/api/library/scan`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${$authToken}` },
-      })
-      if (res.status === 403) {
-        scanMsg = "Admin access required."
-      } else if (!res.ok) {
-        scanMsg = `Server error: ${res.status}`
-      } else {
-        scanMsg = "Scan started."
-      }
-    } catch (e) {
-      scanMsg = `Error: ${e}`
-    }
-    scanning = false
-  }
 </script>
 
 <section>
   <h2>Settings</h2>
-
-  <!-- ── Server connection ── -->
   <div class="group">
     <h3>Server Connection</h3>
     {#if $connected}
       <p class="text-3 connected-status">
-        ✓ Connected to <code>{$serverURL}</code>
+        Connected to <code>{$serverURL}</code>
       </p>
       <button class="btn-danger" on:click={disconnect}>Disconnect</button>
     {:else if $isReconnecting}
@@ -100,7 +72,7 @@
           on:keydown={(e) => e.key === "Enter" && connect()}
         />
         <button on:click={connect} disabled={connecting || !connectURL || !connectUser || !connectPass}>
-          {connecting ? "Connecting…" : "Connect"}
+          {connecting ? "Connecting..." : "Connect"}
         </button>
         {#if connectErr}
           <p class="msg error">{connectErr}</p>
@@ -109,41 +81,9 @@
     {/if}
   </div>
 
-  <!-- ── Watch folders / scan ── -->
-  <div class="group">
-    <h3>Watch Folders</h3>
-    <p class="text-3">Edit <code>~/.pneuma/config.toml</code> to add or remove watch folders, then rescan.</p>
-    {#if $connected}
-      <button on:click={scan} disabled={scanning}>
-        {scanning ? "Scanning…" : "↺ Rescan Now"}
-      </button>
-      {#if scanMsg}
-        <p class="msg">{scanMsg}</p>
-      {/if}
-    {:else}
-      <p class="text-3 muted">Connect to a server to trigger a rescan.</p>
-    {/if}
-  </div>
-
-  <!-- ── Local files ── -->
-  <div class="group">
-    <h3>Local Files</h3>
-    {#if $scanProgress}
-      <p class="text-3 scan-progress">
-        Scanning <code>{$scanProgress.folder.split('/').pop()}</code> — {$scanProgress.done} / {$scanProgress.total} songs
-      </p>
-      <div class="progress-bar">
-        <div class="progress-fill" style="width: {($scanProgress.total > 0 ? ($scanProgress.done / $scanProgress.total) * 100 : 0)}%"></div>
-      </div>
-    {:else if $localLoading}
-      <p class="text-3 muted">Loading local library…</p>
-    {/if}
-  </div>
-
-  <!-- ── Cache ── -->
   <div class="group">
     <h3>Cache</h3>
-    <p class="text-3">Thumbnail images are cached on disk to speed up the album grid.</p>
+    <p class="text-3">Thumbnail images are cached on disk. Clear the cache whenever issues with album artwork arise.</p>
     <button on:click={async () => {
       await ClearArtworkCache()
       cacheCleared = true
@@ -154,7 +94,7 @@
 
   <div class="group">
     <h3>About</h3>
-    <p class="text-3">pneuma — open-source, self-hosted music server</p>
+    <p class="text-3">pneuma, an open-source, self-hostable, and local-first music player and server.</p>
     <p class="text-3">v0.1.0</p>
   </div>
 </section>
@@ -195,35 +135,11 @@
 
   .msg { font-size: 13px; margin: 0; color: var(--accent); }
   .msg.error { color: #ef4444; }
-  .muted { opacity: 0.5; }
 
   code {
     background: var(--surface);
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
-  }
-
-  .scan-progress {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--accent);
-  }
-
-  .progress-bar {
-    width: 100%;
-    max-width: 320px;
-    height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-    transition: width 0.15s ease-out;
   }
 </style>
