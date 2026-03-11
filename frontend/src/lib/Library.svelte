@@ -16,6 +16,7 @@
   import { get, derived } from "svelte/store"
   import { recordRecentAlbum } from "../stores/recentAlbums"
   import { createVirtualizer } from "@tanstack/svelte-virtual"
+  import { playlists, addTracksToPlaylist, type PlaylistSummary } from "../stores/playlists"
 
   const currentTrackId = derived(playerState, $s => $s.trackId);
 
@@ -424,6 +425,53 @@
     pushNav({ albumKey: album.key })
   }
 
+  // ─── Album card context menu ────────────────────────────────────────────────
+
+  let albumCtxMenu: { group: AlbumGroup; x: number; y: number } | null = null
+  let albumCtxPlaylistSub = false
+
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node)
+    return { destroy() { node.remove() } }
+  }
+
+  function onAlbumContext(e: MouseEvent, album: AlbumGroup) {
+    e.preventDefault()
+    albumCtxMenu = { group: album, x: e.clientX, y: e.clientY }
+    albumCtxPlaylistSub = false
+    const close = (ev: MouseEvent) => {
+      // Don't close immediately on the right-click that opened it.
+      albumCtxMenu = null
+      window.removeEventListener("click", close)
+    }
+    window.addEventListener("click", close)
+  }
+
+  async function addAlbumToPlaylist(pl: PlaylistSummary, group: AlbumGroup) {
+    albumCtxMenu = null
+    let tracksToAdd: Track[] = []
+
+    if (group.isLocal) {
+      const parts = group.key === UNORGANIZED_KEY ? ["", ""] : group.key.split("|||")
+      try {
+        const locals = await fetchLocalAlbumTracks(parts[0] ?? "", parts[1] ?? "")
+        tracksToAdd = locals.map(localTrackToTrack)
+      } catch (e) { console.warn("addAlbumToPlaylist local:", e) }
+    } else {
+      const parts = group.key === UNORGANIZED_KEY ? ["", ""] : group.key.split("|||")
+      const params = new URLSearchParams()
+      params.set("album_name", parts[0] ?? "")
+      params.set("album_artist", parts[1] ?? "")
+      params.set("limit", "500")
+      try {
+        const r = await serverFetch(`/api/library/tracks?${params}`)
+        if (r.ok) { const d = await r.json(); tracksToAdd = Array.isArray(d) ? d : (d.tracks ?? []) }
+      } catch (e) { console.warn("addAlbumToPlaylist remote:", e) }
+    }
+
+    await addTracksToPlaylist(pl.id, tracksToAdd, group.isLocal ?? false)
+  }
+
   async function handleAddFolder() {
     await addLocalFolder()
   }
@@ -597,6 +645,7 @@
             class="album-card"
             class:unorganized={album.key === UNORGANIZED_KEY}
             on:click={() => openAlbum(album)}
+            on:contextmenu={(e) => onAlbumContext(e, album)}
           >
             <div class="album-art" class:unorg-art={album.key === UNORGANIZED_KEY}>
               {#if album.key !== UNORGANIZED_KEY}
@@ -619,6 +668,31 @@
   {/if} <!-- /.scroll-body inner if -->
 
   </div> <!-- /.scroll-body -->
+
+{#if albumCtxMenu}
+  {@const grp = albumCtxMenu.group}
+  <div class="album-ctx-menu" use:portal style="left:{albumCtxMenu.x}px;top:{albumCtxMenu.y}px">
+    {#if $playlists.length > 0}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="album-ctx-sub-wrap"
+        on:mouseenter={() => albumCtxPlaylistSub = true}
+        on:mouseleave={() => albumCtxPlaylistSub = false}
+      >
+        <button class="has-sub">Add all to playlist ›</button>
+        {#if albumCtxPlaylistSub}
+          <div class="album-ctx-submenu">
+            {#each $playlists as pl (pl.id)}
+              <button on:click={() => addAlbumToPlaylist(pl, grp)}>{pl.name}</button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {:else}
+      <button disabled style="opacity:0.5">No playlists yet</button>
+    {/if}
+  </div>
+{/if}
+
 </section>
 
 <style>
@@ -960,4 +1034,52 @@
     padding: 16px 8px;
     font-size: 13px;
   }
+
+  /* Album card context menu */
+  .album-ctx-menu {
+    position: fixed;
+    z-index: 9999;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px 0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    min-width: 180px;
+  }
+  .album-ctx-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-1);
+    border-radius: 0;
+    cursor: pointer;
+  }
+  .album-ctx-menu button:hover { background: var(--surface-hover); }
+  .album-ctx-sub-wrap { position: relative; }
+  .album-ctx-sub-wrap .has-sub { cursor: default; }
+  .album-ctx-submenu {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px 0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    min-width: 160px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .album-ctx-submenu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-1);
+    border-radius: 0;
+  }
+  .album-ctx-submenu button:hover { background: var(--surface-hover); }
 </style>

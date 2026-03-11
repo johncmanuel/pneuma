@@ -38,7 +38,7 @@
   // ─── Detail: sort & filter ─────────────────────────────────────
 
   let filter = ""
-  type SortField = "default" | "title" | "artist" | "duration"
+  type SortField = "default" | "title" | "added_at" | "duration"
   let sortField: SortField = "default"
   let sortDir: "asc" | "desc" = "asc"
 
@@ -68,7 +68,7 @@
         if (sortField === "default") return a.position - b.position
         let cmp = 0
         if (sortField === "title") cmp = a.ref_title.localeCompare(b.ref_title)
-        else if (sortField === "artist") cmp = a.ref_album_artist.localeCompare(b.ref_album_artist)
+        else if (sortField === "added_at") cmp = a.added_at.localeCompare(b.added_at)
         else if (sortField === "duration") cmp = a.ref_duration_ms - b.ref_duration_ms
         return sortDir === "desc" ? -cmp : cmp
       })
@@ -124,6 +124,12 @@
     if ($selectedPlaylistId) {
       await removePlaylistItem($selectedPlaylistId, item.position)
     }
+  }
+
+  function formatDate(iso: string): string {
+    if (!iso) return "—"
+    const d = new Date(iso)
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
   }
 
   async function handleUpload() {
@@ -221,8 +227,8 @@
     <div class="track-headers">
       <span class="num">#</span>
       <button class="sortable" on:click={() => toggleSort("title")}>Title{sortIndicator("title")}</button>
-      <button class="sortable" on:click={() => toggleSort("artist")}>Artist{sortIndicator("artist")}</button>
       <span>Album</span>
+      <button class="sortable" on:click={() => toggleSort("added_at")}>Date Added{sortIndicator("added_at")}</button>
       <button class="sortable" on:click={() => toggleSort("duration")}>Duration{sortIndicator("duration")}</button>
     </div>
 
@@ -240,10 +246,12 @@
             <TrackRow
               {track}
               active={$currentTrackId === track.id}
+              dateAdded={formatDate(item.added_at)}
+              showRemove={true}
               on:play={() => handlePlay(item)}
               on:addToQueue
+              on:remove={() => handleRemove(item)}
             />
-            <button class="remove-btn" on:click={() => handleRemove(item)} title="Remove from playlist">×</button>
           </div>
         {/each}
       {/if}
@@ -523,29 +531,11 @@
   .track-list { flex: 1; overflow-y: auto; }
 
   .playlist-row {
-    display: flex;
-    align-items: center;
+    display: block;
   }
   .playlist-row :global(.track-row) { flex: 1; }
   .playlist-row.missing { opacity: 0.45; }
   .playlist-row.missing :global(.track-row) { pointer-events: none; }
-
-  .remove-btn {
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    font-size: 16px;
-    color: var(--text-3);
-    opacity: 0;
-    transition: opacity 0.1s, background 0.1s;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-  .playlist-row:hover .remove-btn { opacity: 1; }
-  .remove-btn:hover { background: var(--surface-hover); color: var(--text-1); }
 
   .empty-msg { padding: 40px 12px; text-align: center; }
   .loading-msg { padding: 20px 12px; text-align: center; }

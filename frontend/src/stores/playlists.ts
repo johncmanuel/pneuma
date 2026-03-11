@@ -213,6 +213,74 @@ export async function addTrackToPlaylist(
   }
 }
 
+/**
+ * Add multiple tracks to a playlist in one batch.
+ * Duplicates are silently skipped and reported in a single toast.
+ */
+export async function addTracksToPlaylist(
+  playlistId: string,
+  tracks: Track[],
+  isLocal: boolean
+) {
+  const pl = get(playlists).find(p => p.id === playlistId)
+  const playlistName = pl?.name ?? "playlist"
+
+  // Fetch current items once for duplicate detection.
+  let currentItems: PlaylistItem[]
+  if (get(selectedPlaylistId) === playlistId) {
+    currentItems = get(selectedPlaylistItems)
+  } else {
+    try {
+      currentItems = ((await GetLocalPlaylistItems(playlistId)) ?? []) as PlaylistItem[]
+    } catch {
+      currentItems = []
+    }
+  }
+
+  let added = 0
+  let skipped = 0
+  for (const track of tracks) {
+    const isDuplicate = currentItems.some(item =>
+      isLocal
+        ? item.local_path && item.local_path === (track as any).path
+        : item.track_id && item.track_id === track.id
+    )
+    if (isDuplicate) { skipped++; continue }
+
+    try {
+      const item: any = {
+        position: 0,
+        source: isLocal ? "local_ref" : "remote",
+        track_id: isLocal ? "" : track.id,
+        local_path: isLocal ? (track as any).path : "",
+        ref_title: track.title || "",
+        ref_album: track.album_name || "",
+        ref_album_artist: track.album_artist || "",
+        ref_duration_ms: track.duration_ms || 0,
+        added_at: "",
+        resolved: false,
+        missing: false,
+      }
+      await AddLocalPlaylistItem(playlistId, item)
+      // Optimistically add to local list to catch same-batch duplicates.
+      currentItems = [...currentItems, item]
+      added++
+    } catch (e: any) {
+      console.error("addTracksToPlaylist: failed to add track", track.title, e)
+    }
+  }
+
+  if (get(selectedPlaylistId) === playlistId) {
+    await selectPlaylist(playlistId)
+  }
+  await loadPlaylists()
+
+  const parts: string[] = []
+  if (added > 0) parts.push(`Added ${added} track${added !== 1 ? "s" : ""} to "${playlistName}"`)
+  if (skipped > 0) parts.push(`${skipped} already in playlist`)
+  addToast(parts.join(" · "), added > 0 ? "success" : "info")
+}
+
 /** Reorder items in a playlist. */
 export async function reorderPlaylistItems(playlistId: string, items: PlaylistItem[]) {
   try {

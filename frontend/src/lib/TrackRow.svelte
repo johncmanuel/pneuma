@@ -7,6 +7,10 @@
   export let active: boolean = false
   export let hideAlbum: boolean = false
   export let isLocal: boolean = false
+  /** When set, the row is in playlist mode: artist column shows album, album column shows this date string. */
+  export let dateAdded: string | undefined = undefined
+  /** When true, adds a "Remove from playlist" item to the context menu. */
+  export let showRemove: boolean = false
 
   const dispatch = createEventDispatcher()
 
@@ -46,6 +50,11 @@
     showPlaylistSub = false
   }
 
+  function handleRemove() {
+    dispatch("remove", track)
+    showMenu = false
+  }
+
   onDestroy(() => { showMenu = false; showPlaylistSub = false })
 </script>
 
@@ -59,9 +68,9 @@
 >
   <span class="num text-3">{track?.track_number || "-"}</span>
   <span class="title truncate">{track?.title ?? "Unknown"}</span>
-  <span class="artist truncate text-2">{track?.artist_name || track?.album_artist || "-"}</span>
+  <span class="artist truncate text-2">{dateAdded !== undefined ? (track?.album_name || "-") : (track?.artist_name || track?.album_artist || "-")}</span>
   {#if !hideAlbum}
-    <span class="album truncate text-2">{track?.album_name || "-"}</span>
+    <span class="album truncate text-2">{dateAdded !== undefined ? dateAdded : (track?.album_name || "-")}</span>
   {/if}
   <span class="duration text-3">{formatDuration(track?.duration_ms ?? 0)}</span>
 </button>
@@ -84,6 +93,10 @@
           </div>
         {/if}
       </div>
+    {/if}
+    {#if showRemove}
+      <hr class="ctx-sep" />
+      <button class="ctx-danger" on:click={handleRemove}>Remove from playlist</button>
     {/if}
   </div>
 {/if}
@@ -163,4 +176,8 @@
     border-radius: 0;
   }
   .ctx-submenu button:hover { background: var(--surface-hover); }
+
+  .ctx-sep { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+  .ctx-danger { color: #e74c3c !important; }
+  .ctx-danger:hover { background: rgba(231, 76, 60, 0.1) !important; }
 </style>
