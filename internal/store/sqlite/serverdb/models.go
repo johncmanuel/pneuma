@@ -8,32 +8,6 @@ import (
 	"database/sql"
 )
 
-type Album struct {
-	ID          string
-	Title       string
-	ArtistID    sql.NullString
-	Year        sql.NullInt64
-	MbReleaseID sql.NullString
-	ArtworkID   sql.NullString
-	CreatedAt   string
-}
-
-type Artist struct {
-	ID         string
-	Name       string
-	MbArtistID sql.NullString
-	CreatedAt  string
-}
-
-type Artwork struct {
-	ID        string
-	Path      string
-	Width     sql.NullInt64
-	Height    sql.NullInt64
-	Format    sql.NullString
-	CreatedAt string
-}
-
 type AuditLog struct {
 	ID         string
 	UserID     string
@@ -50,14 +24,6 @@ type Device struct {
 	Name       string
 	LastSeenAt sql.NullString
 	CreatedAt  string
-}
-
-type OfflinePack struct {
-	ID           string
-	UserID       string
-	TrackID      string
-	LocalPath    string
-	DownloadedAt string
 }
 
 type PlaybackSession struct {
@@ -93,34 +59,28 @@ type PlaylistItem struct {
 }
 
 type Track struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            sql.NullString
-	AlbumID             sql.NullString
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           sql.NullString
-	UploadedByUserID    sql.NullString
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      sql.NullString
+	AlbumName        sql.NullString
+	Genre            sql.NullString
+	Year             sql.NullInt64
+	TrackNumber      sql.NullInt64
+	DiscNumber       sql.NullInt64
+	DurationMs       sql.NullInt64
+	BitrateKbps      sql.NullInt64
+	SampleRateHz     sql.NullInt64
+	Codec            sql.NullString
+	FileSizeBytes    sql.NullInt64
+	LastModified     string
+	Fingerprint      sql.NullString
+	ReplayGainTrack  sql.NullFloat64
+	ReplayGainAlbum  sql.NullFloat64
+	UploadedByUserID sql.NullString
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 type User struct {

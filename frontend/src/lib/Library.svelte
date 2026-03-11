@@ -1,6 +1,6 @@
 <script lang="ts">
   import { loading,
-           remoteAlbumGroups, remoteAlbumGroupsTotal, remoteAlbumGroupsOffset,
+           remoteAlbumGroups, remoteAlbumGroupsTotal,
            loadRemoteAlbumGroupsPage, loadMoreRemoteAlbumGroups,
            type RemoteAlbumGroup } from "../stores/library"
   import { localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, localAlbumGroups, localAlbumGroupsTotal, localAlbumGroupsOffset, localAlbumFilter, loadLocalAlbumGroups, loadMoreLocalAlbumGroups, fetchLocalAlbumTracks, localChangeSeq, type LocalAlbumGroup } from "../stores/localLibrary"
@@ -116,7 +116,6 @@
     : localGroupsAsAlbumGroups($localAlbumGroups)
   $: isLoading = $activeTab === "library" ? $loading : $localLoading
   $: currentTotal = $activeTab === "library" ? $remoteAlbumGroupsTotal : $localAlbumGroupsTotal
-  $: currentOffset = $activeTab === "library" ? $remoteAlbumGroupsOffset : $localAlbumGroupsOffset
   $: hasMore = displayedGroups.length < currentTotal
 
   // Load the selected album's tracks on demand
@@ -439,7 +438,7 @@
     e.preventDefault()
     albumCtxMenu = { group: album, x: e.clientX, y: e.clientY }
     albumCtxPlaylistSub = false
-    const close = (ev: MouseEvent) => {
+    const close = (_: MouseEvent) => {
       // Don't close immediately on the right-click that opened it.
       albumCtxMenu = null
       window.removeEventListener("click", close)
@@ -502,7 +501,6 @@
 </script>
 
 <section>
-  <!-- Main tab bar -->
   <div class="tab-bar">
     <button
       class="lib-tab"
@@ -520,11 +518,9 @@
     </button>
   </div>
 
-  <!-- Scrollable body -->
   <div class="scroll-body">
 
     {#if currentAlbumGroup}
-      <!-- Album detail view -->
       <div class="album-detail-view">
         <div class="album-detail-header">
           <div class="album-art-hero">
@@ -664,10 +660,10 @@
     {/if}
   {/if}
 
-  </div> <!-- /.grid-scroll-wrapper -->
-  {/if} <!-- /.scroll-body inner if -->
+  </div> 
+  {/if} 
 
-  </div> <!-- /.scroll-body -->
+  </div>
 
 {#if albumCtxMenu}
   {@const grp = albumCtxMenu.group}
@@ -703,7 +699,6 @@
     overflow: hidden;
   }
 
-  /* Main tab bar */
   .tab-bar {
     display: flex;
     gap: 0;
@@ -724,7 +719,6 @@
     border-bottom-color: var(--accent);
   }
 
-  /* Scrollable body — flex container for album detail or grid */
   .scroll-body {
     flex: 1;
     min-height: 0;
@@ -734,7 +728,6 @@
     padding: 16px 16px 0 0;
   }
 
-  /* Album detail view — flex column so track-list fills remaining space */
   .album-detail-view {
     flex: 1;
     display: flex;
@@ -743,7 +736,6 @@
     overflow: hidden;
   }
 
-  /* Grid scroll wrapper — owns vertical scroll for album grid view */
   .grid-scroll-wrapper {
     flex: 1;
     min-height: 0;
@@ -772,7 +764,6 @@
     margin: 0;
   }
 
-  /* Folder chips */
   .folder-chips {
     display: flex;
     flex-wrap: wrap;
@@ -800,7 +791,6 @@
   }
   .chip-remove:hover { color: var(--danger); }
 
-  /* Album grid filter bar */
   .album-grid-search {
     display: flex;
     align-items: center;
@@ -840,7 +830,6 @@
   }
   .grid-filter-clear:hover { color: var(--fg); }
 
-  /* Album grid */
   .album-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -892,7 +881,6 @@
   }
   .unorg-title { font-style: italic; }
 
-  /* Offline state */
   .offline-state {
     display: flex;
     flex-direction: column;
@@ -907,7 +895,6 @@
   .offline-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-1); }
   .offline-sub { margin: 0; font-size: 13px; color: var(--text-3); }
 
-  /* Virtualized track list within album detail */
   .track-list {
     flex: 1;
     min-height: 0;
@@ -957,7 +944,6 @@
   }
   .col-sort:hover { color: var(--text-1); }
 
-  /* Album detail header with artwork */
   .album-detail-header {
     display: flex;
     flex-direction: row;
@@ -1008,7 +994,6 @@
     font-weight: 700;
   }
 
-  /* Album filter bar */
   .album-filter-bar {
     margin-top: 12px;
   }
@@ -1035,7 +1020,6 @@
     font-size: 13px;
   }
 
-  /* Album card context menu */
   .album-ctx-menu {
     position: fixed;
     z-index: 9999;

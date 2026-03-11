@@ -18,8 +18,11 @@ type Store struct {
 	db *sql.DB
 }
 
-// Open creates or opens the SQLite database at path and applies the schema.
-func Open(path string) (*Store, error) {
+// OpenRaw opens the SQLite database at path, creates the directory if needed,
+// and applies the standard connection pragmas. It does NOT run migrations.
+// Use Open for normal server startup; use OpenRaw when you need full control
+// over migrations (e.g., the dbmigrate CLI).
+func OpenRaw(path string) (*sql.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("create db dir: %w", err)
 	}
@@ -50,12 +53,40 @@ func Open(path string) (*Store, error) {
 		"PRAGMA temp_store=MEMORY",  // temp tables in memory
 	} {
 		if _, err := db.Exec(pragma); err != nil {
+			db.Close()
 			return nil, fmt.Errorf("pragma: %w", err)
 		}
 	}
 
-	if err := runMigrations(db); err != nil {
+	return db, nil
+}
+
+// Open creates or opens the SQLite database at path and applies all pending
+// migrations. This is the normal server entrypoint.
+func Open(path string) (*Store, error) {
+	db, err := OpenRaw(path)
+	if err != nil {
 		return nil, err
+	}
+
+	// Disable FK enforcement while migrations run.
+	// golang-migrate wraps each migration in a transaction, and SQLite does not
+	// allow the foreign_keys pragma to be changed *inside* a transaction — but a
+	// value set on the connection *before* a transaction begins is honoured for
+	// the duration of that transaction. Migration 003 drops and recreates the
+	// tracks table; disabling FKs prevents the cascade-constraint error from
+	// tables (e.g. playlist_items) that reference tracks.
+	if _, err := db.Exec("PRAGMA foreign_keys=OFF"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("disable fk for migrations: %w", err)
+	}
+	if err := runMigrations(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("re-enable fk after migrations: %w", err)
 	}
 
 	return &Store{db: db}, nil
@@ -71,18 +102,29 @@ func (s *Store) DB() *sql.DB {
 	return s.db
 }
 
-func runMigrations(db *sql.DB) error {
+// NewMigrator builds a *migrate.Migrate instance backed by the embedded
+// migration files and the provided DB connection. The caller is responsible
+// for calling m.Close() when done.
+func NewMigrator(db *sql.DB) (*migrate.Migrate, error) {
 	sourceDriver, err := iofs.New(ServerMigrations, "sql/server/migrations")
 	if err != nil {
-		return fmt.Errorf("migration source: %w", err)
+		return nil, fmt.Errorf("migration source: %w", err)
 	}
 	dbDriver, err := migratesqlite.WithInstance(db, &migratesqlite.Config{})
 	if err != nil {
-		return fmt.Errorf("migration db driver: %w", err)
+		return nil, fmt.Errorf("migration db driver: %w", err)
 	}
 	m, err := migrate.NewWithInstance("iofs", sourceDriver, "sqlite", dbDriver)
 	if err != nil {
-		return fmt.Errorf("migrate new: %w", err)
+		return nil, fmt.Errorf("migrate new: %w", err)
+	}
+	return m, nil
+}
+
+func runMigrations(db *sql.DB) error {
+	m, err := NewMigrator(db)
+	if err != nil {
+		return err
 	}
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("run migrations: %w", err)

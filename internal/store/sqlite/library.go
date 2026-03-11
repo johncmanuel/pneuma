@@ -52,7 +52,7 @@ func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, off
 			COALESCE(album_artist,'') AS album_artist,
 			COUNT(*) AS track_count,
 			MIN(id) AS first_track_id,
-			COALESCE(MAX(NULLIF(artwork_id,'')), '') AS artwork_id
+			'' AS artwork_id
 		FROM tracks
 		WHERE deleted_at IS NULL AND (album_name LIKE ? OR album_artist LIKE ?)
 		GROUP BY grp_key
@@ -66,7 +66,7 @@ func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, off
 			COALESCE(album_artist,'') AS album_artist,
 			COUNT(*) AS track_count,
 			MIN(id) AS first_track_id,
-			COALESCE(MAX(NULLIF(artwork_id,'')), '') AS artwork_id
+			'' AS artwork_id
 		FROM tracks
 		WHERE deleted_at IS NULL
 		GROUP BY grp_key
@@ -109,14 +109,11 @@ func (s *Store) CountTrackAlbumGroups(ctx context.Context, filter string) (int, 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const trackColumns = `id,path,title,
-	COALESCE(artist_id,''),COALESCE(album_id,''),
-	COALESCE((SELECT name FROM artists WHERE id=tracks.artist_id),'') AS artist_name,
-	album_artist,album_name,genre,year,
-	track_number,disc_number,duration_ms,bitrate_kbps,sample_rate_hz,
-	codec,file_size_bytes,last_modified,fingerprint,acoustic_fingerprint,mb_recording_id,
-	replay_gain_track,replay_gain_album,COALESCE(artwork_id,''),
-	COALESCE(uploaded_by_user_id,''),deleted_at,
-	enriched_at,created_at,updated_at`
+	COALESCE(album_artist,''),COALESCE(album_name,''),COALESCE(genre,''),COALESCE(year,0),
+	COALESCE(track_number,0),COALESCE(disc_number,0),COALESCE(duration_ms,0),COALESCE(bitrate_kbps,0),COALESCE(sample_rate_hz,0),
+	COALESCE(codec,''),COALESCE(file_size_bytes,0),last_modified,COALESCE(fingerprint,''),
+	COALESCE(replay_gain_track,0),COALESCE(replay_gain_album,0),
+	COALESCE(uploaded_by_user_id,''),deleted_at,created_at,updated_at`
 
 type scanner interface {
 	Scan(dest ...any) error
@@ -124,16 +121,15 @@ type scanner interface {
 
 func scanTrack(row scanner) (*models.Track, error) {
 	var t models.Track
-	var enrichedAt, deletedAt sql.NullString
+	var deletedAt sql.NullString
 	err := row.Scan(
 		&t.ID, &t.Path, &t.Title,
-		&t.ArtistID, &t.AlbumID, &t.ArtistName, &t.AlbumArtist, &t.AlbumName, &t.Genre, &t.Year,
+		&t.AlbumArtist, &t.AlbumName, &t.Genre, &t.Year,
 		&t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.BitrateKbps,
 		&t.SampleRateHz, &t.Codec, &t.FileSizeBytes,
-		(*timeStr)(&t.LastModified), &t.Fingerprint, &t.AcousticFingerprint, &t.MBRecordingID,
-		&t.ReplayGainTrack, &t.ReplayGainAlbum, &t.ArtworkID,
+		(*timeStr)(&t.LastModified), &t.Fingerprint,
+		&t.ReplayGainTrack, &t.ReplayGainAlbum,
 		&t.UploadedByUserID, &deletedAt,
-		&enrichedAt,
 		(*timeStr)(&t.CreatedAt), (*timeStr)(&t.UpdatedAt),
 	)
 	if err == sql.ErrNoRows {
@@ -141,10 +137,6 @@ func scanTrack(row scanner) (*models.Track, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("scanTrack: %w", err)
-	}
-	if enrichedAt.Valid {
-		ts, _ := time.Parse(time.RFC3339, enrichedAt.String)
-		t.EnrichedAt = &ts
 	}
 	if deletedAt.Valid {
 		ts, _ := time.Parse(time.RFC3339, deletedAt.String)

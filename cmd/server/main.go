@@ -15,7 +15,6 @@ import (
 	apws "pneuma/internal/api/ws"
 
 	"pneuma/internal/config"
-	"pneuma/internal/fingerprint/chromaprint"
 	"pneuma/internal/library"
 	"pneuma/internal/metadata/parser"
 	"pneuma/internal/playback"
@@ -52,7 +51,6 @@ func main() {
 	libSvc := library.New(queries, store)
 	userSvc := user.New(queries)
 	metaParser := parser.New(cfg.Transcoding.FFmpegPath)
-	fpcalcSvc := chromaprint.New(cfg.Transcoding.FpcalcPath)
 	playEngine := playback.New(queries, hub, libSvc)
 	handoffSvc := playback.NewHandoff(queries, playEngine)
 	playlistSvc := playlist.New(queries)
@@ -70,19 +68,18 @@ func main() {
 	sched := scanner.NewScheduler(libSvc, metaParser, hub, cfg.Library.WatchFolders, 15*time.Minute)
 
 	router := api.NewRouter(api.Services{
-		Library:       libSvc,
-		User:          userSvc,
-		Playback:      playEngine,
-		Handoff:       handoffSvc,
-		Playlist:      playlistSvc,
-		Hub:           hub,
-		Queries:       queries,
-		Scanner:       sched,
-		Fingerprinter: fpcalcSvc,
-		JWTSecret:     cfg.Auth.SecretKey,
-		UploadsDir:    cfg.Upload.Dir,
-		UploadMaxMB:   cfg.Upload.MaxSizeMB,
-		WebUI:         web.FS(),
+		Library:     libSvc,
+		User:        userSvc,
+		Playback:    playEngine,
+		Handoff:     handoffSvc,
+		Playlist:    playlistSvc,
+		Hub:         hub,
+		Queries:     queries,
+		Scanner:     sched,
+		JWTSecret:   cfg.Auth.SecretKey,
+		UploadsDir:  cfg.Upload.Dir,
+		UploadMaxMB: cfg.Upload.MaxSizeMB,
+		WebUI:       web.FS(),
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

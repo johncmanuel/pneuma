@@ -10,62 +10,6 @@ import (
 	"database/sql"
 )
 
-const deleteOfflinePack = `-- name: DeleteOfflinePack :exec
-DELETE FROM offline_packs
-WHERE user_id = ? AND track_id = ?
-`
-
-type DeleteOfflinePackParams struct {
-	UserID  string
-	TrackID string
-}
-
-func (q *Queries) DeleteOfflinePack(ctx context.Context, arg DeleteOfflinePackParams) error {
-	_, err := q.db.ExecContext(ctx, deleteOfflinePack, arg.UserID, arg.TrackID)
-	return err
-}
-
-const listOfflinePacks = `-- name: ListOfflinePacks :many
-SELECT
-    id,
-    user_id,
-    track_id,
-    local_path,
-    downloaded_at
-FROM offline_packs
-WHERE user_id = ?
-ORDER BY downloaded_at DESC
-`
-
-func (q *Queries) ListOfflinePacks(ctx context.Context, userID string) ([]OfflinePack, error) {
-	rows, err := q.db.QueryContext(ctx, listOfflinePacks, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []OfflinePack
-	for rows.Next() {
-		var i OfflinePack
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.TrackID,
-			&i.LocalPath,
-			&i.DownloadedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const playbackSessionByDevice = `-- name: PlaybackSessionByDevice :one
 SELECT
     id,
@@ -158,32 +102,6 @@ func (q *Queries) PlaybackSessionsByUser(ctx context.Context, userID string) ([]
 		return nil, err
 	}
 	return items, nil
-}
-
-const upsertOfflinePack = `-- name: UpsertOfflinePack :exec
-INSERT INTO offline_packs (id, user_id, track_id, local_path, downloaded_at)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (user_id, track_id) DO UPDATE SET
-    local_path = excluded.local_path, downloaded_at = excluded.downloaded_at
-`
-
-type UpsertOfflinePackParams struct {
-	ID           string
-	UserID       string
-	TrackID      string
-	LocalPath    string
-	DownloadedAt string
-}
-
-func (q *Queries) UpsertOfflinePack(ctx context.Context, arg UpsertOfflinePackParams) error {
-	_, err := q.db.ExecContext(ctx, upsertOfflinePack,
-		arg.ID,
-		arg.UserID,
-		arg.TrackID,
-		arg.LocalPath,
-		arg.DownloadedAt,
-	)
-	return err
 }
 
 const upsertPlaybackSession = `-- name: UpsertPlaybackSession :exec

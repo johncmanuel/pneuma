@@ -32,24 +32,3 @@ FROM playback_sessions ps
 JOIN devices d ON d.id = ps.device_id
 WHERE ps.user_id = ?
 ORDER BY ps.updated_at DESC;
-
--- name: UpsertOfflinePack :exec
-INSERT INTO offline_packs (id, user_id, track_id, local_path, downloaded_at)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT (user_id, track_id) DO UPDATE SET
-    local_path = excluded.local_path, downloaded_at = excluded.downloaded_at;
-
--- name: DeleteOfflinePack :exec
-DELETE FROM offline_packs
-WHERE user_id = ? AND track_id = ?;
-
--- name: ListOfflinePacks :many
-SELECT
-    id,
-    user_id,
-    track_id,
-    local_path,
-    downloaded_at
-FROM offline_packs
-WHERE user_id = ?
-ORDER BY downloaded_at DESC;

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -30,13 +29,6 @@ type scanTrigger interface {
 	ScanPath(path string)
 }
 
-// acousticFingerprinter is satisfied by *chromaprint.Service.
-// It is used exclusively for server-side duplicate detection on uploaded tracks.
-type acousticFingerprinter interface {
-	Available() bool
-	FingerprintString(ctx context.Context, path string) (string, error)
-}
-
 // eventPublisher is satisfied by *ws.Hub.
 type eventPublisher interface {
 	Publish(eventType string, payload any)
@@ -44,19 +36,16 @@ type eventPublisher interface {
 
 // LibraryHandler serves library-related API routes.
 type LibraryHandler struct {
-	lib           *library.Service
-	q             *serverdb.Queries
-	scanner       scanTrigger
-	hub           eventPublisher
-	uploadsDir    string
-	fingerprinter acousticFingerprinter
+	lib        *library.Service
+	q          *serverdb.Queries
+	scanner    scanTrigger
+	hub        eventPublisher
+	uploadsDir string
 }
 
 // NewLibraryHandler creates a LibraryHandler.
-// fp may be nil — acoustic dedup is silently skipped when the service is
-// unavailable or not configured.
-func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, uploadsDir string, fp acousticFingerprinter) *LibraryHandler {
-	return &LibraryHandler{lib: lib, q: q, scanner: sc, hub: hub, uploadsDir: uploadsDir, fingerprinter: fp}
+func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, uploadsDir string) *LibraryHandler {
+	return &LibraryHandler{lib: lib, q: q, scanner: sc, hub: hub, uploadsDir: uploadsDir}
 }
 
 // ListTracks returns tracks. Supports optional pagination via ?offset=&limit=
@@ -219,7 +208,6 @@ func (h *LibraryHandler) UpdateTrackMeta(c echo.Context) error {
 
 	var patch struct {
 		Title       *string `json:"title"`
-		Artist      *string `json:"artist"`
 		AlbumName   *string `json:"album_name"`
 		AlbumArtist *string `json:"album_artist"`
 		Genre       *string `json:"genre"`
@@ -258,49 +246,6 @@ func (h *LibraryHandler) UpdateTrackMeta(c echo.Context) error {
 		return internalErr(err)
 	}
 	return c.JSON(http.StatusOK, track)
-}
-
-// ListAlbums returns albums. Supports optional pagination via ?offset=&limit=
-// and filtering via ?filter= query params.
-func (h *LibraryHandler) ListAlbums(c echo.Context) error {
-	ctx := c.Request().Context()
-	offsetStr := c.QueryParam("offset")
-	limitStr := c.QueryParam("limit")
-	filter := c.QueryParam("filter")
-
-	if offsetStr != "" || limitStr != "" || filter != "" {
-		offset, _ := strconv.Atoi(offsetStr)
-		limit, _ := strconv.Atoi(limitStr)
-		if limit <= 0 {
-			limit = 50
-		}
-		if limit > 200 {
-			limit = 200
-		}
-		if offset < 0 {
-			offset = 0
-		}
-		albums, err := h.lib.AllAlbumsPage(ctx, filter, offset, limit)
-		if err != nil {
-			return internalErr(err)
-		}
-		total, err := h.lib.CountAlbums(ctx, filter)
-		if err != nil {
-			return internalErr(err)
-		}
-		return c.JSON(http.StatusOK, map[string]any{
-			"albums": albums,
-			"total":  total,
-			"offset": offset,
-			"limit":  limit,
-		})
-	}
-
-	albums, err := h.lib.AllAlbums(ctx)
-	if err != nil {
-		return internalErr(err)
-	}
-	return c.JSON(http.StatusOK, albums)
 }
 
 // ListAlbumGroups returns album groups derived from the tracks table using
@@ -440,23 +385,6 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		return c.JSON(http.StatusOK, existing)
 	}
 
-	// ── Dedup: acoustic fingerprint (catches re-encoded / transcoded copies) ──
-	// fpcalc reads the file we just wrote; the SHA-256 check above already
-	// handled byte-identical duplicates, so this catches perceptually-same songs.
-	var acousticFP string
-	if h.fingerprinter != nil && h.fingerprinter.Available() {
-		if fp, fpErr := h.fingerprinter.FingerprintString(ctx, destPath); fpErr == nil && fp != "" {
-			acousticFP = fp
-			if dup, _ := h.lib.TrackByAcousticFingerprint(ctx, fp); dup != nil {
-				_ = os.Remove(destPath)
-				return c.JSON(http.StatusConflict, map[string]any{
-					"error": "duplicate track (acoustic fingerprint match)",
-					"track": dup,
-				})
-			}
-		}
-	}
-
 	// Read embedded metadata (tags) from the uploaded file so the initial
 	// record is fully populated — no need to wait for async enrichment.
 	now := time.Now()
@@ -481,22 +409,21 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	}
 
 	t := &models.Track{
-		ID:                  uuid.NewString(),
-		Path:                destPath,
-		Title:               title,
-		AlbumArtist:         albumArtist,
-		AlbumName:           albumName,
-		Genre:               genre,
-		Year:                year,
-		TrackNumber:         trackNumber,
-		DiscNumber:          discNumber,
-		Fingerprint:         hash,
-		AcousticFingerprint: acousticFP,
-		FileSizeBytes:       info.Size(),
-		LastModified:        info.ModTime(),
-		UploadedByUserID:    claims.UserID,
-		CreatedAt:           now,
-		UpdatedAt:           now,
+		ID:               uuid.NewString(),
+		Path:             destPath,
+		Title:            title,
+		AlbumArtist:      albumArtist,
+		AlbumName:        albumName,
+		Genre:            genre,
+		Year:             year,
+		TrackNumber:      trackNumber,
+		DiscNumber:       discNumber,
+		Fingerprint:      hash,
+		FileSizeBytes:    info.Size(),
+		LastModified:     info.ModTime(),
+		UploadedByUserID: claims.UserID,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}
 
 	if err := h.lib.UpsertTrack(ctx, t); err != nil {

@@ -10,40 +10,10 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS artists (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    mb_artist_id TEXT DEFAULT '',
-    created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS artworks (
-    id TEXT PRIMARY KEY,
-    path TEXT NOT NULL UNIQUE,
-    width INTEGER DEFAULT 0,
-    height INTEGER DEFAULT 0,
-    format TEXT DEFAULT '',
-    created_at TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS albums (
-    id TEXT PRIMARY KEY,
-    title TEXT NOT NULL,
-    artist_id TEXT,
-    year INTEGER DEFAULT 0,
-    mb_release_id TEXT DEFAULT '',
-    artwork_id TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (artist_id) REFERENCES artists (id),
-    FOREIGN KEY (artwork_id) REFERENCES artworks (id)
-);
-
 CREATE TABLE IF NOT EXISTS tracks (
     id TEXT PRIMARY KEY,
     path TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL DEFAULT '',
-    artist_id TEXT,
-    album_id TEXT,
     album_artist TEXT DEFAULT '',
     album_name TEXT DEFAULT '',
     genre TEXT DEFAULT '',
@@ -57,19 +27,12 @@ CREATE TABLE IF NOT EXISTS tracks (
     file_size_bytes INTEGER DEFAULT 0,
     last_modified TEXT NOT NULL,
     fingerprint TEXT DEFAULT '',
-    acoustic_fingerprint TEXT NOT NULL DEFAULT '',
-    mb_recording_id TEXT DEFAULT '',
     replay_gain_track REAL DEFAULT 0,
     replay_gain_album REAL DEFAULT 0,
-    artwork_id TEXT,
     uploaded_by_user_id TEXT DEFAULT '' REFERENCES users (id),
     deleted_at TEXT,
-    enriched_at TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    FOREIGN KEY (artist_id) REFERENCES artists (id),
-    FOREIGN KEY (album_id) REFERENCES albums (id),
-    FOREIGN KEY (artwork_id) REFERENCES artworks (id)
+    updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS playlists (
@@ -127,17 +90,6 @@ CREATE TABLE IF NOT EXISTS playback_sessions (
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
-CREATE TABLE IF NOT EXISTS offline_packs (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    track_id TEXT NOT NULL,
-    local_path TEXT NOT NULL,
-    downloaded_at TEXT NOT NULL,
-    UNIQUE (user_id, track_id),
-    FOREIGN KEY (user_id) REFERENCES users (id),
-    FOREIGN KEY (track_id) REFERENCES tracks (id)
-);
-
 CREATE TABLE IF NOT EXISTS audit_log (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
@@ -150,15 +102,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 
 -- Indexes
-CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks (artist_id);
-CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks (album_id);
 CREATE INDEX IF NOT EXISTS idx_tracks_path ON tracks (path);
-CREATE INDEX IF NOT EXISTS idx_tracks_acoustic_fp ON tracks (acoustic_fingerprint);
-CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums (artist_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices (user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_device ON playback_sessions (device_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON playback_sessions (user_id);
-CREATE INDEX IF NOT EXISTS idx_offline_user ON offline_packs (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log (target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_playlists_user ON playlists (user_id);

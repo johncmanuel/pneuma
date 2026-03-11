@@ -45,47 +45,44 @@ func (q *Queries) DeleteTrackByPath(ctx context.Context, path string) error {
 }
 
 const listTracks = `-- name: ListTracks :many
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(replay_gain_track,0) AS replay_gain_track,
+    COALESCE(replay_gain_album,0) AS replay_gain_album,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL ORDER BY title COLLATE NOCASE
 `
 
 type ListTracksRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) ListTracks(ctx context.Context) ([]ListTracksRow, error) {
@@ -101,9 +98,6 @@ func (q *Queries) ListTracks(ctx context.Context) ([]ListTracksRow, error) {
 			&i.ID,
 			&i.Path,
 			&i.Title,
-			&i.ArtistID,
-			&i.AlbumID,
-			&i.ArtistName,
 			&i.AlbumArtist,
 			&i.AlbumName,
 			&i.Genre,
@@ -117,14 +111,10 @@ func (q *Queries) ListTracks(ctx context.Context) ([]ListTracksRow, error) {
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.AcousticFingerprint,
-			&i.MbRecordingID,
 			&i.ReplayGainTrack,
 			&i.ReplayGainAlbum,
-			&i.ArtworkID,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
-			&i.EnrichedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -142,48 +132,45 @@ func (q *Queries) ListTracks(ctx context.Context) ([]ListTracksRow, error) {
 }
 
 const listTracksByAlbumName = `-- name: ListTracksByAlbumName :many
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(replay_gain_track,0) AS replay_gain_track,
+    COALESCE(replay_gain_album,0) AS replay_gain_album,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ?
 ORDER BY disc_number, track_number, title COLLATE NOCASE
 `
 
 type ListTracksByAlbumNameRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) ListTracksByAlbumName(ctx context.Context, albumName sql.NullString) ([]ListTracksByAlbumNameRow, error) {
@@ -199,9 +186,6 @@ func (q *Queries) ListTracksByAlbumName(ctx context.Context, albumName sql.NullS
 			&i.ID,
 			&i.Path,
 			&i.Title,
-			&i.ArtistID,
-			&i.AlbumID,
-			&i.ArtistName,
 			&i.AlbumArtist,
 			&i.AlbumName,
 			&i.Genre,
@@ -215,14 +199,10 @@ func (q *Queries) ListTracksByAlbumName(ctx context.Context, albumName sql.NullS
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.AcousticFingerprint,
-			&i.MbRecordingID,
 			&i.ReplayGainTrack,
 			&i.ReplayGainAlbum,
-			&i.ArtworkID,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
-			&i.EnrichedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -240,14 +220,18 @@ func (q *Queries) ListTracksByAlbumName(ctx context.Context, albumName sql.NullS
 }
 
 const listTracksByAlbumNameAndArtist = `-- name: ListTracksByAlbumNameAndArtist :many
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(replay_gain_track,0) AS replay_gain_track,
+    COALESCE(replay_gain_album,0) AS replay_gain_album,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ? AND COALESCE(album_artist,'') = ?
 ORDER BY disc_number, track_number, title COLLATE NOCASE
 `
@@ -258,35 +242,28 @@ type ListTracksByAlbumNameAndArtistParams struct {
 }
 
 type ListTracksByAlbumNameAndArtistRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) ListTracksByAlbumNameAndArtist(ctx context.Context, arg ListTracksByAlbumNameAndArtistParams) ([]ListTracksByAlbumNameAndArtistRow, error) {
@@ -302,9 +279,6 @@ func (q *Queries) ListTracksByAlbumNameAndArtist(ctx context.Context, arg ListTr
 			&i.ID,
 			&i.Path,
 			&i.Title,
-			&i.ArtistID,
-			&i.AlbumID,
-			&i.ArtistName,
 			&i.AlbumArtist,
 			&i.AlbumName,
 			&i.Genre,
@@ -318,14 +292,10 @@ func (q *Queries) ListTracksByAlbumNameAndArtist(ctx context.Context, arg ListTr
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.AcousticFingerprint,
-			&i.MbRecordingID,
 			&i.ReplayGainTrack,
 			&i.ReplayGainAlbum,
-			&i.ArtworkID,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
-			&i.EnrichedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -343,48 +313,45 @@ func (q *Queries) ListTracksByAlbumNameAndArtist(ctx context.Context, arg ListTr
 }
 
 const listTracksByAlbumUnorganized = `-- name: ListTracksByAlbumUnorganized :many
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(replay_gain_track,0) AS replay_gain_track,
+    COALESCE(replay_gain_album,0) AS replay_gain_album,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND TRIM(COALESCE(album_name,''))=''
 ORDER BY disc_number, track_number, title COLLATE NOCASE
 `
 
 type ListTracksByAlbumUnorganizedRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) ListTracksByAlbumUnorganized(ctx context.Context) ([]ListTracksByAlbumUnorganizedRow, error) {
@@ -400,9 +367,6 @@ func (q *Queries) ListTracksByAlbumUnorganized(ctx context.Context) ([]ListTrack
 			&i.ID,
 			&i.Path,
 			&i.Title,
-			&i.ArtistID,
-			&i.AlbumID,
-			&i.ArtistName,
 			&i.AlbumArtist,
 			&i.AlbumName,
 			&i.Genre,
@@ -416,14 +380,10 @@ func (q *Queries) ListTracksByAlbumUnorganized(ctx context.Context) ([]ListTrack
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.AcousticFingerprint,
-			&i.MbRecordingID,
 			&i.ReplayGainTrack,
 			&i.ReplayGainAlbum,
-			&i.ArtworkID,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
-			&i.EnrichedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -441,14 +401,18 @@ func (q *Queries) ListTracksByAlbumUnorganized(ctx context.Context) ([]ListTrack
 }
 
 const listTracksPage = `-- name: ListTracksPage :many
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(replay_gain_track,0) AS replay_gain_track,
+    COALESCE(replay_gain_album,0) AS replay_gain_album,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL ORDER BY title COLLATE NOCASE LIMIT ? OFFSET ?
 `
 
@@ -458,35 +422,28 @@ type ListTracksPageParams struct {
 }
 
 type ListTracksPageRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) ListTracksPage(ctx context.Context, arg ListTracksPageParams) ([]ListTracksPageRow, error) {
@@ -502,9 +459,6 @@ func (q *Queries) ListTracksPage(ctx context.Context, arg ListTracksPageParams) 
 			&i.ID,
 			&i.Path,
 			&i.Title,
-			&i.ArtistID,
-			&i.AlbumID,
-			&i.ArtistName,
 			&i.AlbumArtist,
 			&i.AlbumName,
 			&i.Genre,
@@ -518,14 +472,10 @@ func (q *Queries) ListTracksPage(ctx context.Context, arg ListTracksPageParams) 
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.AcousticFingerprint,
-			&i.MbRecordingID,
 			&i.ReplayGainTrack,
 			&i.ReplayGainAlbum,
-			&i.ArtworkID,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
-			&i.EnrichedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -557,54 +507,50 @@ func (q *Queries) RestoreTrack(ctx context.Context, arg RestoreTrackParams) erro
 }
 
 const searchTracks = `-- name: SearchTracks :many
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(replay_gain_track,0) AS replay_gain_track,
+    COALESCE(replay_gain_album,0) AS replay_gain_album,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
 FROM tracks
 WHERE tracks.deleted_at IS NULL
   AND (title LIKE ?1
     OR album_name LIKE ?1
     OR album_artist LIKE ?1
-    OR COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') LIKE ?1
     OR genre LIKE ?1)
 ORDER BY title COLLATE NOCASE LIMIT 200
 `
 
 type SearchTracksRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) SearchTracks(ctx context.Context, pattern string) ([]SearchTracksRow, error) {
@@ -620,9 +566,6 @@ func (q *Queries) SearchTracks(ctx context.Context, pattern string) ([]SearchTra
 			&i.ID,
 			&i.Path,
 			&i.Title,
-			&i.ArtistID,
-			&i.AlbumID,
-			&i.ArtistName,
 			&i.AlbumArtist,
 			&i.AlbumName,
 			&i.Genre,
@@ -636,14 +579,10 @@ func (q *Queries) SearchTracks(ctx context.Context, pattern string) ([]SearchTra
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.AcousticFingerprint,
-			&i.MbRecordingID,
 			&i.ReplayGainTrack,
 			&i.ReplayGainAlbum,
-			&i.ArtworkID,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
-			&i.EnrichedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -675,129 +614,45 @@ func (q *Queries) SoftDeleteTrack(ctx context.Context, arg SoftDeleteTrackParams
 	return err
 }
 
-const trackByAcousticFingerprint = `-- name: TrackByAcousticFingerprint :one
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
-FROM tracks WHERE tracks.acoustic_fingerprint = ? AND acoustic_fingerprint != '' AND deleted_at IS NULL LIMIT 1
-`
-
-type TrackByAcousticFingerprintRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
-}
-
-func (q *Queries) TrackByAcousticFingerprint(ctx context.Context, acousticFingerprint string) (TrackByAcousticFingerprintRow, error) {
-	row := q.db.QueryRowContext(ctx, trackByAcousticFingerprint, acousticFingerprint)
-	var i TrackByAcousticFingerprintRow
-	err := row.Scan(
-		&i.ID,
-		&i.Path,
-		&i.Title,
-		&i.ArtistID,
-		&i.AlbumID,
-		&i.ArtistName,
-		&i.AlbumArtist,
-		&i.AlbumName,
-		&i.Genre,
-		&i.Year,
-		&i.TrackNumber,
-		&i.DiscNumber,
-		&i.DurationMs,
-		&i.BitrateKbps,
-		&i.SampleRateHz,
-		&i.Codec,
-		&i.FileSizeBytes,
-		&i.LastModified,
-		&i.Fingerprint,
-		&i.AcousticFingerprint,
-		&i.MbRecordingID,
-		&i.ReplayGainTrack,
-		&i.ReplayGainAlbum,
-		&i.ArtworkID,
-		&i.UploadedByUserID,
-		&i.DeletedAt,
-		&i.EnrichedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const trackByFingerprint = `-- name: TrackByFingerprint :one
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(replay_gain_track,0) AS replay_gain_track,
+    COALESCE(replay_gain_album,0) AS replay_gain_album,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.fingerprint = ? AND fingerprint != '' LIMIT 1
 `
 
 type TrackByFingerprintRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) TrackByFingerprint(ctx context.Context, fingerprint sql.NullString) (TrackByFingerprintRow, error) {
@@ -807,9 +662,6 @@ func (q *Queries) TrackByFingerprint(ctx context.Context, fingerprint sql.NullSt
 		&i.ID,
 		&i.Path,
 		&i.Title,
-		&i.ArtistID,
-		&i.AlbumID,
-		&i.ArtistName,
 		&i.AlbumArtist,
 		&i.AlbumName,
 		&i.Genre,
@@ -823,14 +675,10 @@ func (q *Queries) TrackByFingerprint(ctx context.Context, fingerprint sql.NullSt
 		&i.FileSizeBytes,
 		&i.LastModified,
 		&i.Fingerprint,
-		&i.AcousticFingerprint,
-		&i.MbRecordingID,
 		&i.ReplayGainTrack,
 		&i.ReplayGainAlbum,
-		&i.ArtworkID,
 		&i.UploadedByUserID,
 		&i.DeletedAt,
-		&i.EnrichedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -838,47 +686,44 @@ func (q *Queries) TrackByFingerprint(ctx context.Context, fingerprint sql.NullSt
 }
 
 const trackByID = `-- name: TrackByID :one
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(replay_gain_track,0) AS replay_gain_track,
+    COALESCE(replay_gain_album,0) AS replay_gain_album,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.id = ? LIMIT 1
 `
 
 type TrackByIDRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) TrackByID(ctx context.Context, id string) (TrackByIDRow, error) {
@@ -888,9 +733,6 @@ func (q *Queries) TrackByID(ctx context.Context, id string) (TrackByIDRow, error
 		&i.ID,
 		&i.Path,
 		&i.Title,
-		&i.ArtistID,
-		&i.AlbumID,
-		&i.ArtistName,
 		&i.AlbumArtist,
 		&i.AlbumName,
 		&i.Genre,
@@ -904,14 +746,10 @@ func (q *Queries) TrackByID(ctx context.Context, id string) (TrackByIDRow, error
 		&i.FileSizeBytes,
 		&i.LastModified,
 		&i.Fingerprint,
-		&i.AcousticFingerprint,
-		&i.MbRecordingID,
 		&i.ReplayGainTrack,
 		&i.ReplayGainAlbum,
-		&i.ArtworkID,
 		&i.UploadedByUserID,
 		&i.DeletedAt,
-		&i.EnrichedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -919,47 +757,44 @@ func (q *Queries) TrackByID(ctx context.Context, id string) (TrackByIDRow, error
 }
 
 const trackByPath = `-- name: TrackByPath :one
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(replay_gain_track,0) AS replay_gain_track,
+    COALESCE(replay_gain_album,0) AS replay_gain_album,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.path = ? LIMIT 1
 `
 
 type TrackByPathRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) TrackByPath(ctx context.Context, path string) (TrackByPathRow, error) {
@@ -969,9 +804,6 @@ func (q *Queries) TrackByPath(ctx context.Context, path string) (TrackByPathRow,
 		&i.ID,
 		&i.Path,
 		&i.Title,
-		&i.ArtistID,
-		&i.AlbumID,
-		&i.ArtistName,
 		&i.AlbumArtist,
 		&i.AlbumName,
 		&i.Genre,
@@ -985,14 +817,10 @@ func (q *Queries) TrackByPath(ctx context.Context, path string) (TrackByPathRow,
 		&i.FileSizeBytes,
 		&i.LastModified,
 		&i.Fingerprint,
-		&i.AcousticFingerprint,
-		&i.MbRecordingID,
 		&i.ReplayGainTrack,
 		&i.ReplayGainAlbum,
-		&i.ArtworkID,
 		&i.UploadedByUserID,
 		&i.DeletedAt,
-		&i.EnrichedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1000,14 +828,18 @@ func (q *Queries) TrackByPath(ctx context.Context, path string) (TrackByPathRow,
 }
 
 const trackDuplicateByMeta = `-- name: TrackDuplicateByMeta :one
-SELECT id, path, title, COALESCE(artist_id,'') AS artist_id, COALESCE(album_id,'') AS album_id,
-    CAST(COALESCE((SELECT name FROM artists WHERE artists.id=tracks.artist_id),'') AS TEXT) AS artist_name,
-    album_artist, album_name, genre, year,
-    track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, COALESCE(artwork_id,'') AS artwork_id,
-    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id, deleted_at,
-    enriched_at, created_at, updated_at
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(replay_gain_track,0) AS replay_gain_track,
+    COALESCE(replay_gain_album,0) AS replay_gain_album,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
 FROM tracks
 WHERE tracks.deleted_at IS NULL
   AND LOWER(title)        = LOWER(?1)
@@ -1027,35 +859,28 @@ type TrackDuplicateByMetaParams struct {
 }
 
 type TrackDuplicateByMetaRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) TrackDuplicateByMeta(ctx context.Context, arg TrackDuplicateByMetaParams) (TrackDuplicateByMetaRow, error) {
@@ -1071,9 +896,6 @@ func (q *Queries) TrackDuplicateByMeta(ctx context.Context, arg TrackDuplicateBy
 		&i.ID,
 		&i.Path,
 		&i.Title,
-		&i.ArtistID,
-		&i.AlbumID,
-		&i.ArtistName,
 		&i.AlbumArtist,
 		&i.AlbumName,
 		&i.Genre,
@@ -1087,14 +909,10 @@ func (q *Queries) TrackDuplicateByMeta(ctx context.Context, arg TrackDuplicateBy
 		&i.FileSizeBytes,
 		&i.LastModified,
 		&i.Fingerprint,
-		&i.AcousticFingerprint,
-		&i.MbRecordingID,
 		&i.ReplayGainTrack,
 		&i.ReplayGainAlbum,
-		&i.ArtworkID,
 		&i.UploadedByUserID,
 		&i.DeletedAt,
-		&i.EnrichedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1103,15 +921,14 @@ func (q *Queries) TrackDuplicateByMeta(ctx context.Context, arg TrackDuplicateBy
 
 const upsertTrack = `-- name: UpsertTrack :exec
 INSERT INTO tracks (
-    id, path, title, artist_id, album_id, album_artist, album_name, genre, year,
+    id, path, title, album_artist, album_name, genre, year,
     track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
-    codec, file_size_bytes, last_modified, fingerprint, acoustic_fingerprint, mb_recording_id,
-    replay_gain_track, replay_gain_album, artwork_id, uploaded_by_user_id,
-    enriched_at, created_at, updated_at
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    codec, file_size_bytes, last_modified, fingerprint,
+    replay_gain_track, replay_gain_album, uploaded_by_user_id,
+    created_at, updated_at
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(path) DO UPDATE SET
     title=excluded.title,
-    artist_id=excluded.artist_id, album_id=excluded.album_id,
     album_artist=excluded.album_artist, album_name=excluded.album_name,
     genre=excluded.genre,
     year=excluded.year, track_number=excluded.track_number,
@@ -1119,44 +936,34 @@ ON CONFLICT(path) DO UPDATE SET
     bitrate_kbps=excluded.bitrate_kbps, sample_rate_hz=excluded.sample_rate_hz,
     codec=excluded.codec, file_size_bytes=excluded.file_size_bytes,
     last_modified=excluded.last_modified, fingerprint=excluded.fingerprint,
-    acoustic_fingerprint=excluded.acoustic_fingerprint,
-    mb_recording_id=excluded.mb_recording_id,
     replay_gain_track=excluded.replay_gain_track,
     replay_gain_album=excluded.replay_gain_album,
-    artwork_id=excluded.artwork_id,
     uploaded_by_user_id=excluded.uploaded_by_user_id,
-    enriched_at=excluded.enriched_at,
     updated_at=excluded.updated_at
 `
 
 type UpsertTrackParams struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            sql.NullString
-	AlbumID             sql.NullString
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           sql.NullString
-	UploadedByUserID    sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      sql.NullString
+	AlbumName        sql.NullString
+	Genre            sql.NullString
+	Year             sql.NullInt64
+	TrackNumber      sql.NullInt64
+	DiscNumber       sql.NullInt64
+	DurationMs       sql.NullInt64
+	BitrateKbps      sql.NullInt64
+	SampleRateHz     sql.NullInt64
+	Codec            sql.NullString
+	FileSizeBytes    sql.NullInt64
+	LastModified     string
+	Fingerprint      sql.NullString
+	ReplayGainTrack  sql.NullFloat64
+	ReplayGainAlbum  sql.NullFloat64
+	UploadedByUserID sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) error {
@@ -1164,8 +971,6 @@ func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) error 
 		arg.ID,
 		arg.Path,
 		arg.Title,
-		arg.ArtistID,
-		arg.AlbumID,
 		arg.AlbumArtist,
 		arg.AlbumName,
 		arg.Genre,
@@ -1179,13 +984,9 @@ func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) error 
 		arg.FileSizeBytes,
 		arg.LastModified,
 		arg.Fingerprint,
-		arg.AcousticFingerprint,
-		arg.MbRecordingID,
 		arg.ReplayGainTrack,
 		arg.ReplayGainAlbum,
-		arg.ArtworkID,
 		arg.UploadedByUserID,
-		arg.EnrichedAt,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)

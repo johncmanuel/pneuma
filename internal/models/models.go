@@ -26,25 +26,8 @@ type Device struct {
 
 // ─── Library ─────────────────────────────────────────────────────────────────
 
-type Artist struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	MBArtistID string    `json:"mb_artist_id,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
-}
-
-type Album struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	ArtistID    string    `json:"artist_id,omitempty"`
-	Year        int       `json:"year,omitempty"`
-	MBReleaseID string    `json:"mb_release_id,omitempty"`
-	ArtworkID   string    `json:"artwork_id,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
 // TrackAlbumGroup is an album group derived directly from the tracks table
-// using GROUP BY. Unlike Album, it does not require a separate albums table
+// using GROUP BY. It does not require a separate albums table
 // and always reflects the actual music files present.
 type TrackAlbumGroup struct {
 	Key          string `json:"key"`    // "name|||artist" or "__unorganized__"
@@ -56,44 +39,28 @@ type TrackAlbumGroup struct {
 }
 
 type Track struct {
-	ID                  string     `json:"id"`
-	Path                string     `json:"path"`
-	Title               string     `json:"title"`
-	ArtistID            string     `json:"artist_id,omitempty"`
-	AlbumID             string     `json:"album_id,omitempty"`
-	ArtistName          string     `json:"artist_name,omitempty"` // resolved from artists table
-	AlbumArtist         string     `json:"album_artist"`
-	AlbumName           string     `json:"album_name"`
-	Genre               string     `json:"genre"`
-	Year                int        `json:"year"`
-	TrackNumber         int        `json:"track_number"`
-	DiscNumber          int        `json:"disc_number"`
-	DurationMS          int64      `json:"duration_ms"`
-	BitrateKbps         int        `json:"bitrate_kbps,omitempty"`
-	SampleRateHz        int        `json:"sample_rate_hz,omitempty"`
-	Codec               string     `json:"codec,omitempty"`
-	FileSizeBytes       int64      `json:"file_size_bytes"`
-	LastModified        time.Time  `json:"last_modified"`
-	Fingerprint         string     `json:"fingerprint,omitempty"`
-	AcousticFingerprint string     `json:"acoustic_fingerprint,omitempty"`
-	MBRecordingID       string     `json:"mb_recording_id,omitempty"`
-	ReplayGainTrack     float64    `json:"replay_gain_track,omitempty"`
-	ReplayGainAlbum     float64    `json:"replay_gain_album,omitempty"`
-	ArtworkID           string     `json:"artwork_id,omitempty"`
-	UploadedByUserID    string     `json:"uploaded_by_user_id,omitempty"`
-	DeletedAt           *time.Time `json:"deleted_at,omitempty"`
-	EnrichedAt          *time.Time `json:"enriched_at,omitempty"`
-	CreatedAt           time.Time  `json:"created_at"`
-	UpdatedAt           time.Time  `json:"updated_at"`
-}
-
-type Artwork struct {
-	ID        string    `json:"id"`
-	Path      string    `json:"path"`
-	Width     int       `json:"width,omitempty"`
-	Height    int       `json:"height,omitempty"`
-	Format    string    `json:"format,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID               string     `json:"id"`
+	Path             string     `json:"path"`
+	Title            string     `json:"title"`
+	AlbumArtist      string     `json:"album_artist"`
+	AlbumName        string     `json:"album_name"`
+	Genre            string     `json:"genre"`
+	Year             int        `json:"year"`
+	TrackNumber      int        `json:"track_number"`
+	DiscNumber       int        `json:"disc_number"`
+	DurationMS       int64      `json:"duration_ms"`
+	BitrateKbps      int        `json:"bitrate_kbps,omitempty"`
+	SampleRateHz     int        `json:"sample_rate_hz,omitempty"`
+	Codec            string     `json:"codec,omitempty"`
+	FileSizeBytes    int64      `json:"file_size_bytes"`
+	LastModified     time.Time  `json:"last_modified"`
+	Fingerprint      string     `json:"fingerprint,omitempty"`
+	ReplayGainTrack  float64    `json:"replay_gain_track,omitempty"`
+	ReplayGainAlbum  float64    `json:"replay_gain_album,omitempty"`
+	UploadedByUserID string     `json:"uploaded_by_user_id,omitempty"`
+	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 // ─── Playlists ───────────────────────────────────────────────────────────────
@@ -167,16 +134,6 @@ type PlaybackSession struct {
 	PositionMS int64     `json:"position_ms"`
 	Queue      []string  `json:"queue"`
 	UpdatedAt  time.Time `json:"updated_at"`
-}
-
-// ─── Offline ─────────────────────────────────────────────────────────────────
-
-type OfflinePack struct {
-	ID           string    `json:"id"`
-	UserID       string    `json:"user_id"`
-	TrackID      string    `json:"track_id"`
-	LocalPath    string    `json:"local_path"`
-	DownloadedAt time.Time `json:"downloaded_at"`
 }
 
 // ─── Events ──────────────────────────────────────────────────────────────────

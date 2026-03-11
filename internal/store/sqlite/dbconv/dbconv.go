@@ -170,28 +170,6 @@ func SessionsByUserToModels(rows []serverdb.PlaybackSessionsByUserRow) []*models
 	return out
 }
 
-// ─── Offline Pack ────────────────────────────────────────────────────────────
-
-// OfflinePackToModel converts a serverdb.OfflinePack to a domain model.
-func OfflinePackToModel(op serverdb.OfflinePack) *models.OfflinePack {
-	return &models.OfflinePack{
-		ID:           op.ID,
-		UserID:       op.UserID,
-		TrackID:      op.TrackID,
-		LocalPath:    op.LocalPath,
-		DownloadedAt: parseTime(op.DownloadedAt),
-	}
-}
-
-// OfflinePacksToModels converts a slice of serverdb.OfflinePack.
-func OfflinePacksToModels(rows []serverdb.OfflinePack) []*models.OfflinePack {
-	out := make([]*models.OfflinePack, len(rows))
-	for i, r := range rows {
-		out[i] = OfflinePackToModel(r)
-	}
-	return out
-}
-
 // ─── Track ───────────────────────────────────────────────────────────────────
 
 // trackRow is the common field layout shared by every sqlc-generated Track*Row
@@ -199,74 +177,57 @@ func OfflinePacksToModels(rows []serverdb.OfflinePack) []*models.OfflinePack {
 // generated row structs are structurally identical, allowing Go struct
 // conversion: trackRow(anyRow).
 type trackRow struct {
-	ID                  string
-	Path                string
-	Title               string
-	ArtistID            string
-	AlbumID             string
-	ArtistName          string
-	AlbumArtist         sql.NullString
-	AlbumName           sql.NullString
-	Genre               sql.NullString
-	Year                sql.NullInt64
-	TrackNumber         sql.NullInt64
-	DiscNumber          sql.NullInt64
-	DurationMs          sql.NullInt64
-	BitrateKbps         sql.NullInt64
-	SampleRateHz        sql.NullInt64
-	Codec               sql.NullString
-	FileSizeBytes       sql.NullInt64
-	LastModified        string
-	Fingerprint         sql.NullString
-	AcousticFingerprint string
-	MbRecordingID       sql.NullString
-	ReplayGainTrack     sql.NullFloat64
-	ReplayGainAlbum     sql.NullFloat64
-	ArtworkID           string
-	UploadedByUserID    string
-	DeletedAt           sql.NullString
-	EnrichedAt          sql.NullString
-	CreatedAt           string
-	UpdatedAt           string
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	ReplayGainTrack  float64
+	ReplayGainAlbum  float64
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
 }
 
 func trackToModel(r trackRow) *models.Track {
 	t := &models.Track{
-		ID:                  r.ID,
-		Path:                r.Path,
-		Title:               r.Title,
-		ArtistID:            r.ArtistID,
-		AlbumID:             r.AlbumID,
-		ArtistName:          r.ArtistName,
-		AlbumArtist:         r.AlbumArtist.String,
-		AlbumName:           r.AlbumName.String,
-		Genre:               r.Genre.String,
-		Year:                int(r.Year.Int64),
-		TrackNumber:         int(r.TrackNumber.Int64),
-		DiscNumber:          int(r.DiscNumber.Int64),
-		DurationMS:          r.DurationMs.Int64,
-		BitrateKbps:         int(r.BitrateKbps.Int64),
-		SampleRateHz:        int(r.SampleRateHz.Int64),
-		Codec:               r.Codec.String,
-		FileSizeBytes:       r.FileSizeBytes.Int64,
-		LastModified:        parseTime(r.LastModified),
-		Fingerprint:         r.Fingerprint.String,
-		AcousticFingerprint: r.AcousticFingerprint,
-		MBRecordingID:       r.MbRecordingID.String,
-		ReplayGainTrack:     r.ReplayGainTrack.Float64,
-		ReplayGainAlbum:     r.ReplayGainAlbum.Float64,
-		ArtworkID:           r.ArtworkID,
-		UploadedByUserID:    r.UploadedByUserID,
-		CreatedAt:           parseTime(r.CreatedAt),
-		UpdatedAt:           parseTime(r.UpdatedAt),
+		ID:               r.ID,
+		Path:             r.Path,
+		Title:            r.Title,
+		AlbumArtist:      r.AlbumArtist,
+		AlbumName:        r.AlbumName,
+		Genre:            r.Genre,
+		Year:             int(r.Year),
+		TrackNumber:      int(r.TrackNumber),
+		DiscNumber:       int(r.DiscNumber),
+		DurationMS:       r.DurationMs,
+		BitrateKbps:      int(r.BitrateKbps),
+		SampleRateHz:     int(r.SampleRateHz),
+		Codec:            r.Codec,
+		FileSizeBytes:    r.FileSizeBytes,
+		LastModified:     parseTime(r.LastModified),
+		Fingerprint:      r.Fingerprint,
+		ReplayGainTrack:  r.ReplayGainTrack,
+		ReplayGainAlbum:  r.ReplayGainAlbum,
+		UploadedByUserID: r.UploadedByUserID,
+		CreatedAt:        parseTime(r.CreatedAt),
+		UpdatedAt:        parseTime(r.UpdatedAt),
 	}
 	if r.DeletedAt.Valid {
 		ts := parseTime(r.DeletedAt.String)
 		t.DeletedAt = &ts
-	}
-	if r.EnrichedAt.Valid {
-		ts := parseTime(r.EnrichedAt.String)
-		t.EnrichedAt = &ts
 	}
 	return t
 }
@@ -276,9 +237,6 @@ func trackToModel(r trackRow) *models.Track {
 func TrackByPathToModel(r serverdb.TrackByPathRow) *models.Track { return trackToModel(trackRow(r)) }
 func TrackByIDToModel(r serverdb.TrackByIDRow) *models.Track     { return trackToModel(trackRow(r)) }
 func TrackByFPToModel(r serverdb.TrackByFingerprintRow) *models.Track {
-	return trackToModel(trackRow(r))
-}
-func TrackByAcousticFPToModel(r serverdb.TrackByAcousticFingerprintRow) *models.Track {
 	return trackToModel(trackRow(r))
 }
 func TrackDuplicateToModel(r serverdb.TrackDuplicateByMetaRow) *models.Track {
@@ -334,84 +292,6 @@ func ListTracksByAlbumUnorganizedToModels(rows []serverdb.ListTracksByAlbumUnorg
 		out[i] = trackToModel(trackRow(r))
 	}
 	return out
-}
-
-// ─── Album ───────────────────────────────────────────────────────────────────
-
-// albumRow is the common shape of all album query row types.
-type albumRow struct {
-	ID          string
-	Title       string
-	ArtistID    string
-	Year        sql.NullInt64
-	MbReleaseID string
-	ArtworkID   string
-	CreatedAt   string
-}
-
-func albumToModel(r albumRow) *models.Album {
-	return &models.Album{
-		ID:          r.ID,
-		Title:       r.Title,
-		ArtistID:    r.ArtistID,
-		Year:        int(r.Year.Int64),
-		MBReleaseID: r.MbReleaseID,
-		ArtworkID:   r.ArtworkID,
-		CreatedAt:   parseTime(r.CreatedAt),
-	}
-}
-
-func AlbumByIDToModel(r serverdb.AlbumByIDRow) *models.Album { return albumToModel(albumRow(r)) }
-func AlbumByTitleArtistToModel(r serverdb.AlbumByTitleArtistRow) *models.Album {
-	return albumToModel(albumRow(r))
-}
-
-func ListAlbumsToModels(rows []serverdb.ListAlbumsRow) []*models.Album {
-	out := make([]*models.Album, len(rows))
-	for i, r := range rows {
-		out[i] = albumToModel(albumRow(r))
-	}
-	return out
-}
-
-func ListAlbumsPageToModels(rows []serverdb.ListAlbumsPageRow) []*models.Album {
-	out := make([]*models.Album, len(rows))
-	for i, r := range rows {
-		out[i] = albumToModel(albumRow(r))
-	}
-	return out
-}
-
-func ListAlbumsPageFilteredToModels(rows []serverdb.ListAlbumsPageFilteredRow) []*models.Album {
-	out := make([]*models.Album, len(rows))
-	for i, r := range rows {
-		out[i] = albumToModel(albumRow(r))
-	}
-	return out
-}
-
-// ─── Artist ──────────────────────────────────────────────────────────────────
-
-func ArtistByNameToModel(r serverdb.ArtistByNameRow) *models.Artist {
-	return &models.Artist{
-		ID:         r.ID,
-		Name:       r.Name,
-		MBArtistID: r.MbArtistID,
-		CreatedAt:  parseTime(r.CreatedAt),
-	}
-}
-
-// ─── Artwork ─────────────────────────────────────────────────────────────────
-
-func ArtworkByPathToModel(r serverdb.ArtworkByPathRow) *models.Artwork {
-	return &models.Artwork{
-		ID:        r.ID,
-		Path:      r.Path,
-		Width:     int(r.Width),
-		Height:    int(r.Height),
-		Format:    r.Format,
-		CreatedAt: parseTime(r.CreatedAt),
-	}
 }
 
 // ─── Watch Folder ────────────────────────────────────────────────────────────

@@ -1,3 +1,2 @@
--- SQLite 3.35+ supports DROP COLUMN; the columns revert to not existing.
-ALTER TABLE playlists DROP COLUMN description;
-ALTER TABLE playlists DROP COLUMN artwork_path;
+-- No-op: the baseline schema already includes description and artwork_path.
+SELECT 1;

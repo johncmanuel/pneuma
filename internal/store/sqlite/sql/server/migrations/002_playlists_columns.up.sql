@@ -1,4 +1,4 @@
--- Add columns introduced with the playlist feature that may be missing from
--- databases created before the full schema was in place.
-ALTER TABLE playlists ADD COLUMN description TEXT NOT NULL DEFAULT '';
-ALTER TABLE playlists ADD COLUMN artwork_path TEXT NOT NULL DEFAULT '';
+-- No-op: description and artwork_path are already part of the baseline schema (001_initial).
+-- This entry is kept so databases that recorded schema_migrations version 2
+-- remain consistent with the migration history.
+SELECT 1;

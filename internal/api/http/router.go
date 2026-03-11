@@ -34,10 +34,6 @@ type Services struct {
 		ScanAll()
 		ScanPath(path string)
 	} // *scanner.Scheduler
-	Fingerprinter interface {
-		Available() bool
-		FingerprintString(ctx context.Context, path string) (string, error)
-	} // *chromaprint.Service; nil disables acoustic dedup on upload
 	JWTSecret   string
 	UploadsDir  string
 	UploadMaxMB int   // max upload body size in MB (0 = default 500 MB)
@@ -61,7 +57,7 @@ func NewRouter(svc Services) *echo.Echo {
 	authMW := middleware.RequireAuth(secret)
 	adminMW := middleware.RequireAdmin(secret)
 
-	lh := handlers.NewLibraryHandler(svc.Library, svc.Queries, svc.Scanner, svc.Hub, svc.UploadsDir, svc.Fingerprinter)
+	lh := handlers.NewLibraryHandler(svc.Library, svc.Queries, svc.Scanner, svc.Hub, svc.UploadsDir)
 	ph := handlers.NewPlaybackHandler(svc.Playback, svc.Handoff)
 	uh := handlers.NewUserHandler(svc.User, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries)
@@ -114,7 +110,6 @@ func NewRouter(svc Services) *echo.Echo {
 
 	lib.POST("/tracks/upload", lh.UploadTrack, middleware.RequirePerm(secret, "can_upload"), uploadBodyLimit)
 	lib.DELETE("/tracks/:id", lh.DeleteTrack, middleware.RequirePerm(secret, "can_delete"))
-	lib.GET("/albums", lh.ListAlbums)
 	lib.GET("/albumgroups", lh.ListAlbumGroups)
 	lib.GET("/search", lh.Search)
 	lib.POST("/scan", lh.TriggerScan, adminMW)
