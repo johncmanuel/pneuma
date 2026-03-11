@@ -433,9 +433,79 @@ func WatchFoldersToModels(rows []serverdb.WatchFolder) []*models.WatchFolder {
 	return out
 }
 
+// ─── Playlists ───────────────────────────────────────────────────────────────
+
+func PlaylistToModel(p serverdb.Playlist) *models.Playlist {
+	return &models.Playlist{
+		ID:          p.ID,
+		UserID:      p.UserID,
+		Name:        p.Name,
+		Description: p.Description,
+		ArtworkPath: p.ArtworkPath,
+		CreatedAt:   parseTime(p.CreatedAt),
+		UpdatedAt:   parseTime(p.UpdatedAt),
+	}
+}
+
+func PlaylistRowToModel(r serverdb.ListPlaylistsByUserRow) *models.Playlist {
+	var dur int64
+	switch v := r.TotalDurationMs.(type) {
+	case int64:
+		dur = v
+	case float64:
+		dur = int64(v)
+	}
+	return &models.Playlist{
+		ID:          r.ID,
+		UserID:      r.UserID,
+		Name:        r.Name,
+		Description: r.Description,
+		ArtworkPath: r.ArtworkPath,
+		CreatedAt:   parseTime(r.CreatedAt),
+		UpdatedAt:   parseTime(r.UpdatedAt),
+		ItemCount:   int(r.ItemCount),
+		DurationMS:  dur,
+	}
+}
+
+func PlaylistRowsToModels(rows []serverdb.ListPlaylistsByUserRow) []*models.Playlist {
+	out := make([]*models.Playlist, len(rows))
+	for i, r := range rows {
+		out[i] = PlaylistRowToModel(r)
+	}
+	return out
+}
+
+func PlaylistItemToModel(r serverdb.ListPlaylistItemsRow) models.PlaylistItem {
+	return models.PlaylistItem{
+		PlaylistID:     r.PlaylistID,
+		Position:       int(r.Position),
+		Source:         models.ItemSource(r.Source),
+		TrackID:        r.TrackID,
+		RefTitle:       r.RefTitle,
+		RefAlbum:       r.RefAlbum,
+		RefAlbumArtist: r.RefAlbumArtist,
+		RefDurationMS:  r.RefDurationMs,
+		AddedAt:        parseTime(r.AddedAt),
+	}
+}
+
+func PlaylistItemsToModels(rows []serverdb.ListPlaylistItemsRow) []models.PlaylistItem {
+	out := make([]models.PlaylistItem, len(rows))
+	for i, r := range rows {
+		out[i] = PlaylistItemToModel(r)
+	}
+	return out
+}
+
 // ─── internal helpers ────────────────────────────────────────────────────────
 
-func parseTime(s string) time.Time {
+// ParseTime parses an RFC3339 string into a time.Time (exported for use by desktop layer).
+func ParseTime(s string) time.Time {
 	t, _ := time.Parse(time.RFC3339, s)
 	return t
+}
+
+func parseTime(s string) time.Time {
+	return ParseTime(s)
 }

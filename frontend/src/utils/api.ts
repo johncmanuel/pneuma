@@ -258,3 +258,11 @@ export function artworkUrl(trackId: string): string {
   }
   return ""
 }
+
+/** URL for a locally stored playlist artwork file. */
+export function playlistArtUrl(artworkPath: string): string {
+  if (!artworkPath) return ""
+  const p = get(localPort)
+  if (!p) return ""
+  return `http://127.0.0.1:${p}/local/playlist-art?file=${encodeURIComponent(artworkPath)}`
+}

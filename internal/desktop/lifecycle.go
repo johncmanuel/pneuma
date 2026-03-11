@@ -48,6 +48,7 @@ func (a *App) Startup(ctx context.Context) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/local/stream", a.handleLocalStream)
 	mux.HandleFunc("/local/art", a.handleLocalArt)
+	mux.HandleFunc("/local/playlist-art", a.handlePlaylistArt)
 
 	a.localSrv = &http.Server{Handler: mux}
 	go func() {

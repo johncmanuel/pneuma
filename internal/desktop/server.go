@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"pneuma/internal/models"
 )
 
 // RestoreSession attempts to restore a previous server session by validating
@@ -204,6 +206,73 @@ func (a *App) refreshLoop(ctx context.Context) {
 			a.doTokenRefresh()
 		}
 	}
+}
+
+// ── Playlist server helpers ──────────────────────────────────────────────────
+
+// createServerPlaylist creates a new playlist on the server, sets its items,
+// and returns the remote playlist ID.
+func (a *App) createServerPlaylist(serverURL, token, name, description string, items []models.PlaylistItem) (string, error) {
+	body, _ := json.Marshal(map[string]string{
+		"name":        name,
+		"description": description,
+	})
+	req, err := http.NewRequest("POST", serverURL+"/api/playlists", bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("server unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("create playlist failed (%d): %s", resp.StatusCode, string(msg))
+	}
+
+	var result struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("invalid response: %w", err)
+	}
+
+	// Set items on the newly created playlist.
+	if len(items) > 0 {
+		if err := a.updateServerPlaylistItems(serverURL, token, result.ID, items); err != nil {
+			return result.ID, err // playlist was created, items failed
+		}
+	}
+
+	return result.ID, nil
+}
+
+// updateServerPlaylistItems replaces all items of a server playlist.
+func (a *App) updateServerPlaylistItems(serverURL, token, playlistID string, items []models.PlaylistItem) error {
+	body, _ := json.Marshal(items)
+	req, err := http.NewRequest("PUT", serverURL+"/api/playlists/"+playlistID+"/items", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("server unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("set items failed (%d): %s", resp.StatusCode, string(msg))
+	}
+	return nil
 }
 
 // doTokenRefresh performs a single token refresh round-trip.

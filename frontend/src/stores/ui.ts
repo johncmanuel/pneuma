@@ -31,6 +31,9 @@ export const activeTab = writable<LibTab>("library")
 export const localSubTab = writable<LocalSubTab>("albums")
 export const selectedAlbum = writable<string | null>(null)
 
+/** Currently selected playlist ID (drives the playlist detail view). */
+export const selectedPlaylistView = writable<string | null>(null)
+
 /* ── Navigation history (back / forward) ───────────────────────── */
 
 export interface NavState {
@@ -38,6 +41,7 @@ export interface NavState {
   tab: LibTab
   subTab: LocalSubTab
   albumKey: string | null
+  playlistId: string | null
 }
 
 function currentNavState(): NavState {
@@ -46,6 +50,7 @@ function currentNavState(): NavState {
     tab: get(activeTab),
     subTab: get(localSubTab),
     albumKey: get(selectedAlbum),
+    playlistId: get(selectedPlaylistView),
   }
 }
 
@@ -54,10 +59,11 @@ function applyNavState(s: NavState) {
   activeTab.set(s.tab)
   localSubTab.set(s.subTab)
   selectedAlbum.set(s.albumKey)
+  selectedPlaylistView.set(s.playlistId ?? null)
 }
 
 const _navStack = writable<NavState[]>([{
-  view: "library", tab: "library", subTab: "albums", albumKey: null,
+  view: "library", tab: "library", subTab: "albums", albumKey: null, playlistId: null,
 }])
 const _navIndex = writable<number>(0)
 
@@ -87,7 +93,8 @@ export function pushNav(partial?: Partial<NavState>) {
     // Avoid duplicate consecutive entries
     const prev = trimmed[trimmed.length - 1]
     if (prev && prev.view === next.view && prev.tab === next.tab
-        && prev.subTab === next.subTab && prev.albumKey === next.albumKey) {
+        && prev.subTab === next.subTab && prev.albumKey === next.albumKey
+        && prev.playlistId === next.playlistId) {
       return trimmed
     }
     trimmed.push(next)

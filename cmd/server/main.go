@@ -19,6 +19,7 @@ import (
 	"pneuma/internal/library"
 	"pneuma/internal/metadata/parser"
 	"pneuma/internal/playback"
+	"pneuma/internal/playlist"
 	"pneuma/internal/scanner"
 	"pneuma/internal/store/sqlite"
 	"pneuma/internal/store/sqlite/serverdb"
@@ -44,6 +45,8 @@ func main() {
 	}
 	defer store.Close()
 
+	slog.Info("database opened", "path", cfg.Database.Path)
+
 	hub := apws.New()
 	queries := serverdb.New(store.DB())
 	libSvc := library.New(queries, store)
@@ -52,6 +55,7 @@ func main() {
 	fpcalcSvc := chromaprint.New(cfg.Transcoding.FpcalcPath)
 	playEngine := playback.New(queries, hub, libSvc)
 	handoffSvc := playback.NewHandoff(queries, playEngine)
+	playlistSvc := playlist.New(queries)
 
 	watcher, err := scanner.NewWatcher(libSvc, metaParser, hub)
 	if err != nil {
@@ -70,6 +74,7 @@ func main() {
 		User:          userSvc,
 		Playback:      playEngine,
 		Handoff:       handoffSvc,
+		Playlist:      playlistSvc,
 		Hub:           hub,
 		Queries:       queries,
 		Scanner:       sched,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte"
-  import { recentAlbums, getRecentAlbumArtUrl } from "../stores/recentAlbums"
+  import { recentAlbums, recentPlaylists, getRecentAlbumArtUrl, getRecentPlaylistArtUrl } from "../stores/recentAlbums"
   import { pushNav } from "../stores/ui"
   import { serverURL, authToken } from "../utils/api"
   export let activeView: string = "library"
@@ -9,6 +9,7 @@
 
   const navItems = [
     { id: "library",   label: "Library"  },
+    { id: "playlists", label: "Playlists" },
     { id: "settings",  label: "Settings" },
   ]
 
@@ -21,6 +22,10 @@
     })
   }
 
+  function openRecentPlaylist(pl: import("../stores/recentAlbums").RecentPlaylist) {
+    pushNav({ view: "playlists", playlistId: pl.id, albumKey: null })
+  }
+
   function hideImg(e: Event) {
     const img = e.currentTarget as HTMLImageElement
     if (img) img.style.display = "none"
@@ -28,6 +33,12 @@
 
   // Re-compute artwork URLs whenever auth state changes (needed for remote albums)
   $: _authDeps = [$serverURL, $authToken]
+
+  // Merge and sort recent albums + playlists by playedAt descending (max 20).
+  $: recentItems = [
+    ...$recentPlaylists.map(p => ({ kind: 'playlist' as const, key: 'pl-' + p.id, name: p.name, sub: 'Playlist', playedAt: p.playedAt, pl: p, album: null })),
+    ...$recentAlbums.map(a => ({ kind: 'album' as const, key: 'al-' + a.key, name: a.name, sub: a.artist, playedAt: a.playedAt ?? 0, pl: null, album: a })),
+  ].sort((a, b) => b.playedAt - a.playedAt).slice(0, 20)
 </script>
 
 <nav>
@@ -45,24 +56,39 @@
     {/each}
   </ul>
 
-  {#if $recentAlbums.length > 0}
+  {#if recentItems.length > 0}
     <div class="recents-section">
       <p class="recents-heading">Recently Played</p>
       <ul class="recents-list">
-        {#each $recentAlbums as album (album.key)}
+        {#each recentItems as item (item.key)}
           <li>
-            <button class="recent-row" on:click={() => openRecentAlbum(album)}>
-              <div class="recent-art">
-                {#if _authDeps && getRecentAlbumArtUrl(album)}
-                  <img src={_authDeps && getRecentAlbumArtUrl(album)} alt={album.name} on:error={hideImg} loading="lazy"/>
-                {/if}
-                <span class="recent-art-placeholder">♫</span>
-              </div>
-              <div class="recent-info">
-                <span class="recent-name truncate">{album.name}</span>
-                <span class="recent-artist truncate">{album.artist}</span>
-              </div>
-            </button>
+            {#if item.kind === 'playlist' && item.pl}
+              <button class="recent-row" on:click={() => openRecentPlaylist(item.pl)}>
+                <div class="recent-art">
+                  {#if item.pl.artworkPath && getRecentPlaylistArtUrl(item.pl.artworkPath)}
+                    <img src={getRecentPlaylistArtUrl(item.pl.artworkPath)} alt={item.pl.name} on:error={hideImg} loading="lazy"/>
+                  {/if}
+                  <span class="recent-art-placeholder">♫</span>
+                </div>
+                <div class="recent-info">
+                  <span class="recent-name truncate">{item.pl.name}</span>
+                  <span class="recent-artist truncate">Playlist</span>
+                </div>
+              </button>
+            {:else if item.kind === 'album' && item.album}
+              <button class="recent-row" on:click={() => openRecentAlbum(item.album)}>
+                <div class="recent-art">
+                  {#if _authDeps && getRecentAlbumArtUrl(item.album)}
+                    <img src={_authDeps && getRecentAlbumArtUrl(item.album)} alt={item.album.name} on:error={hideImg} loading="lazy"/>
+                  {/if}
+                  <span class="recent-art-placeholder">♫</span>
+                </div>
+                <div class="recent-info">
+                  <span class="recent-name truncate">{item.album.name}</span>
+                  <span class="recent-artist truncate">{item.album.artist}</span>
+                </div>
+              </button>
+            {/if}
           </li>
         {/each}
       </ul>

@@ -76,17 +76,25 @@ CREATE TABLE IF NOT EXISTS playlists (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
     name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    artwork_path TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
-CREATE TABLE IF NOT EXISTS playlist_tracks (
+CREATE TABLE IF NOT EXISTS playlist_items (
     playlist_id TEXT NOT NULL,
-    track_id TEXT NOT NULL,
     position INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (playlist_id, track_id),
-    FOREIGN KEY (playlist_id) REFERENCES playlists (id),
+    source TEXT NOT NULL DEFAULT 'remote',  -- 'remote' or 'local_ref'
+    track_id TEXT,                           -- server track UUID (for remote)
+    ref_title TEXT NOT NULL DEFAULT '',       -- display/matching metadata (for local_ref)
+    ref_album TEXT NOT NULL DEFAULT '',
+    ref_album_artist TEXT NOT NULL DEFAULT '',
+    ref_duration_ms INTEGER NOT NULL DEFAULT 0,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY (playlist_id, position),
+    FOREIGN KEY (playlist_id) REFERENCES playlists (id) ON DELETE CASCADE,
     FOREIGN KEY (track_id) REFERENCES tracks (id)
 );
 
@@ -145,15 +153,13 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks (artist_id);
 CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks (album_id);
 CREATE INDEX IF NOT EXISTS idx_tracks_path ON tracks (path);
-CREATE INDEX IF NOT EXISTS idx_tracks_acoustic_fp ON tracks (
-    acoustic_fingerprint
-);
+CREATE INDEX IF NOT EXISTS idx_tracks_acoustic_fp ON tracks (acoustic_fingerprint);
 CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums (artist_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices (user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_device ON playback_sessions (device_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON playback_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_offline_user ON offline_packs (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log (user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log (
-    target_type, target_id
-);
+CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log (target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_playlists_user ON playlists (user_id);
+CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist ON playlist_items (playlist_id);

@@ -1,12 +1,12 @@
 package sqlite
 
-import _ "embed"
+import "embed"
 
-// Embedded canonical schemas, usable by any package that imports this one.
-// Both are idempotent (CREATE … IF NOT EXISTS) and safe to Exec on every startup.
+// Embedded migration directories, used by golang-migrate's iofs source driver.
+// Each directory contains numbered migration files (e.g. 001_initial.up.sql).
 
-//go:embed sql/server/schema/main.sql
-var ServerSchema string
+//go:embed sql/server/migrations
+var ServerMigrations embed.FS
 
-//go:embed sql/desktop/schema/main.sql
-var DesktopSchema string
+//go:embed sql/desktop/migrations
+var DesktopMigrations embed.FS

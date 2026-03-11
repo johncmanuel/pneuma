@@ -16,6 +16,7 @@ import (
 	apws "pneuma/internal/api/ws"
 	"pneuma/internal/library"
 	"pneuma/internal/playback"
+	"pneuma/internal/playlist"
 	"pneuma/internal/store/sqlite/serverdb"
 	"pneuma/internal/user"
 )
@@ -28,6 +29,7 @@ type Services struct {
 	Handoff  *playback.Handoff
 	Hub      *apws.Hub
 	Queries  *serverdb.Queries
+	Playlist *playlist.Service
 	Scanner  interface {
 		ScanAll()
 		ScanPath(path string)
@@ -63,6 +65,7 @@ func NewRouter(svc Services) *echo.Echo {
 	ph := handlers.NewPlaybackHandler(svc.Playback, svc.Handoff)
 	uh := handlers.NewUserHandler(svc.User, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries)
+	plh := handlers.NewPlaylistHandler(svc.Playlist, svc.Hub)
 
 	// Wire inbound WebSocket messages to the playback engine.
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
@@ -115,6 +118,17 @@ func NewRouter(svc Services) *echo.Echo {
 	lib.GET("/albumgroups", lh.ListAlbumGroups)
 	lib.GET("/search", lh.Search)
 	lib.POST("/scan", lh.TriggerScan, adminMW)
+
+	// ── Playlists (authenticated) ─────────────────────────────────────────────
+	pl := e.Group("/api/playlists", authMW)
+	pl.GET("", plh.ListPlaylists)
+	pl.POST("", plh.CreatePlaylist)
+	pl.GET("/:id", plh.GetPlaylist)
+	pl.PUT("/:id", plh.UpdatePlaylist)
+	pl.DELETE("/:id", plh.DeletePlaylist)
+	pl.GET("/:id/items", plh.GetPlaylistItems)
+	pl.PUT("/:id/items", plh.SetPlaylistItems)
+	pl.POST("/:id/items", plh.AddPlaylistItem)
 
 	// ── Stream (supports query-param token for <audio> elements) ──────────────
 	// This is an alternative stream endpoint that accepts ?token= for clients

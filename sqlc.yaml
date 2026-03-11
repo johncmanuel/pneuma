@@ -3,7 +3,7 @@ sql:
   # Server database 
   - engine: "sqlite"
     queries: "internal/store/sqlite/sql/server/query"
-    schema: "internal/store/sqlite/sql/server/schema"
+    schema: "internal/store/sqlite/sql/server/migrations"
     gen:
       go:
         package: "serverdb"
@@ -12,7 +12,7 @@ sql:
   # Desktop database (mainly for caching)
   - engine: "sqlite"
     queries: "internal/store/sqlite/sql/desktop/query"
-    schema: "internal/store/sqlite/sql/desktop/schema"
+    schema: "internal/store/sqlite/sql/desktop/migrations"
     gen:
       go:
         package: "desktopdb"

@@ -187,3 +187,24 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 
 	http.ServeFile(w, r, thumbPath)
 }
+
+// handlePlaylistArt serves a playlist's custom artwork thumbnail.
+// The file query parameter is the basename stored in artwork_path (e.g. "pl-abc123.jpg").
+func (a *App) handlePlaylistArt(w http.ResponseWriter, r *http.Request) {
+	file := r.URL.Query().Get("file")
+	if file == "" {
+		http.Error(w, "file required", http.StatusBadRequest)
+		return
+	}
+
+	// Sanitise: only allow basenames, no path traversal.
+	file = filepath.Base(file)
+	artPath := filepath.Join(a.thumbDir, file)
+
+	if _, err := os.Stat(artPath); err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+
+	http.ServeFile(w, r, artPath)
+}

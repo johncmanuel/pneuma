@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,6 +11,10 @@ import (
 
 	"pneuma/internal/store/sqlite"
 	"pneuma/internal/store/sqlite/desktopdb"
+
+	"github.com/golang-migrate/migrate/v4"
+	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 
 	_ "modernc.org/sqlite"
 )
@@ -64,14 +69,30 @@ func openAppDB() (*sql.DB, error) {
 		_, _ = db.Exec(`DELETE FROM kv WHERE key = 'local_dupes_cache'`)
 	}
 
-	// Create/ensure all tables and indexes from the canonical schema.
-	if _, err = db.Exec(sqlite.DesktopSchema); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("apply desktop schema: %w", err)
-	}
+	// Run versioned schema migrations via golang-migrate.
+	{
+		sourceDriver, migrErr := iofs.New(sqlite.DesktopMigrations, "sql/desktop/migrations")
+		if migrErr != nil {
+			db.Close()
+			return nil, fmt.Errorf("desktop migration source: %w", migrErr)
+		}
+		dbDriver, migrErr := migratesqlite.WithInstance(db, &migratesqlite.Config{})
+		if migrErr != nil {
+			db.Close()
+			return nil, fmt.Errorf("desktop migration db driver: %w", migrErr)
+		}
+		m, migrErr := migrate.NewWithInstance("iofs", sourceDriver, "sqlite", dbDriver)
+		if migrErr != nil {
+			db.Close()
+			return nil, fmt.Errorf("desktop migrate new: %w", migrErr)
+		}
+		if migrErr = m.Up(); migrErr != nil && !errors.Is(migrErr, migrate.ErrNoChange) {
+			db.Close()
+			return nil, fmt.Errorf("apply desktop migrations: %w", migrErr)
+		}
 
-	// One-time migration: clean up old KV-blob track cache if present.
-	_, _ = db.Exec(`DELETE FROM kv WHERE key = 'local_tracks_cache'`)
+		slog.Info("desktop database opened and migrated", "path", db.Stats())
+	}
 
 	return db, nil
 }

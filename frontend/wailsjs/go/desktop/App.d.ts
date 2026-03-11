@@ -3,6 +3,8 @@
 import {desktop} from '../models';
 import {options} from '../models';
 
+export function AddLocalPlaylistItem(arg1:string,arg2:desktop.LocalPlaylistItem):Promise<void>;
+
 export function AppDBDelete(arg1:string):Promise<void>;
 
 export function AppDBGet(arg1:string):Promise<string>;
@@ -17,11 +19,19 @@ export function ClearLocalFolder(arg1:string):Promise<void>;
 
 export function ConnectToServer(arg1:string,arg2:string,arg3:string):Promise<desktop.ConnectResult>;
 
+export function CreateLocalPlaylist(arg1:string,arg2:string):Promise<desktop.LocalPlaylistSummary>;
+
+export function DeleteLocalPlaylist(arg1:string):Promise<void>;
+
 export function DisconnectFromServer():Promise<void>;
 
 export function GetLocalAlbumGroups(arg1:Array<string>,arg2:string,arg3:number,arg4:number):Promise<desktop.LocalAlbumGroupsResult>;
 
 export function GetLocalAlbumTracks(arg1:Array<string>,arg2:string,arg3:string):Promise<Array<desktop.LocalTrack>>;
+
+export function GetLocalPlaylistItems(arg1:string):Promise<Array<desktop.LocalPlaylistItem>>;
+
+export function GetLocalPlaylists():Promise<Array<desktop.LocalPlaylistSummary>>;
 
 export function GetLocalPort():Promise<number>;
 
@@ -43,6 +53,10 @@ export function OpenLocalFiles():Promise<Array<string>>;
 
 export function OpenLocalFolder():Promise<Array<string>>;
 
+export function PickPlaylistArtwork(arg1:string):Promise<string>;
+
+export function ResolvePlaylistItems(arg1:string):Promise<Array<desktop.LocalPlaylistItem>>;
+
 export function RestoreSession(arg1:string,arg2:string):Promise<void>;
 
 export function ScanLocalFolderStream(arg1:string):Promise<void>;
@@ -51,8 +65,14 @@ export function SearchLocalTracks(arg1:Array<string>,arg2:string):Promise<Array<
 
 export function SecondInstanceLaunch(arg1:options.SecondInstanceData):Promise<void>;
 
+export function SetLocalPlaylistItems(arg1:string,arg2:Array<desktop.LocalPlaylistItem>):Promise<void>;
+
 export function UnwatchLocalFolder(arg1:string):Promise<void>;
 
+export function UpdateLocalPlaylist(arg1:string,arg2:string,arg3:string,arg4:string):Promise<void>;
+
 export function UploadLocalFile(arg1:string):Promise<string>;
+
+export function UploadPlaylistToServer(arg1:string):Promise<string>;
 
 export function WatchLocalFolder(arg1:string):Promise<void>;

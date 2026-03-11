@@ -2,10 +2,14 @@ package sqlite
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/golang-migrate/migrate/v4"
+	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "modernc.org/sqlite"
 )
 
@@ -50,9 +54,10 @@ func Open(path string) (*Store, error) {
 		}
 	}
 
-	if err := migrate(db); err != nil {
+	if err := runMigrations(db); err != nil {
 		return nil, err
 	}
+
 	return &Store{db: db}, nil
 }
 
@@ -66,10 +71,21 @@ func (s *Store) DB() *sql.DB {
 	return s.db
 }
 
-func migrate(db *sql.DB) error {
-	// Apply the full canonical schema (idempotent: all CREATE TABLE/INDEX use IF NOT EXISTS).
-	if _, err := db.Exec(ServerSchema); err != nil {
-		return fmt.Errorf("apply schema: %w", err)
+func runMigrations(db *sql.DB) error {
+	sourceDriver, err := iofs.New(ServerMigrations, "sql/server/migrations")
+	if err != nil {
+		return fmt.Errorf("migration source: %w", err)
+	}
+	dbDriver, err := migratesqlite.WithInstance(db, &migratesqlite.Config{})
+	if err != nil {
+		return fmt.Errorf("migration db driver: %w", err)
+	}
+	m, err := migrate.NewWithInstance("iofs", sourceDriver, "sqlite", dbDriver)
+	if err != nil {
+		return fmt.Errorf("migrate new: %w", err)
+	}
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("run migrations: %w", err)
 	}
 	return nil
 }

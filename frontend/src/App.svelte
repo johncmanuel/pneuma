@@ -3,11 +3,13 @@
   import { initApi, connected } from "./utils/api"
   import { connectWS, disconnectWS } from "./stores/ws"
   import { loadRemoteAlbumGroupsPage } from "./stores/library"
+  import { initPlaylists } from "./stores/playlists"
   import { activePanel, currentView, pushNav, goBack, goForward, canGoBack, canGoForward } from "./stores/ui"
 
   import Sidebar from "./lib/Sidebar.svelte"
   import Player from "./lib/Player.svelte"
   import Library from "./lib/Library.svelte"
+  import Playlists from "./lib/Playlists.svelte"
   import SearchBar from "./lib/SearchBar.svelte"
   import Queue from "./lib/Queue.svelte"
   import DevicesPanel from "./lib/DevicesPanel.svelte"
@@ -20,6 +22,7 @@
 
   onMount(async () => {
     await initApi()
+    await initPlaylists()
   })
 
   onDestroy(() => {
@@ -38,7 +41,7 @@
   }
 
   function handleNavigate(e: CustomEvent<string>) {
-    pushNav({ view: e.detail, tab: "library", subTab: "albums", albumKey: null })
+    pushNav({ view: e.detail, tab: "library", subTab: "albums", albumKey: null, playlistId: null })
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -78,6 +81,8 @@
   <main class="content">
     {#if $currentView === "library"}
       <Library />
+    {:else if $currentView === "playlists"}
+      <Playlists />
     {:else if $currentView === "settings"}
       <Settings />
     {/if}

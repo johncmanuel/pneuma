@@ -9,6 +9,29 @@ type Kv struct {
 	Value string
 }
 
+type LocalPlaylist struct {
+	ID               string
+	Name             string
+	Description      string
+	ArtworkPath      string
+	RemotePlaylistID string
+	CreatedAt        string
+	UpdatedAt        string
+}
+
+type LocalPlaylistItem struct {
+	PlaylistID     string
+	Position       int64
+	Source         string
+	TrackID        string
+	LocalPath      string
+	RefTitle       string
+	RefAlbum       string
+	RefAlbumArtist string
+	RefDurationMs  int64
+	AddedAt        string
+}
+
 type LocalTrack struct {
 	Path        string
 	Folder      string

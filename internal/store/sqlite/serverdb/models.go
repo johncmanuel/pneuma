@@ -71,17 +71,25 @@ type PlaybackSession struct {
 }
 
 type Playlist struct {
-	ID        string
-	UserID    string
-	Name      string
-	CreatedAt string
-	UpdatedAt string
+	ID          string
+	UserID      string
+	Name        string
+	Description string
+	ArtworkPath string
+	CreatedAt   string
+	UpdatedAt   string
 }
 
-type PlaylistTrack struct {
-	PlaylistID string
-	TrackID    string
-	Position   int64
+type PlaylistItem struct {
+	PlaylistID     string
+	Position       int64
+	Source         string
+	TrackID        sql.NullString
+	RefTitle       string
+	RefAlbum       string
+	RefAlbumArtist string
+	RefDurationMs  int64
+	AddedAt        string
 }
 
 type Track struct {

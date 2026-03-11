@@ -85,10 +85,10 @@
   }
 
   function playFromQueue(track: Track, idx: number) {
-    if (!$connected) return
     const newIndex = currentIndex + 1 + idx
+    const isLocalTrack = track.id.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(track.id)
     playerState.update(s => ({ ...s, trackId: track.id, track, queueIndex: newIndex, positionMs: 0, paused: false }))
-    wsSend("playback.play", { device_id: "desktop", track_id: track.id, position_ms: 0 })
+    if (!isLocalTrack && $connected) wsSend("playback.play", { device_id: "desktop", track_id: track.id, position_ms: 0 })
   }
 </script>
 

@@ -98,18 +98,54 @@ type Artwork struct {
 
 // ─── Playlists ───────────────────────────────────────────────────────────────
 
+// ItemSource distinguishes how a playlist item was added.
+type ItemSource string
+
+const (
+	SourceRemote   ItemSource = "remote"    // server-hosted track (has track_id)
+	SourceLocalRef ItemSource = "local_ref" // reference to a local file (metadata only)
+)
+
+// Playlist represents a user-created playlist that can mix remote and local tracks.
 type Playlist struct {
-	ID        string    `json:"id"`
-	UserID    string    `json:"user_id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID               string    `json:"id"`
+	UserID           string    `json:"user_id"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description,omitempty"`
+	ArtworkPath      string    `json:"artwork_path,omitempty"`
+	RemotePlaylistID string    `json:"remote_playlist_id,omitempty"` // linked server playlist ID for sync
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+
+	// Computed/aggregate fields (not stored, populated by service layer).
+	ItemCount  int   `json:"item_count,omitempty"`
+	DurationMS int64 `json:"duration_ms,omitempty"`
+	TrackCount int   `json:"track_count,omitempty"`  // alias for ItemCount in list views
+	TotalDurMS int64 `json:"total_dur_ms,omitempty"` // alias for DurationMS in list views
 }
 
-type PlaylistTrack struct {
-	PlaylistID string `json:"playlist_id"`
-	TrackID    string `json:"track_id"`
-	Position   int    `json:"position"`
+// PlaylistItem is a single entry in a playlist. It supports both remote tracks
+// (identified by TrackID UUID) and local-only references (metadata for matching).
+type PlaylistItem struct {
+	PlaylistID string     `json:"playlist_id"`
+	Position   int        `json:"position"`
+	Source     ItemSource `json:"source"`
+
+	// Remote tracks: the server-side track UUID.
+	TrackID string `json:"track_id,omitempty"`
+
+	// Local references: display/matching metadata (never contains file paths).
+	RefTitle       string `json:"ref_title,omitempty"`
+	RefAlbum       string `json:"ref_album,omitempty"`
+	RefAlbumArtist string `json:"ref_album_artist,omitempty"`
+	RefDurationMS  int64  `json:"ref_duration_ms,omitempty"`
+
+	AddedAt time.Time `json:"added_at"`
+
+	// Resolved at runtime — not persisted.
+	Resolved  bool   `json:"resolved"`             // true when a matching track was found
+	Missing   bool   `json:"missing"`              // true when no match exists on this device
+	LocalPath string `json:"local_path,omitempty"` // resolved local file path (client-only, never uploaded)
 }
 
 // ─── Watch Folders ───────────────────────────────────────────────────────────
@@ -170,6 +206,10 @@ const (
 	EventScanStarted      EventType = "scan.started"
 	EventScanCompleted    EventType = "scan.completed"
 	EventDownloadProgress EventType = "download.progress"
+
+	EventPlaylistCreated EventType = "playlist.created"
+	EventPlaylistUpdated EventType = "playlist.updated"
+	EventPlaylistDeleted EventType = "playlist.deleted"
 )
 
 type Event struct {

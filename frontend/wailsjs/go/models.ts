@@ -66,6 +66,66 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class LocalPlaylistItem {
+	    position: number;
+	    source: string;
+	    track_id?: string;
+	    local_path?: string;
+	    ref_title: string;
+	    ref_album: string;
+	    ref_album_artist: string;
+	    ref_duration_ms: number;
+	    added_at: string;
+	    resolved: boolean;
+	    missing: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalPlaylistItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.position = source["position"];
+	        this.source = source["source"];
+	        this.track_id = source["track_id"];
+	        this.local_path = source["local_path"];
+	        this.ref_title = source["ref_title"];
+	        this.ref_album = source["ref_album"];
+	        this.ref_album_artist = source["ref_album_artist"];
+	        this.ref_duration_ms = source["ref_duration_ms"];
+	        this.added_at = source["added_at"];
+	        this.resolved = source["resolved"];
+	        this.missing = source["missing"];
+	    }
+	}
+	export class LocalPlaylistSummary {
+	    id: string;
+	    name: string;
+	    description: string;
+	    artwork_path: string;
+	    remote_playlist_id: string;
+	    item_count: number;
+	    total_duration_ms: number;
+	    created_at: string;
+	    updated_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalPlaylistSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.artwork_path = source["artwork_path"];
+	        this.remote_playlist_id = source["remote_playlist_id"];
+	        this.item_count = source["item_count"];
+	        this.total_duration_ms = source["total_duration_ms"];
+	        this.created_at = source["created_at"];
+	        this.updated_at = source["updated_at"];
+	    }
+	}
 	export class LocalTrack {
 	    path: string;
 	    title: string;

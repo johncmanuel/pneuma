@@ -1,16 +1,19 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy } from "svelte"
   import type { Track } from "../stores/player"
+  import { playlists, addTrackToPlaylist, type PlaylistSummary } from "../stores/playlists"
 
   export let track: Track | null = null
   export let active: boolean = false
   export let hideAlbum: boolean = false
+  export let isLocal: boolean = false
 
   const dispatch = createEventDispatcher()
 
   let showMenu = false
   let menuX = 0
   let menuY = 0
+  let showPlaylistSub = false
 
   // Portal action: moves the node to document.body so it is never clipped
   // by any ancestor overflow or contain property.
@@ -35,7 +38,15 @@
     showMenu = false
   }
 
-  onDestroy(() => { showMenu = false })
+  function handleAddToPlaylist(pl: PlaylistSummary) {
+    if (track) {
+      addTrackToPlaylist(pl.id, track, isLocal)
+    }
+    showMenu = false
+    showPlaylistSub = false
+  }
+
+  onDestroy(() => { showMenu = false; showPlaylistSub = false })
 </script>
 
 <button
@@ -58,6 +69,22 @@
 {#if showMenu}
   <div class="ctx-menu" use:portal style="left:{menuX}px;top:{menuY}px">
     <button on:click={handleAddToQueue}>Add to queue</button>
+    {#if $playlists.length > 0}
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="ctx-submenu-wrap"
+        on:mouseenter={() => showPlaylistSub = true}
+        on:mouseleave={() => showPlaylistSub = false}
+      >
+        <button class="has-sub">Add to playlist ›</button>
+        {#if showPlaylistSub}
+          <div class="ctx-submenu">
+            {#each $playlists as pl (pl.id)}
+              <button on:click={() => handleAddToPlaylist(pl)}>{pl.name}</button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 {/if}
 
@@ -110,4 +137,30 @@
     border-radius: 0;
   }
   .ctx-menu button:hover { background: var(--surface-hover); }
+
+  .ctx-submenu-wrap { position: relative; }
+  .ctx-submenu-wrap .has-sub { cursor: default; }
+  .ctx-submenu {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px 0;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    min-width: 160px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+  .ctx-submenu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-1);
+    border-radius: 0;
+  }
+  .ctx-submenu button:hover { background: var(--surface-hover); }
 </style>

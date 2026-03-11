@@ -519,6 +519,7 @@
                   <TrackRow
                     track={filteredAlbumDetailTracks[row.index]}
                     hideAlbum={true}
+                    isLocal={currentAlbumGroup?.isLocal ?? false}
                     active={$currentTrackId === filteredAlbumDetailTracks[row.index]?.id}
                     on:play={handlePlay}
                     on:select={() => {}}
