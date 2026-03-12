@@ -1,6 +1,6 @@
 import { writable, derived, get } from "svelte/store"
 
-export type PanelName = "queue" | "devices" | null
+export type PanelName = "queue" | null
 
 export const activePanel = writable<PanelName>(null)
 
@@ -10,7 +10,7 @@ export const currentView = writable<string>("library")
 // Convenience derived stores for backward compat
 export const queuePanelOpen = derived(activePanel, $p => $p === "queue")
 
-export function togglePanel(name: "queue" | "devices") {
+export function togglePanel(name: "queue") {
   activePanel.update(v => (v === name ? null : name))
 }
 

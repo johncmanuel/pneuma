@@ -49,9 +49,6 @@ export function clearSession() {
 }
 
 export function loadSession(): SavedSession | null {
-  // One-time migration: remove any plaintext credentials left by the old storage scheme.
-  localStorage.removeItem("pneuma_server_creds")
-
   // sessionStorage takes priority (same window); fall back to localStorage
   // so it survives an app restart.
   const raw = sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY)

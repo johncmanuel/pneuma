@@ -6,7 +6,7 @@
   import { formatDuration } from "./TrackRow.svelte"
   import { streamUrl, artworkUrl } from "../utils/api"
   import { wsSend } from "../stores/ws"
-  import { onMount } from "svelte"
+  import { onMount, onDestroy } from "svelte"
   import { shuffle } from "../utils/algos"
 
   let audio: HTMLAudioElement
@@ -21,6 +21,9 @@
     volume = isNaN(saved) ? 1 : Math.max(0, Math.min(1, saved))
     prevVolume = volume > 0 ? volume : 1
     if (audio) audio.volume = volume
+  })
+
+  onDestroy(() => {
   })
   let audioDurationMs = 0  // actual duration from <audio> element
   let seeking = false       // true while user is dragging seekbar
@@ -375,7 +378,7 @@
         <img
           src="{artworkUrl(track.id)}"
           alt=""
-          on:error={(e) => { e.currentTarget.style.display = 'none' }}
+          on:error={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
         />
         <div class="art-placeholder" style="position:absolute">♫</div>
       {:else}
@@ -430,18 +433,6 @@
   </div>
 
   <div class="right-controls">
-    <button
-      class="ctrl-btn devices-toggle"
-      class:active-toggle={$activePanel === 'devices'}
-      on:click={() => togglePanel('devices')}
-      title="Devices"
-    >
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="2" y="3" width="20" height="14" rx="2"/>
-        <line x1="8" y1="21" x2="16" y2="21"/>
-        <line x1="12" y1="17" x2="12" y2="21"/>
-      </svg>
-    </button>
     <button
       class="ctrl-btn queue-toggle"
       class:active-toggle={$activePanel === 'queue'}
@@ -575,12 +566,6 @@
     color: var(--accent);
     line-height: 1;
   }
-
-  .devices-toggle {
-    margin-right: 2px;
-    color: var(--text-2);
-  }
-  .devices-toggle:hover { color: var(--text-1); }
 
   .seek-row {
     display: flex;

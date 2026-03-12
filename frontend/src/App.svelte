@@ -12,7 +12,6 @@
   import Playlists from "./lib/Playlists.svelte"
   import SearchBar from "./lib/SearchBar.svelte"
   import Queue from "./lib/Queue.svelte"
-  import DevicesPanel from "./lib/DevicesPanel.svelte"
   import Toasts from "./lib/Toasts.svelte"
   import Settings from "./lib/Settings.svelte"
   import DisconnectBanner from "./lib/DisconnectBanner.svelte"
@@ -91,10 +90,6 @@
   {#if $activePanel === 'queue'}
     <div class="panel-area">
       <Queue />
-    </div>
-  {:else if $activePanel === 'devices'}
-    <div class="panel-area">
-      <DevicesPanel />
     </div>
   {/if}
 
