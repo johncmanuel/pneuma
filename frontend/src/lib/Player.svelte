@@ -4,7 +4,6 @@
   import { resolveLocalTracksByPaths } from "../stores/localLibrary";
   import {
     activePanel,
-    togglePanel,
     toggleQueuePanel,
     currentView,
     pushNav
@@ -15,6 +14,19 @@
   import { onMount, onDestroy } from "svelte";
   import { shuffle } from "../utils/algos";
   import { addToast } from "../stores/toasts";
+  import {
+    Play,
+    Pause,
+    SkipBack,
+    SkipForward,
+    Shuffle,
+    Repeat,
+    VolumeX,
+    Volume1,
+    Volume2,
+    Music,
+    List
+  } from "@lucide/svelte";
 
   let audio: HTMLAudioElement;
   let deviceId = "desktop";
@@ -522,14 +534,16 @@
       {#if track}
         <img
           src={artworkUrl(track.id)}
-          alt=""
+          alt={track.title}
           on:error={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
-        <div class="art-placeholder" style="position:absolute">♫</div>
+        <div class="art-placeholder" style="position:absolute">
+          <Music size={24} />
+        </div>
       {:else}
-        <div class="art-placeholder">♫</div>
+        <div class="art-placeholder"><Music size={18} /></div>
       {/if}
     </div>
     <div class="info">
@@ -554,13 +568,13 @@
         class="ctrl-btn"
         class:active-toggle={$playerState.shuffle}
         on:click={toggleShuffle}
-        title="Shuffle">⇄</button
+        title="Shuffle"><Shuffle size={16} /></button
       >
       <button
         class="ctrl-btn"
         on:click={skipPrev}
         title="Previous"
-        disabled={!hasTrack}>⏮</button
+        disabled={!hasTrack}><SkipBack size={16} /></button
       >
       <button
         class="play-btn"
@@ -568,13 +582,17 @@
         title={$playerState.paused ? "Play" : "Pause"}
         disabled={!hasTrack}
       >
-        {$playerState.paused ? "▶" : "⏸"}
+        {#if $playerState.paused}
+          <Play size={16} />
+        {:else}
+          <Pause size={16} />
+        {/if}
       </button>
       <button
         class="ctrl-btn"
         on:click={skipNext}
         title="Next"
-        disabled={!hasTrack}>⏭</button
+        disabled={!hasTrack}><SkipForward size={16} /></button
       >
       <button
         class="ctrl-btn repeat-btn"
@@ -582,7 +600,8 @@
         on:click={toggleRepeat}
         title="Repeat: {repeatLabel}"
       >
-        🔁{#if $playerState.repeat === 2}<span class="repeat-badge">1</span
+        <Repeat size={16} />{#if $playerState.repeat === 2}<span
+            class="repeat-badge">1</span
           >{/if}
       </button>
     </div>
@@ -608,28 +627,18 @@
       on:click={toggleQueuePanel}
       title="Queue"
     >
-      <svg
-        viewBox="0 0 24 24"
-        width="18"
-        height="18"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <line x1="3" y1="6" x2="17" y2="6" />
-        <line x1="3" y1="12" x2="13" y2="12" />
-        <line x1="3" y1="18" x2="9" y2="18" />
-        <polyline points="17 14 21 18 17 22" />
-      </svg>
+      <List size={18} />
     </button>
     <span class="vol-icon"
-      >{volume === 0
-        ? "🔇"
-        : volume < 0.4
-          ? "🔈"
-          : volume < 0.8
-            ? "🔉"
-            : "🔊"}</span
+      >{#if volume === 0}
+        <VolumeX size={16} />
+      {:else if volume < 0.4}
+        <Volume1 size={16} />
+      {:else if volume < 0.8}
+        <Volume2 size={16} />
+      {:else}
+        <Volume2 size={16} />
+      {/if}</span
     >
     <input
       type="range"

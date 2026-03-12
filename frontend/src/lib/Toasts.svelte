@@ -1,11 +1,12 @@
 <script lang="ts">
   import { toasts, dismissToast, type Toast } from "../stores/toasts";
+  import { Info, TriangleAlert, CircleX, Check, X } from "@lucide/svelte";
 
-  const icons: Record<Toast["type"], string> = {
-    info: "i",
-    warning: "⚠",
-    error: "✕",
-    success: "✓"
+  const icons: Record<Toast["type"], any> = {
+    info: Info,
+    warning: TriangleAlert,
+    error: CircleX,
+    success: Check
   };
 </script>
 
@@ -13,12 +14,14 @@
   <div class="toast-container" role="status" aria-live="polite">
     {#each $toasts as toast (toast.id)}
       <div class="toast toast-{toast.type}">
-        <span class="toast-icon">{icons[toast.type]}</span>
+        <span class="toast-icon">
+          <svelte:component this={icons[toast.type]} size={16} />
+        </span>
         <span class="toast-msg">{toast.message}</span>
         <button
           class="toast-close"
           on:click={() => dismissToast(toast.id)}
-          title="Dismiss">×</button
+          title="Dismiss"><X size={14} /></button
         >
       </div>
     {/each}

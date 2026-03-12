@@ -15,6 +15,7 @@
   import TrackRow from "./TrackRow.svelte";
   import type { Track } from "../stores/player";
   import { connected, artworkUrl, localBase } from "../utils/api";
+  import { Music, ChevronRight } from "@lucide/svelte";
   import { wsSend } from "../stores/ws";
   import { pushNav } from "../stores/ui";
 
@@ -96,7 +97,7 @@
   <h2>Search</h2>
   <input
     type="search"
-    placeholder="Search tracks, artists, albums…"
+    placeholder="Search tracks, playlists, albums..."
     bind:value={query}
     on:input={onInput}
     class="search-input"
@@ -116,7 +117,7 @@
                   (e.currentTarget as HTMLImageElement).style.display = "none";
                 }}
               />
-              <span class="album-art-ph">♫</span>
+              <span class="album-art-ph"><Music size={24} /></span>
             </div>
             <div class="album-info">
               <span class="album-name">{album.name || "Unorganized"}</span>
@@ -125,7 +126,7 @@
                 Local</span
               >
             </div>
-            <span class="album-chevron">›</span>
+            <span class="album-chevron"><ChevronRight size={14} /></span>
           </button>
         {/each}
         {#each $albumSearchResults as album (album.key + "-remote")}
@@ -138,7 +139,7 @@
                   (e.currentTarget as HTMLImageElement).style.display = "none";
                 }}
               />
-              <span class="album-art-ph">♫</span>
+              <span class="album-art-ph"><Music size={24} /></span>
             </div>
             <div class="album-info">
               <span class="album-name">{album.name || "Unorganized"}</span>

@@ -23,6 +23,7 @@
   import Toasts from "./lib/Toasts.svelte";
   import Settings from "./lib/Settings.svelte";
   import DisconnectBanner from "./lib/DisconnectBanner.svelte";
+  import { ChevronLeft, ChevronRight } from "@lucide/svelte";
 
   let wasConnected = false;
   let searchBar: SearchBar;
@@ -90,16 +91,7 @@
         on:click={goBack}
         title="Go back"
       >
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"><polyline points="15 18 9 12 15 6" /></svg
-        >
+        <ChevronLeft size={18} />
       </button>
       <button
         class="nav-btn"
@@ -107,16 +99,7 @@
         on:click={goForward}
         title="Go forward"
       >
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"><polyline points="9 6 15 12 9 18" /></svg
-        >
+        <ChevronRight size={18} />
       </button>
     </div>
     <div class="search-wrapper">

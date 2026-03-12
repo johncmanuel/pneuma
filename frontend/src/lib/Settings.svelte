@@ -14,6 +14,7 @@
     isReconnecting,
     stopAutoReconnect
   } from "../utils/api";
+  import { RotateCcw } from "@lucide/svelte";
 
   let connectURL = "http://127.0.0.1:8989";
   let connectUser = "";
@@ -60,7 +61,9 @@
       </p>
       <button class="btn-danger" on:click={disconnect}>Disconnect</button>
     {:else if $isReconnecting}
-      <p class="text-3 reconnecting-status">↺ Reconnecting to server…</p>
+      <p class="text-3 reconnecting-status">
+        <RotateCcw size={14} /> Reconnecting to server...
+      </p>
       <button
         class="btn-danger"
         on:click={() => {

@@ -15,7 +15,6 @@
     scanLocalFolders,
     localAlbumGroups,
     localAlbumGroupsTotal,
-    localAlbumGroupsOffset,
     localAlbumFilter,
     loadLocalAlbumGroups,
     loadMoreLocalAlbumGroups,
@@ -46,6 +45,15 @@
     addTracksToPlaylist,
     type PlaylistSummary
   } from "../stores/playlists";
+  import {
+    Music,
+    FolderOpen,
+    RotateCcw,
+    X,
+    AlertTriangle,
+    ChevronRight,
+    Search
+  } from "@lucide/svelte";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -611,7 +619,7 @@
                 decoding="async"
               />
             {/if}
-            <div class="album-art-hero-placeholder">♫</div>
+            <div class="album-art-hero-placeholder"><Music size={24} /></div>
           </div>
           <div class="album-detail-info">
             <h2 class="album-detail-title">{currentAlbumGroup.name}</h2>
@@ -622,7 +630,7 @@
               <input
                 type="search"
                 class="album-filter-input"
-                placeholder="Filter songs…"
+                placeholder="Filter songs..."
                 bind:value={albumFilter}
               />
             </div>
@@ -686,7 +694,7 @@
           <div class="toolbar-actions">
             {#if $activeTab === "library"}
               <button on:click={scanLibrary} title="Rescan watch folders"
-                >↺ Scan</button
+                ><RotateCcw size={14} /> Scan</button
               >
             {:else}
               <button
@@ -696,7 +704,8 @@
               {#if $localFolders.length > 0}
                 <button
                   on:click={() => scanLocalFolders()}
-                  title="Rescan local folders">↺ Rescan</button
+                  title="Rescan local folders"
+                  ><RotateCcw size={14} /> Rescan</button
                 >
               {/if}
             {/if}
@@ -704,26 +713,17 @@
         </div>
 
         <div class="album-grid-search">
-          <svg
-            class="grid-search-icon"
-            viewBox="0 0 24 24"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            ><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg
-          >
+          <Search size={14} />
           <input
             type="search"
             class="album-grid-filter"
-            placeholder="Search albums…"
+            placeholder="Search albums..."
             bind:value={albumGridFilter}
             on:input={onAlbumGridFilterInput}
           />
           {#if albumGridFilter}
             <button class="grid-filter-clear" on:click={clearAlbumGridFilter}
-              >×</button
+              ><X size={14} /></button
             >
           {/if}
         </div>
@@ -736,7 +736,7 @@
                 <button
                   class="chip-remove"
                   on:click={() => removeLocalFolder(dir)}
-                  title="Remove folder">×</button
+                  title="Remove folder"><X size={14} /></button
                 >
               </span>
             {/each}
@@ -745,7 +745,7 @@
 
         {#if $activeTab === "library" && !$connected}
           <div class="offline-state">
-            <span class="offline-icon">⚠</span>
+            <span class="offline-icon"><AlertTriangle size={16} /></span>
             <p class="offline-title">
               {$isReconnecting
                 ? "Reconnecting to server..."
@@ -758,7 +758,7 @@
             </p>
           </div>
         {:else if isLoading}
-          <p class="text-3">Loading…</p>
+          <p class="text-3">Loading...</p>
         {:else if displayedGroups.length === 0}
           {#if $activeTab === "local"}
             <p class="text-3">
@@ -793,7 +793,11 @@
                     />
                   {/if}
                   <div class="album-art-placeholder">
-                    {album.key === UNORGANIZED_KEY ? "📂" : "♫"}
+                    {#if album.key === UNORGANIZED_KEY}
+                      <FolderOpen size={24} />
+                    {:else}
+                      <Music size={24} />
+                    {/if}
                   </div>
                 </div>
                 <p
@@ -810,7 +814,7 @@
           </div>
           {#if hasMore}
             <p class="text-3" style="text-align:center;padding:12px;">
-              Loading more…
+              Loading more...
             </p>
           {/if}
         {/if}
@@ -832,7 +836,9 @@
           on:mouseenter={() => (albumCtxPlaylistSub = true)}
           on:mouseleave={() => (albumCtxPlaylistSub = false)}
         >
-          <button class="has-sub">Add all to playlist ›</button>
+          <button class="has-sub"
+            >Add all to playlist <ChevronRight size={12} /></button
+          >
           {#if albumCtxPlaylistSub}
             <div class="album-ctx-submenu">
               {#each $playlists as pl (pl.id)}
@@ -974,11 +980,6 @@
   }
   .album-grid-search:focus-within {
     border-color: var(--accent);
-  }
-
-  .grid-search-icon {
-    color: var(--text-3);
-    flex-shrink: 0;
   }
 
   .album-grid-filter {

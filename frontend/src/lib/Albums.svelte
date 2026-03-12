@@ -1,6 +1,7 @@
 <script lang="ts">
   import { albums, loading } from "../stores/library";
   import { apiBase } from "../utils/api";
+  import { Music } from "@lucide/svelte";
 
   function artUrl(artworkId: string | null): string {
     if (!artworkId) return "";
@@ -14,7 +15,7 @@
   <h2>Albums</h2>
 
   {#if $loading}
-    <p class="text-3">Loading…</p>
+    <p class="text-3">Loading...</p>
   {:else if $albums.length === 0}
     <p class="text-3">No albums found yet.</p>
   {:else}
@@ -30,7 +31,7 @@
                 decoding="async"
               />
             {:else}
-              <div class="placeholder">♫</div>
+              <div class="placeholder"><Music size={24} /></div>
             {/if}
           </div>
           <p class="album-title truncate">{album.title}</p>

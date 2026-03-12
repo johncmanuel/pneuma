@@ -15,6 +15,7 @@
     type PlaylistSummary
   } from "../stores/playlists";
   import { connected } from "../utils/api";
+  import { ChevronRight } from "@lucide/svelte";
 
   export let track: Track | null = null;
   export let active: boolean = false;
@@ -113,7 +114,9 @@
         on:mouseenter={() => (showPlaylistSub = true)}
         on:mouseleave={() => (showPlaylistSub = false)}
       >
-        <button class="has-sub">Add to playlist ›</button>
+        <button class="has-sub"
+          >Add to playlist <ChevronRight size={14} /></button
+        >
         {#if showPlaylistSub}
           <div class="ctx-submenu">
             {#each $playlists as pl (pl.id)}

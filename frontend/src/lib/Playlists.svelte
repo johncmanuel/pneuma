@@ -22,11 +22,10 @@
   import { selectedPlaylistView, pushNav } from "../stores/ui";
   import { playerState, type Track } from "../stores/player";
   import { connected, playlistArtUrl } from "../utils/api";
+  import { Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "./TrackRow.svelte";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
-
-  // ─── List / detail view state ──────────────────────────────────
 
   let showNewDialog = false;
   let newName = "";
@@ -35,7 +34,6 @@
   let editName = "";
   let editDesc = "";
 
-  // Track the playlist view from ui store
   $: if ($selectedPlaylistView) {
     selectPlaylist($selectedPlaylistView);
   } else {
@@ -43,8 +41,6 @@
     selectedPlaylist.set(null);
     selectedPlaylistItems.set([]);
   }
-
-  // ─── Detail: sort & filter ─────────────────────────────────────
 
   let filter = "";
   type SortField = "default" | "title" | "added_at" | "duration";
@@ -85,7 +81,6 @@
       return sortDir === "desc" ? -cmp : cmp;
     });
 
-  // Build Track from PlaylistItem for TrackRow
   function itemToTrack(item: PlaylistItem): Track {
     const id =
       item.source === "local_ref" && item.local_path
@@ -110,8 +105,6 @@
       artwork_id: ""
     };
   }
-
-  // ─── Handlers ──────────────────────────────────────────────────
 
   async function handleCreate() {
     if (!newName.trim()) return;
@@ -210,22 +203,9 @@
               }}
             />
           {/if}
-          <span class="art-placeholder">♫</span>
+          <span class="art-placeholder"><Music size={24} /></span>
           <div class="art-overlay">
-            <svg
-              viewBox="0 0 24 24"
-              width="24"
-              height="24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M12 20h9" /><path
-                d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
-              />
-            </svg>
+            <SquarePen size={24} />
           </div>
         </button>
         <div class="detail-meta">
@@ -300,7 +280,7 @@
         <input
           type="text"
           class="filter-input"
-          placeholder="Filter tracks…"
+          placeholder="Filter tracks..."
           bind:value={filter}
         />
       </div>
@@ -322,7 +302,7 @@
 
     <div class="track-list">
       {#if $playlistsLoading}
-        <p class="text-3 loading-msg">Loading…</p>
+        <p class="text-3 loading-msg">Loading...</p>
       {:else if filteredItems.length === 0}
         <p class="text-3 empty-msg">
           {filter
@@ -406,7 +386,7 @@
                   }}
                 />
               {/if}
-              <span class="art-placeholder">♫</span>
+              <span class="art-placeholder"><Music size={40} /></span>
             </div>
             <div class="pl-info">
               <span class="pl-name truncate">{pl.name}</span>

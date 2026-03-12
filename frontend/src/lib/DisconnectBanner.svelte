@@ -1,11 +1,12 @@
 <script lang="ts">
   import { serverDisconnected } from "../stores/ws";
+  import { AlertTriangle } from "@lucide/svelte";
 </script>
 
 {#if $serverDisconnected}
   <div class="disconnect-banner" role="alert">
-    <span class="disconnect-icon">⚠</span>
-    <span>Lost connection to server. Reconnecting…</span>
+    <span class="disconnect-icon"><AlertTriangle size={16} /></span>
+    <span>Lost connection to server. Reconnecting...</span>
   </div>
 {/if}
 

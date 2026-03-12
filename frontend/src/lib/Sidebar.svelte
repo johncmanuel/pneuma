@@ -8,6 +8,7 @@
   } from "../stores/recentAlbums";
   import { pushNav } from "../stores/ui";
   import { serverURL, authToken } from "../utils/api";
+  import { Music } from "@lucide/svelte";
   export let activeView: string = "library";
 
   const dispatch = createEventDispatcher();
@@ -103,7 +104,8 @@
                       loading="lazy"
                     />
                   {/if}
-                  <span class="recent-art-placeholder">♫</span>
+                  <span class="recent-art-placeholder"><Music size={12} /></span
+                  >
                 </div>
                 <div class="recent-info">
                   <span class="recent-name truncate">{item.pl.name}</span>
@@ -124,7 +126,8 @@
                       loading="lazy"
                     />
                   {/if}
-                  <span class="recent-art-placeholder">♫</span>
+                  <span class="recent-art-placeholder"><Music size={12} /></span
+                  >
                 </div>
                 <div class="recent-info">
                   <span class="recent-name truncate">{item.album.name}</span>

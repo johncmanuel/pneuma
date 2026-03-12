@@ -15,6 +15,7 @@
   import { playerState } from "../stores/player";
   import type { Track } from "../stores/player";
   import { connected, serverFetch, artworkUrl, localBase } from "../utils/api";
+  import { Music, Search } from "@lucide/svelte";
   import { wsSend } from "../stores/ws";
   import { pushNav } from "../stores/ui";
   import { tick } from "svelte";
@@ -423,20 +424,10 @@
   on:keydown={handleKeydown}
 >
   <div class="search-bar">
-    <svg
-      class="search-icon"
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-    >
-      <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
-    </svg>
+    <Search size={16} stroke="currentColor" stroke-width={2} />
     <input
       type="search"
-      placeholder="Search tracks, artists, albums…"
+      placeholder="Search tracks, playlists, albums..."
       bind:value={query}
       bind:this={inputEl}
       on:input={onInput}
@@ -470,7 +461,7 @@
                       "none";
                   }}
                 />
-                <span class="album-thumb-ph">♫</span>
+                <span class="album-thumb-ph"><Music size={14} /></span>
               </div>
               <div class="album-info">
                 <span class="album-name">{album.name || "Unorganized"}</span>
@@ -499,7 +490,7 @@
                       "none";
                   }}
                 />
-                <span class="album-thumb-ph">♫</span>
+                <span class="album-thumb-ph"><Music size={14} /></span>
               </div>
               <div class="album-info">
                 <span class="album-name">{album.name || "Unorganized"}</span>
@@ -566,10 +557,7 @@
   .search-bar:focus-within {
     border-color: var(--accent);
   }
-  .search-icon {
-    color: var(--text-3);
-    flex-shrink: 0;
-  }
+
   input {
     flex: 1;
     background: none;
