@@ -117,46 +117,6 @@ func (s *Service) ChangePassword(ctx context.Context, userID, newPwd string) err
 	})
 }
 
-// RegisterDevice registers or updates a device.
-func (s *Service) RegisterDevice(ctx context.Context, userID, deviceName string) (*models.Device, error) {
-	now := time.Now()
-	nowStr := dbconv.FormatTime(now)
-	d := &models.Device{
-		ID:         uuid.NewString(),
-		UserID:     userID,
-		Name:       deviceName,
-		LastSeenAt: &now,
-		CreatedAt:  now,
-	}
-	if err := s.q.UpsertDevice(ctx, serverdb.UpsertDeviceParams{
-		ID:         d.ID,
-		UserID:     d.UserID,
-		Name:       d.Name,
-		LastSeenAt: sql.NullString{String: nowStr, Valid: true},
-		CreatedAt:  nowStr,
-	}); err != nil {
-		return nil, err
-	}
-	return d, nil
-}
-
-// TouchDevice updates the last_seen_at timestamp.
-func (s *Service) TouchDevice(ctx context.Context, deviceID string) error {
-	return s.q.TouchDevice(ctx, serverdb.TouchDeviceParams{
-		LastSeenAt: sql.NullString{String: dbconv.FormatTime(time.Now()), Valid: true},
-		ID:         deviceID,
-	})
-}
-
-// Devices returns all devices for a user.
-func (s *Service) Devices(ctx context.Context, userID string) ([]*models.Device, error) {
-	rows, err := s.q.DevicesByUser(ctx, userID)
-	if err != nil {
-		return nil, err
-	}
-	return dbconv.DevicesToModels(rows), nil
-}
-
 // ListUsers returns all registered users.
 func (s *Service) ListUsers(ctx context.Context) ([]*models.User, error) {
 	rows, err := s.q.ListUsers(ctx)

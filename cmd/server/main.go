@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -27,11 +28,23 @@ import (
 )
 
 func main() {
-	cfgPath := flag.String("config", config.DefaultPath(), "path to config.toml")
+	dataDir := flag.String("data", "", "path to data directory (default: $PNEUMA_DATA_DIR or ~/.pneuma)")
+	cfgPath := flag.String("config", "", "path to config.toml (default: <data-dir>/config.toml)")
 	flag.Parse()
+
 	slog.SetDefault(slog.New(newConsoleHandler(os.Stdout, slog.LevelInfo)))
 
-	cfg, err := config.Load(*cfgPath)
+	dir := *dataDir
+	if dir == "" {
+		dir = config.DefaultDataDir()
+	}
+
+	cPath := *cfgPath
+	if cPath == "" {
+		cPath = filepath.Join(dir, "config.toml")
+	}
+
+	cfg, err := config.Load(cPath, dir)
 	if err != nil {
 		slog.Error("config load failed", "err", err)
 		os.Exit(1)
@@ -102,7 +115,8 @@ func main() {
 	<-quit
 	slog.Info("shutting down...")
 	cancel()
+
 	shutCtx, shutCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutCancel()
-	srv.Shutdown(shutCtx) //nolint:errcheck
+	srv.Shutdown(shutCtx)
 }

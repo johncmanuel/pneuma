@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -40,8 +41,10 @@ Flags:
 `
 
 func main() {
-	cfgPath := flag.String("config", config.DefaultPath(), "path to config.toml")
+	dataDir := flag.String("data", "", "path to data directory (default: $PNEUMA_DATA_DIR or ~/.pneuma)")
+	cfgPath := flag.String("config", "", "path to config.toml (default: <data-dir>/config.toml)")
 	dbPath := flag.String("db", "", "direct path to SQLite database file (overrides -config)")
+
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, usageHeader)
 		flag.PrintDefaults()
@@ -54,10 +57,20 @@ func main() {
 		os.Exit(1)
 	}
 
+	dir := *dataDir
+	if dir == "" {
+		dir = config.DefaultDataDir()
+	}
+
+	cPath := *cfgPath
+	if cPath == "" {
+		cPath = filepath.Join(dir, "config.toml")
+	}
+
 	// Resolve the database path: -db wins, otherwise fall back to config.
 	path := *dbPath
 	if path == "" {
-		cfg, err := config.Load(*cfgPath)
+		cfg, err := config.Load(cPath, dir)
 		if err != nil {
 			fatalf("load config: %v", err)
 		}

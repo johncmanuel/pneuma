@@ -3,8 +3,11 @@ package config
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -64,11 +67,22 @@ type Config struct {
 	Transcoding TranscodingConfig `toml:"transcoding"`
 }
 
-// DefaultConfig returns a Config with safe defaults derived from the user's home
-// directory. The SecretKey is freshly generated.
-func DefaultConfig() *Config {
+// DefaultDataDir returns the canonical base directory for app data.
+// It checks PNEUMA_DATA_DIR, then falls back to ~/.pneuma
+func DefaultDataDir() string {
+	if dir := os.Getenv("PNEUMA_DATA_DIR"); dir != "" {
+		return dir
+	}
 	home, _ := os.UserHomeDir()
-	dataDir := filepath.Join(home, ".pneuma")
+	return filepath.Join(home, ".pneuma")
+}
+
+// DefaultConfig returns a Config with safe defaults derived from dataDir.
+// The SecretKey is freshly generated.
+func DefaultConfig(dataDir string) *Config {
+	if dataDir == "" {
+		dataDir = DefaultDataDir()
+	}
 	return &Config{
 		Server: ServerConfig{
 			Host: "127.0.0.1",
@@ -98,12 +112,55 @@ func DefaultConfig() *Config {
 	}
 }
 
+// applyEnvOverrides parses PNEUMA_* environment variables and overwrites config fields.
+func applyEnvOverrides(cfg *Config) {
+	if v := os.Getenv("PNEUMA_SERVER_PORT"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Server.Port = p
+		}
+	}
+	if v := os.Getenv("PNEUMA_SERVER_HOST"); v != "" {
+		cfg.Server.Host = v
+	}
+	if v := os.Getenv("PNEUMA_DATABASE_PATH"); v != "" {
+		cfg.Database.Path = v
+	}
+	if v := os.Getenv("PNEUMA_AUTH_SECRET_KEY"); v != "" {
+		cfg.Auth.SecretKey = v
+	}
+	if v := os.Getenv("PNEUMA_LIBRARY_WATCH_FOLDERS"); v != "" {
+		cfg.Library.WatchFolders = strings.Split(v, ",")
+	}
+	if v := os.Getenv("PNEUMA_ARTWORK_CACHE_DIR"); v != "" {
+		cfg.Artwork.CacheDir = v
+	}
+	if v := os.Getenv("PNEUMA_ARTWORK_MAX_SIZE_MB"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Artwork.MaxSizeMB = p
+		}
+	}
+	if v := os.Getenv("PNEUMA_UPLOAD_DIR"); v != "" {
+		cfg.Upload.Dir = v
+	}
+	if v := os.Getenv("PNEUMA_UPLOAD_MAX_SIZE_MB"); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Upload.MaxSizeMB = p
+		}
+	}
+	if v := os.Getenv("PNEUMA_TRANSCODING_FFMPEG_PATH"); v != "" {
+		cfg.Transcoding.FFmpegPath = v
+	}
+	if v := os.Getenv("PNEUMA_TRANSCODING_FPCALC_PATH"); v != "" {
+		cfg.Transcoding.FpcalcPath = v
+	}
+}
+
 // Load reads the TOML config file at path and overlays it onto DefaultConfig.
 // The resulting config is always written back to disk so that any
 // auto-generated values (especially the JWT secret) are persisted on the very
 // first run and on upgrades where new fields are added.
-func Load(path string) (*Config, error) {
-	cfg := DefaultConfig()
+func Load(path string, dataDir string) (*Config, error) {
+	cfg := DefaultConfig(dataDir)
 	data, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
@@ -114,9 +171,15 @@ func Load(path string) (*Config, error) {
 			return nil, err
 		}
 	}
+
+	applyEnvOverrides(cfg)
+
 	// Always save back so auto-generated fields (like SecretKey) are persisted
 	// even when the file pre-existed without them.
-	_ = Save(path, cfg)
+	if err := Save(path, cfg); err != nil {
+		slog.Warn("could not persist config to disk (read-only filesystem?)", "path", path, "err", err)
+	}
+
 	return cfg, nil
 }
 
@@ -130,12 +193,6 @@ func Save(path string, cfg *Config) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o600)
-}
-
-// DefaultPath returns the canonical config file location.
-func DefaultPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".pneuma", "config.toml")
 }
 
 func generateKey() string {

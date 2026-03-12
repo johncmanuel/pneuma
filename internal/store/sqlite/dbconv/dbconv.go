@@ -89,40 +89,6 @@ func NullFloat(f float64) sql.NullFloat64 {
 	return sql.NullFloat64{Float64: f, Valid: true}
 }
 
-// OptionalTime returns a NullString for an optional *time.Time.
-func OptionalTime(t *time.Time) sql.NullString {
-	if t == nil {
-		return sql.NullString{}
-	}
-	return sql.NullString{String: FormatTime(*t), Valid: true}
-}
-
-// ─── Device ──────────────────────────────────────────────────────────────────
-
-// DeviceToModel converts a serverdb.Device to a domain models.Device.
-func DeviceToModel(d serverdb.Device) *models.Device {
-	out := &models.Device{
-		ID:        d.ID,
-		UserID:    d.UserID,
-		Name:      d.Name,
-		CreatedAt: parseTime(d.CreatedAt),
-	}
-	if d.LastSeenAt.Valid {
-		ts := parseTime(d.LastSeenAt.String)
-		out.LastSeenAt = &ts
-	}
-	return out
-}
-
-// DevicesToModels converts a slice of serverdb.Device to domain models.
-func DevicesToModels(rows []serverdb.Device) []*models.Device {
-	out := make([]*models.Device, len(rows))
-	for i, r := range rows {
-		out[i] = DeviceToModel(r)
-	}
-	return out
-}
-
 // ─── Playback Session ────────────────────────────────────────────────────────
 
 // sessionRow is the common shape of PlaybackSessionByDeviceRow and
@@ -240,9 +206,6 @@ func TrackByFPToModel(r serverdb.TrackByFingerprintRow) *models.Track {
 	return trackToModel(trackRow(r))
 }
 func TrackDuplicateToModel(r serverdb.TrackDuplicateByMetaRow) *models.Track {
-	return trackToModel(trackRow(r))
-}
-func SearchTrackToModel(r serverdb.SearchTracksRow) *models.Track {
 	return trackToModel(trackRow(r))
 }
 
