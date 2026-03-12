@@ -78,6 +78,14 @@ export function GetLocalTracksPage(arg1, arg2, arg3) {
   return window['go']['desktop']['App']['GetLocalTracksPage'](arg1, arg2, arg3);
 }
 
+export function GetRecentAlbums() {
+  return window['go']['desktop']['App']['GetRecentAlbums']();
+}
+
+export function GetRecentPlaylists() {
+  return window['go']['desktop']['App']['GetRecentPlaylists']();
+}
+
 export function GetServerURL() {
   return window['go']['desktop']['App']['GetServerURL']();
 }
@@ -128,6 +136,14 @@ export function SecondInstanceLaunch(arg1) {
 
 export function SetLocalPlaylistItems(arg1, arg2) {
   return window['go']['desktop']['App']['SetLocalPlaylistItems'](arg1, arg2);
+}
+
+export function SetRecentAlbum(arg1) {
+  return window['go']['desktop']['App']['SetRecentAlbum'](arg1);
+}
+
+export function SetRecentPlaylist(arg1) {
+  return window['go']['desktop']['App']['SetRecentPlaylist'](arg1);
 }
 
 export function UnwatchLocalFolder(arg1) {

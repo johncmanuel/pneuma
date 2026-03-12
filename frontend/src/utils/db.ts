@@ -1,4 +1,16 @@
-import { AppDBGet, AppDBSet, AppDBDelete } from "../../wailsjs/go/desktop/App";
+import {
+  AppDBGet,
+  AppDBSet,
+  AppDBDelete,
+  GetRecentAlbums,
+  GetRecentPlaylists,
+  SetRecentAlbum,
+  SetRecentPlaylist
+} from "../../wailsjs/go/desktop/App";
+import type { desktop } from "../../wailsjs/go/models";
+
+type RecentAlbum = desktop.RecentAlbum;
+type RecentPlaylist = desktop.RecentPlaylist;
 
 /**
  * Async key-value store backed by the app's local SQLite database.
@@ -34,6 +46,38 @@ export const db = {
   async del(key: string): Promise<void> {
     try {
       await AppDBDelete(key);
+    } catch {
+      /* non-fatal */
+    }
+  },
+
+  async getRecentAlbums(): Promise<RecentAlbum[]> {
+    try {
+      return await GetRecentAlbums();
+    } catch {
+      return [];
+    }
+  },
+
+  async setRecentAlbum(album: RecentAlbum): Promise<void> {
+    try {
+      await SetRecentAlbum(album);
+    } catch {
+      /* non-fatal */
+    }
+  },
+
+  async getRecentPlaylists(): Promise<RecentPlaylist[]> {
+    try {
+      return await GetRecentPlaylists();
+    } catch {
+      return [];
+    }
+  },
+
+  async setRecentPlaylist(playlist: RecentPlaylist): Promise<void> {
+    try {
+      await SetRecentPlaylist(playlist);
     } catch {
       /* non-fatal */
     }

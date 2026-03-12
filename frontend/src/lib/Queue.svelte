@@ -134,7 +134,8 @@
           src={artworkUrl(nowPlayingTrack.id)}
           alt=""
           on:error={(e) => {
-            e.currentTarget.style.display = "none";
+            // may find a better way to do this but this is temporary
+            (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
         />
       </div>

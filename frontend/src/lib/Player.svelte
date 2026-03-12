@@ -51,15 +51,53 @@
     /^[a-zA-Z]:[/\\]/.test($playerState.trackId ?? "")
   );
 
-  // When connection is lost and current track is remote, stop playback and skip to next
+  // Store original queues for restoration when reconnected
+  let originalQueue: string[] = [];
+  let originalBaseQueue: string[] = [];
   let wasConnected = true;
-  $: if (wasConnected && !$connected && $playerState.trackId && !isLocal) {
+
+  // Filter queue when transitioning to disconnected - remove offline (remote) tracks
+  $: if (wasConnected && !$connected) {
     wasConnected = false;
-    playerState.update((s) => ({ ...s, paused: true }));
-    skipNext();
+    const q = $playerState.queue;
+    const baseQ = $playerState.baseQueue;
+
+    if (q.length > 0) {
+      originalQueue = [...q];
+      originalBaseQueue = [...baseQ];
+
+      const isOffline = (id: string) => isRemoteTrack(id);
+      const filteredQueue = q.filter((id) => !isOffline(id));
+      const filteredBaseQueue = baseQ.filter((id) => !isOffline(id));
+
+      // Adjust queueIndex if current position is now invalid
+      let newIndex = $playerState.queueIndex;
+      if (newIndex >= filteredQueue.length) {
+        newIndex = Math.max(0, filteredQueue.length - 1);
+      }
+
+      playerState.update((s) => ({
+        ...s,
+        queue: filteredQueue,
+        baseQueue: filteredBaseQueue,
+        queueIndex: newIndex
+      }));
+    }
   }
-  $: if ($connected) {
+
+  // Restore original queues when reconnected
+  $: if (!wasConnected && $connected) {
     wasConnected = true;
+    if (originalQueue.length > 0) {
+      playerState.update((s) => ({
+        ...s,
+        queue: originalQueue,
+        baseQueue: originalBaseQueue,
+        queueIndex: 0
+      }));
+      originalQueue = [];
+      originalBaseQueue = [];
+    }
   }
 
   /** Cache of resolved tracks — avoids re-fetching on every skip. */

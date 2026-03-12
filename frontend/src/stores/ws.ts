@@ -130,19 +130,14 @@ export function connectWS() {
   socket.onclose = () => {
     if (intentionalClose) return;
 
-    // Unexpected disconnect — show banner but let already-buffered audio
-    // continue playing so the user isn't interrupted.
+    // Mark server as disconnected to trigger UI updates (grey out tracks, filter queue)
+    connected.set(false);
 
     // Show disconnect banner
     serverDisconnected.set(true);
 
-    // Attempt WS reconnect if still logically connected
-    if (get(connected)) {
-      reconnectTimer = setTimeout(() => connectWS(), 3000);
-    } else {
-      // Backend says disconnected — try full re-auth reconnect, then reconnect WS
-      autoReconnect(() => connectWS());
-    }
+    // Try to reconnect - use autoReconnect for full re-auth flow
+    autoReconnect(() => connectWS());
   };
 
   socket.onerror = () => socket?.close();

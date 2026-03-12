@@ -4,6 +4,10 @@
 
 package desktopdb
 
+import (
+	"database/sql"
+)
+
 type Kv struct {
 	Key   string
 	Value string
@@ -45,4 +49,21 @@ type LocalTrack struct {
 	DiscNumber  int64
 	DurationMs  int64
 	HasArtwork  int64
+}
+
+type RecentAlbum struct {
+	Key            string
+	Name           string
+	Artist         string
+	IsLocal        int64
+	FirstTrackID   sql.NullString
+	FirstLocalPath sql.NullString
+	PlayedAt       int64
+}
+
+type RecentPlaylist struct {
+	ID          string
+	Name        string
+	ArtworkPath sql.NullString
+	PlayedAt    int64
 }

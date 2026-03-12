@@ -158,6 +158,48 @@ export namespace desktop {
 	        this.has_artwork = source["has_artwork"];
 	    }
 	}
+	export class RecentAlbum {
+	    Key: string;
+	    Name: string;
+	    Artist: string;
+	    IsLocal: boolean;
+	    FirstTrackID: string;
+	    FirstLocalPath: string;
+	    PlayedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RecentAlbum(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Key = source["Key"];
+	        this.Name = source["Name"];
+	        this.Artist = source["Artist"];
+	        this.IsLocal = source["IsLocal"];
+	        this.FirstTrackID = source["FirstTrackID"];
+	        this.FirstLocalPath = source["FirstLocalPath"];
+	        this.PlayedAt = source["PlayedAt"];
+	    }
+	}
+	export class RecentPlaylist {
+	    ID: string;
+	    Name: string;
+	    ArtworkPath: string;
+	    PlayedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RecentPlaylist(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ID = source["ID"];
+	        this.Name = source["Name"];
+	        this.ArtworkPath = source["ArtworkPath"];
+	        this.PlayedAt = source["PlayedAt"];
+	    }
+	}
 
 }
 

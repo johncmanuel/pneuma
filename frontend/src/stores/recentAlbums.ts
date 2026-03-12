@@ -1,15 +1,19 @@
 import { writable } from "svelte/store";
 import { artworkUrl, localBase } from "../utils/api";
 import { db } from "../utils/db";
+import type { desktop } from "../../wailsjs/go/models";
+
+type RecentAlbumModel = desktop.RecentAlbum;
+type RecentPlaylistModel = desktop.RecentPlaylist;
 
 export interface RecentAlbum {
   key: string;
   name: string;
   artist: string;
   isLocal: boolean;
-  firstTrackId: string; // for remote artwork
-  firstLocalPath: string; // for local artwork
-  playedAt?: number; // unix ms, for chronological sort with playlists
+  firstTrackId: string;
+  firstLocalPath: string;
+  playedAt?: number;
 }
 
 export interface RecentPlaylist {
@@ -19,10 +23,6 @@ export interface RecentPlaylist {
   playedAt: number;
 }
 
-const DB_KEY = "recent_albums";
-const LS_KEY = "pneuma_recent_albums";
-const PL_DB_KEY = "recent_playlists";
-
 let _initialized = false;
 let _plInitialized = false;
 
@@ -31,33 +31,69 @@ export const recentPlaylists = writable<RecentPlaylist[]>([]);
 
 recentAlbums.subscribe((v) => {
   if (!_initialized) return;
-  void db.set(DB_KEY, JSON.stringify(v));
+  for (const album of v) {
+    void db.setRecentAlbum(toModelAlbum(album));
+  }
 });
 
 recentPlaylists.subscribe((v) => {
   if (!_plInitialized) return;
-  void db.set(PL_DB_KEY, JSON.stringify(v));
+  for (const playlist of v) {
+    void db.setRecentPlaylist(toModelPlaylist(playlist));
+  }
 });
 
-/** Migrate a single key from localStorage into the SQLite KV store (one-time). */
-async function migrateFromLS(lsKey: string, dbKey: string): Promise<void> {
-  const existing = await db.get(dbKey);
-  if (existing !== null) return; // already migrated
-  try {
-    const raw = localStorage.getItem(lsKey);
-    if (raw) await db.set(dbKey, raw);
-    localStorage.removeItem(lsKey);
-  } catch {}
+function toModelAlbum(album: RecentAlbum): RecentAlbumModel {
+  return {
+    Key: album.key,
+    Name: album.name,
+    Artist: album.artist,
+    IsLocal: album.isLocal,
+    FirstTrackID: album.firstTrackId,
+    FirstLocalPath: album.firstLocalPath,
+    PlayedAt: album.playedAt ?? Date.now()
+  };
 }
 
-/** Call once at app startup (inside initApi) before any subscribers write. */
+function toModelPlaylist(playlist: RecentPlaylist): RecentPlaylistModel {
+  return {
+    ID: playlist.id,
+    Name: playlist.name,
+    ArtworkPath: playlist.artworkPath,
+    PlayedAt: playlist.playedAt
+  };
+}
+
+function fromModelAlbum(model: RecentAlbumModel): RecentAlbum {
+  return {
+    key: model.Key,
+    name: model.Name,
+    artist: model.Artist,
+    isLocal: model.IsLocal,
+    firstTrackId: model.FirstTrackID,
+    firstLocalPath: model.FirstLocalPath,
+    playedAt: model.PlayedAt
+  };
+}
+
+function fromModelPlaylist(model: RecentPlaylistModel): RecentPlaylist {
+  return {
+    id: model.ID,
+    name: model.Name,
+    artworkPath: model.ArtworkPath,
+    playedAt: model.PlayedAt
+  };
+}
+
 export async function initRecentAlbums(): Promise<void> {
-  await migrateFromLS(LS_KEY, DB_KEY);
   _initialized = true;
   _plInitialized = true;
-  const [raw, plRaw] = await Promise.all([db.get(DB_KEY), db.get(PL_DB_KEY)]);
-  recentAlbums.set(raw ? (JSON.parse(raw) as RecentAlbum[]) : []);
-  recentPlaylists.set(plRaw ? (JSON.parse(plRaw) as RecentPlaylist[]) : []);
+  const [albums, playlists] = await Promise.all([
+    db.getRecentAlbums(),
+    db.getRecentPlaylists()
+  ]);
+  recentAlbums.set(albums.map(fromModelAlbum));
+  recentPlaylists.set(playlists.map(fromModelPlaylist));
 }
 
 export function recordRecentAlbum(album: RecentAlbum) {

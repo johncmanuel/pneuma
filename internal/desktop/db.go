@@ -135,3 +135,110 @@ func (a *App) AppDBDelete(key string) error {
 	}
 	return a.dq.DeleteKV(context.Background(), key)
 }
+
+// RecentAlbum represents a recently played album.
+type RecentAlbum struct {
+	Key            string
+	Name           string
+	Artist         string
+	IsLocal        bool
+	FirstTrackID   string
+	FirstLocalPath string
+	PlayedAt       int64
+}
+
+// RecentPlaylist represents a recently played playlist.
+type RecentPlaylist struct {
+	ID          string
+	Name        string
+	ArtworkPath string
+	PlayedAt    int64
+}
+
+// GetRecentAlbums returns all recently played albums, ordered by played_at DESC.
+func (a *App) GetRecentAlbums() []RecentAlbum {
+	if a.dq == nil {
+		return nil
+	}
+	albums, err := a.dq.GetRecentAlbums(context.Background())
+	if err != nil {
+		return nil
+	}
+	result := make([]RecentAlbum, len(albums))
+	for i, al := range albums {
+		result[i] = RecentAlbum{
+			Key:            al.Key,
+			Name:           al.Name,
+			Artist:         al.Artist,
+			IsLocal:        al.IsLocal == 1,
+			FirstTrackID:   al.FirstTrackID.String,
+			FirstLocalPath: al.FirstLocalPath.String,
+			PlayedAt:       al.PlayedAt,
+		}
+	}
+	return result
+}
+
+// SetRecentAlbum upserts a recently played album.
+func (a *App) SetRecentAlbum(album RecentAlbum) error {
+	if a.dq == nil {
+		return fmt.Errorf("appDB not initialised")
+	}
+	return a.dq.SetRecentAlbum(context.Background(), desktopdb.SetRecentAlbumParams{
+		Key:            album.Key,
+		Name:           album.Name,
+		Artist:         album.Artist,
+		IsLocal:        boolToInt(album.IsLocal),
+		FirstTrackID:   nullString(album.FirstTrackID),
+		FirstLocalPath: nullString(album.FirstLocalPath),
+		PlayedAt:       album.PlayedAt,
+	})
+}
+
+// GetRecentPlaylists returns all recently played playlists, ordered by played_at DESC.
+func (a *App) GetRecentPlaylists() []RecentPlaylist {
+	if a.dq == nil {
+		return nil
+	}
+	playlists, err := a.dq.GetRecentPlaylists(context.Background())
+	if err != nil {
+		return nil
+	}
+	result := make([]RecentPlaylist, len(playlists))
+	for i, pl := range playlists {
+		result[i] = RecentPlaylist{
+			ID:          pl.ID,
+			Name:        pl.Name,
+			ArtworkPath: pl.ArtworkPath.String,
+			PlayedAt:    pl.PlayedAt,
+		}
+	}
+	return result
+}
+
+// SetRecentPlaylist upserts a recently played playlist.
+func (a *App) SetRecentPlaylist(playlist RecentPlaylist) error {
+	if a.dq == nil {
+		return fmt.Errorf("appDB not initialised")
+	}
+	return a.dq.SetRecentPlaylist(context.Background(), desktopdb.SetRecentPlaylistParams{
+		ID:          playlist.ID,
+		Name:        playlist.Name,
+		ArtworkPath: nullString(playlist.ArtworkPath),
+		PlayedAt:    playlist.PlayedAt,
+	})
+}
+
+func boolToInt(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func nullString(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{}
+	}
+	return sql.NullString{String: s, Valid: true}
+}

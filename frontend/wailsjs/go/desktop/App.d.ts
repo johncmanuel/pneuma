@@ -41,6 +41,10 @@ export function GetLocalTracksByPaths(arg1:Array<string>):Promise<Array<desktop.
 
 export function GetLocalTracksPage(arg1:Array<string>,arg2:number,arg3:number):Promise<Array<desktop.LocalTrack>>;
 
+export function GetRecentAlbums():Promise<Array<desktop.RecentAlbum>>;
+
+export function GetRecentPlaylists():Promise<Array<desktop.RecentPlaylist>>;
+
 export function GetServerURL():Promise<string>;
 
 export function GetToken():Promise<string>;
@@ -66,6 +70,10 @@ export function SearchLocalTracks(arg1:Array<string>,arg2:string):Promise<Array<
 export function SecondInstanceLaunch(arg1:options.SecondInstanceData):Promise<void>;
 
 export function SetLocalPlaylistItems(arg1:string,arg2:Array<desktop.LocalPlaylistItem>):Promise<void>;
+
+export function SetRecentAlbum(arg1:desktop.RecentAlbum):Promise<void>;
+
+export function SetRecentPlaylist(arg1:desktop.RecentPlaylist):Promise<void>;
 
 export function UnwatchLocalFolder(arg1:string):Promise<void>;
 
