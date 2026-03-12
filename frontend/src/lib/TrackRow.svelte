@@ -14,6 +14,7 @@
     addTrackToPlaylist,
     type PlaylistSummary
   } from "../stores/playlists";
+  import { connected } from "../utils/api";
 
   export let track: Track | null = null;
   export let active: boolean = false;
@@ -82,6 +83,7 @@
   class="track-row"
   class:active
   class:hide-album={hideAlbum}
+  class:offline={!isLocal && !$connected}
   on:dblclick={() => dispatch("play", track)}
   on:click={() => dispatch("select")}
   on:contextmenu={onContext}
@@ -152,6 +154,9 @@
   }
   .track-row.active {
     color: var(--accent);
+  }
+  .track-row.offline {
+    opacity: 0.4;
   }
   .num {
     font-size: 12px;

@@ -21,6 +21,10 @@ export interface Track {
   artwork_id: string;
 }
 
+export function isRemoteTrack(id: string): boolean {
+  return !id.startsWith("/") && !/^[a-zA-Z]:[/\\]/.test(id);
+}
+
 export interface PlayerState {
   trackId: string;
   track: Track | null;

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { playerState, type Track } from "../stores/player";
+  import { playerState, type Track, isRemoteTrack } from "../stores/player";
   import { fetchTracksByIDs } from "../stores/library";
   import { resolveLocalTracksByPaths } from "../stores/localLibrary";
   import {
@@ -10,10 +10,11 @@
     pushNav
   } from "../stores/ui";
   import { formatDuration } from "./TrackRow.svelte";
-  import { streamUrl, artworkUrl } from "../utils/api";
+  import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { onMount, onDestroy } from "svelte";
   import { shuffle } from "../utils/algos";
+  import { addToast } from "../stores/toasts";
 
   let audio: HTMLAudioElement;
   let deviceId = "desktop";
@@ -49,6 +50,17 @@
     $playerState.trackId?.startsWith("/") ||
     /^[a-zA-Z]:[/\\]/.test($playerState.trackId ?? "")
   );
+
+  // When connection is lost and current track is remote, stop playback and skip to next
+  let wasConnected = true;
+  $: if (wasConnected && !$connected && $playerState.trackId && !isLocal) {
+    wasConnected = false;
+    playerState.update((s) => ({ ...s, paused: true }));
+    skipNext();
+  }
+  $: if ($connected) {
+    wasConnected = true;
+  }
 
   /** Cache of resolved tracks — avoids re-fetching on every skip. */
   const trackCache = new Map<string, Track>();
@@ -168,7 +180,45 @@
       nextQueue = base;
       nextIdx = 0;
     }
-    const nextId = nextQueue[nextIdx];
+
+    // Skip offline tracks (remote tracks when not connected to server)
+    let nextId = nextQueue[nextIdx];
+    let skippedCount = 0;
+    while (nextId && isRemoteTrack(nextId) && !$connected) {
+      skippedCount++;
+      nextIdx++;
+      if (nextIdx >= nextQueue.length) {
+        const base =
+          $playerState.baseQueue.length > 0
+            ? $playerState.baseQueue
+            : nextQueue;
+        nextQueue = base;
+        nextIdx = 0;
+      }
+      nextId = nextQueue[nextIdx];
+      // If we've looped through all tracks and they're all offline, stop
+      if (
+        !nextId ||
+        skippedCount >= q.length + ($playerState.baseQueue.length || 0)
+      ) {
+        playerState.update((s) => ({
+          ...s,
+          paused: true,
+          trackId: "",
+          track: null
+        }));
+        addToast("All tracks are offline", "warning");
+        return;
+      }
+    }
+
+    if (skippedCount > 0) {
+      addToast(
+        `Skipped ${skippedCount} offline track${skippedCount > 1 ? "s" : ""}`,
+        "info"
+      );
+    }
+
     const nextTrack = await findTrackById(nextId);
     audioDurationMs = 0;
     playerState.update((s) => ({

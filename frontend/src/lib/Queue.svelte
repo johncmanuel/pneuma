@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { playerState, type Track } from "../stores/player";
+  import { playerState, type Track, isRemoteTrack } from "../stores/player";
   import { fetchTracksByIDs } from "../stores/library";
   import { resolveLocalTracksByPaths } from "../stores/localLibrary";
   import { closePanel } from "../stores/ui";
   import { formatDuration } from "./TrackRow.svelte";
   import { artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
+  import { addToast } from "../stores/toasts";
 
   $: queue = $playerState.queue ?? [];
   $: currentIndex = $playerState.queueIndex ?? 0;
@@ -95,6 +96,13 @@
     const newIndex = currentIndex + 1 + idx;
     const isLocalTrack =
       track.id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(track.id);
+
+    // Don't play offline tracks - skip to next available
+    if (!isLocalTrack && isRemoteTrack(track.id) && !$connected) {
+      addToast("Cannot play offline track", "warning");
+      return;
+    }
+
     playerState.update((s) => ({
       ...s,
       trackId: track.id,

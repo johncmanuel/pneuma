@@ -338,6 +338,7 @@
               active={$currentTrackId === track.id}
               dateAdded={formatDate(item.added_at)}
               showRemove={true}
+              isLocal={item.source === "local_ref"}
               on:play={() => handlePlay(item)}
               on:addToQueue
               on:remove={() => handleRemove(item)}
