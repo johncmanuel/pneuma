@@ -1,32 +1,34 @@
 <script lang="ts">
-  import { login, register } from "./api"
+  import { login, register } from "./api";
 
-  let username = ""
-  let password = ""
-  let error = ""
-  let mode: "login" | "register" = "login"
-  let loading = false
+  let username = "";
+  let password = "";
+  let error = "";
+  let mode: "login" | "register" = "login";
+  let loading = false;
 
   async function handleSubmit() {
-    error = ""
+    error = "";
     if (!username.trim() || !password) {
-      error = "Username and password required"
-      return
+      error = "Username and password required";
+      return;
     }
-    loading = true
+    loading = true;
     const err =
       mode === "login"
         ? await login(username.trim(), password)
-        : await register(username.trim(), password)
-    loading = false
-    if (err) error = err
+        : await register(username.trim(), password);
+    loading = false;
+    if (err) error = err;
   }
 </script>
 
 <div class="login-page">
   <div class="card">
     <h1 class="logo">♫ Pneuma</h1>
-    <p class="subtitle text-2">{mode === "login" ? "Sign in to your server" : "Create an account"}</p>
+    <p class="subtitle text-2">
+      {mode === "login" ? "Sign in to your server" : "Create an account"}
+    </p>
 
     <form on:submit|preventDefault={handleSubmit}>
       <label>
@@ -35,7 +37,11 @@
       </label>
       <label>
         <span class="text-2">Password</span>
-        <input type="password" bind:value={password} autocomplete={mode === "login" ? "current-password" : "new-password"} />
+        <input
+          type="password"
+          bind:value={password}
+          autocomplete={mode === "login" ? "current-password" : "new-password"}
+        />
       </label>
 
       {#if error}
@@ -49,9 +55,21 @@
 
     <p class="toggle text-3">
       {#if mode === "login"}
-        Don't have an account? <button class="link-btn" on:click={() => { mode = "register"; error = "" }}>Register</button>
+        Don't have an account? <button
+          class="link-btn"
+          on:click={() => {
+            mode = "register";
+            error = "";
+          }}>Register</button
+        >
       {:else}
-        Already have an account? <button class="link-btn" on:click={() => { mode = "login"; error = "" }}>Sign In</button>
+        Already have an account? <button
+          class="link-btn"
+          on:click={() => {
+            mode = "login";
+            error = "";
+          }}>Sign In</button
+        >
       {/if}
     </p>
   </div>
@@ -116,7 +134,9 @@
     font-size: 14px;
     transition: opacity 0.15s;
   }
-  .primary-btn:hover:not(:disabled) { opacity: 0.9; }
+  .primary-btn:hover:not(:disabled) {
+    opacity: 0.9;
+  }
 
   .toggle {
     text-align: center;

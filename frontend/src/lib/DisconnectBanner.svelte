@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { serverDisconnected } from "../stores/ws"
+  import { serverDisconnected } from "../stores/ws";
 </script>
 
 {#if $serverDisconnected}
@@ -27,8 +27,14 @@
   }
 
   @keyframes slide-down {
-    from { transform: translateY(-100%); opacity: 0; }
-    to   { transform: translateY(0);     opacity: 1; }
+    from {
+      transform: translateY(-100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
 
   .disconnect-icon {

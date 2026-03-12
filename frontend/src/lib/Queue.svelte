@@ -1,55 +1,60 @@
 <script lang="ts">
-  import { playerState, type Track } from "../stores/player"
-  import { fetchTracksByIDs } from "../stores/library"
-  import { resolveLocalTracksByPaths } from "../stores/localLibrary"
-  import { closePanel } from "../stores/ui"
-  import { formatDuration } from "./TrackRow.svelte"
-  import { artworkUrl, connected } from "../utils/api"
-  import { wsSend } from "../stores/ws"
+  import { playerState, type Track } from "../stores/player";
+  import { fetchTracksByIDs } from "../stores/library";
+  import { resolveLocalTracksByPaths } from "../stores/localLibrary";
+  import { closePanel } from "../stores/ui";
+  import { formatDuration } from "./TrackRow.svelte";
+  import { artworkUrl, connected } from "../utils/api";
+  import { wsSend } from "../stores/ws";
 
-  $: queue = $playerState.queue ?? []
-  $: currentIndex = $playerState.queueIndex ?? 0
-  $: nowPlayingTrack = $playerState.track
+  $: queue = $playerState.queue ?? [];
+  $: currentIndex = $playerState.queueIndex ?? 0;
+  $: nowPlayingTrack = $playerState.track;
 
   // Cached map of track ID → Track for queue resolution.
   // Populated lazily — only fetches IDs not already in the cache.
-  const trackCache = new Map<string, Track>()
-  let upNext: Track[] = []
-  let resolving = false
+  const trackCache = new Map<string, Track>();
+  let upNext: Track[] = [];
+  let resolving = false;
 
   // When the queue changes, resolve any new IDs from the backend.
   $: if (queue.length > 0 || currentIndex >= 0) {
-    resolveQueue(queue, currentIndex)
+    resolveQueue(queue, currentIndex);
   }
 
   async function resolveQueue(q: string[], idx: number) {
-    const ids = q.slice(idx + 1)
-    if (ids.length === 0) { upNext = []; return }
+    const ids = q.slice(idx + 1);
+    if (ids.length === 0) {
+      upNext = [];
+      return;
+    }
 
     // Split IDs into cached vs uncached
-    const uncachedRemote: string[] = []
-    const uncachedLocal: string[] = []
+    const uncachedRemote: string[] = [];
+    const uncachedLocal: string[] = [];
     for (const id of ids) {
       if (!trackCache.has(id)) {
         // Local tracks use filesystem paths as IDs (contain /)
         if (id.includes("/")) {
-          uncachedLocal.push(id)
+          uncachedLocal.push(id);
         } else {
-          uncachedRemote.push(id)
+          uncachedRemote.push(id);
         }
       }
     }
 
     // Fetch uncached tracks from the backend
     if (uncachedRemote.length > 0 || uncachedLocal.length > 0) {
-      resolving = true
+      resolving = true;
       try {
         const [remoteTracks, localTracks] = await Promise.all([
           uncachedRemote.length > 0 ? fetchTracksByIDs(uncachedRemote) : [],
-          uncachedLocal.length > 0 ? resolveLocalTracksByPaths(uncachedLocal) : [],
-        ])
+          uncachedLocal.length > 0
+            ? resolveLocalTracksByPaths(uncachedLocal)
+            : []
+        ]);
         for (const t of remoteTracks) {
-          trackCache.set(t.id, t)
+          trackCache.set(t.id, t);
         }
         for (const lt of localTracks) {
           trackCache.set(lt.path, {
@@ -68,27 +73,42 @@
             duration_ms: lt.duration_ms,
             bitrate_kbps: 0,
             replay_gain_track: 0,
-            artwork_id: "",
-          })
+            artwork_id: ""
+          });
         }
       } finally {
-        resolving = false
+        resolving = false;
       }
     }
 
     // Build the resolved list from cache
-    upNext = ids.map(id => trackCache.get(id)).filter((t): t is Track => t != null)
+    upNext = ids
+      .map((id) => trackCache.get(id))
+      .filter((t): t is Track => t != null);
   }
 
   function close() {
-    closePanel()
+    closePanel();
   }
 
   function playFromQueue(track: Track, idx: number) {
-    const newIndex = currentIndex + 1 + idx
-    const isLocalTrack = track.id.startsWith('/') || /^[a-zA-Z]:[/\\]/.test(track.id)
-    playerState.update(s => ({ ...s, trackId: track.id, track, queueIndex: newIndex, positionMs: 0, paused: false }))
-    if (!isLocalTrack && $connected) wsSend("playback.play", { device_id: "desktop", track_id: track.id, position_ms: 0 })
+    const newIndex = currentIndex + 1 + idx;
+    const isLocalTrack =
+      track.id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(track.id);
+    playerState.update((s) => ({
+      ...s,
+      trackId: track.id,
+      track,
+      queueIndex: newIndex,
+      positionMs: 0,
+      paused: false
+    }));
+    if (!isLocalTrack && $connected)
+      wsSend("playback.play", {
+        device_id: "desktop",
+        track_id: track.id,
+        position_ms: 0
+      });
   }
 </script>
 
@@ -103,14 +123,20 @@
     <div class="now-playing-item">
       <div class="art-sm">
         <img
-          src="{artworkUrl(nowPlayingTrack.id)}"
+          src={artworkUrl(nowPlayingTrack.id)}
           alt=""
-          on:error={(e) => { e.currentTarget.style.display = 'none' }}
+          on:error={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
         />
       </div>
       <div class="track-info">
         <span class="name truncate">{nowPlayingTrack.title}</span>
-        <span class="artist truncate text-3">{nowPlayingTrack.artist_name || nowPlayingTrack.album_artist || "Unknown"}</span>
+        <span class="artist truncate text-3"
+          >{nowPlayingTrack.artist_name ||
+            nowPlayingTrack.album_artist ||
+            "Unknown"}</span
+        >
       </div>
     </div>
   {/if}
@@ -120,11 +146,13 @@
     {#if upNext.length === 0}
       <p class="empty text-3">Nothing in queue</p>
     {:else}
-      {#each upNext as track, i (track.id + '-' + i)}
+      {#each upNext as track, i (track.id + "-" + i)}
         <button class="queue-item" on:click={() => playFromQueue(track, i)}>
           <div class="track-info">
             <span class="name truncate">{track.title}</span>
-            <span class="artist truncate text-3">{track.artist_name || track.album_artist || "Unknown"}</span>
+            <span class="artist truncate text-3"
+              >{track.artist_name || track.album_artist || "Unknown"}</span
+            >
           </div>
           <span class="dur text-3">{formatDuration(track.duration_ms)}</span>
         </button>
@@ -151,7 +179,11 @@
     flex-shrink: 0;
   }
 
-  h3 { margin: 0; font-size: 16px; font-weight: 700; }
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+  }
 
   .close-btn {
     font-size: 20px;
@@ -159,7 +191,9 @@
     padding: 2px 6px;
     line-height: 1;
   }
-  .close-btn:hover { color: var(--text-1); }
+  .close-btn:hover {
+    color: var(--text-1);
+  }
 
   .section-label {
     font-size: 11px;
@@ -188,7 +222,11 @@
     flex-shrink: 0;
     background: var(--surface-2);
   }
-  .art-sm img { width: 100%; height: 100%; object-fit: cover; }
+  .art-sm img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 
   .queue-list {
     flex: 1;
@@ -205,7 +243,9 @@
     padding: 6px 8px;
     border-radius: 4px;
   }
-  .queue-item:hover { background: var(--surface-hover); }
+  .queue-item:hover {
+    background: var(--surface-hover);
+  }
 
   .track-info {
     display: flex;
@@ -215,8 +255,19 @@
     gap: 1px;
   }
 
-  .name { font-size: 13px; font-weight: 500; }
-  .artist { font-size: 11px; }
-  .dur { font-size: 11px; flex-shrink: 0; }
-  .empty { padding: 8px; font-size: 13px; }
+  .name {
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .artist {
+    font-size: 11px;
+  }
+  .dur {
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .empty {
+    padding: 8px;
+    font-size: 13px;
+  }
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { currentUser, logout } from "./api"
+  import { currentUser, logout } from "./api";
 </script>
 
 <nav class="sidebar">
@@ -44,7 +44,10 @@
     font-weight: 700;
     font-size: 18px;
   }
-  .brand-icon { color: var(--accent); font-size: 22px; }
+  .brand-icon {
+    color: var(--accent);
+    font-size: 22px;
+  }
 
   .nav-btn {
     display: flex;
@@ -56,12 +59,22 @@
     color: var(--text-2);
     text-align: left;
     width: 100%;
-    transition: background 0.12s, color 0.12s;
+    transition:
+      background 0.12s,
+      color 0.12s;
   }
-  .nav-btn:hover { background: var(--surface-hover); color: var(--text-1); }
+  .nav-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-1);
+  }
 
-  .nav-icon { font-size: 16px; flex-shrink: 0; }
-  .nav-label { flex: 1; }
+  .nav-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .nav-label {
+    flex: 1;
+  }
 
   .sidebar-footer {
     padding: 12px 8px 0;
@@ -88,6 +101,10 @@
     font-weight: 600;
   }
 
-  .logout-btn { color: var(--text-3); }
-  .logout-btn:hover { color: var(--danger); }
+  .logout-btn {
+    color: var(--text-3);
+  }
+  .logout-btn:hover {
+    color: var(--danger);
+  }
 </style>

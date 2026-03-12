@@ -1,45 +1,46 @@
 <script lang="ts">
-  import { onMount } from "svelte"
-  import { apiFetch } from "../api"
+  import { onMount } from "svelte";
+  import { apiFetch } from "../api";
 
   interface AuditEntry {
-    id: string
-    user_id: string
-    action: string
-    target_type: string
-    target_id: string
-    detail: string
-    created_at: string
+    id: string;
+    user_id: string;
+    action: string;
+    target_type: string;
+    target_id: string;
+    detail: string;
+    created_at: string;
   }
 
-  let entries: AuditEntry[] = []
-  let loading = false
+  let entries: AuditEntry[] = [];
+  let loading = false;
 
-  onMount(loadAudit)
+  onMount(loadAudit);
 
   async function loadAudit() {
-    loading = true
+    loading = true;
     try {
-      const r = await apiFetch("/api/admin/audit")
-      if (r.ok) entries = await r.json()
+      const r = await apiFetch("/api/admin/audit");
+      if (r.ok) entries = await r.json();
     } finally {
-      loading = false
+      loading = false;
     }
   }
 
   function formatDate(iso: string): string {
     try {
-      const d = new Date(iso)
-      return d.toLocaleString()
+      const d = new Date(iso);
+      return d.toLocaleString();
     } catch {
-      return iso
+      return iso;
     }
   }
 
   function actionColor(action: string): string {
-    if (action.includes("delete")) return "var(--danger)"
-    if (action.includes("upload") || action.includes("create")) return "var(--accent)"
-    return "var(--text-2)"
+    if (action.includes("delete")) return "var(--danger)";
+    if (action.includes("upload") || action.includes("create"))
+      return "var(--accent)";
+    return "var(--text-2)";
   }
 </script>
 
@@ -66,7 +67,11 @@
             <tr>
               <td class="text-3 nowrap">{formatDate(entry.created_at)}</td>
               <td>
-                <span class="action-tag" style="color: {actionColor(entry.action)}">{entry.action}</span>
+                <span
+                  class="action-tag"
+                  style="color: {actionColor(entry.action)}"
+                  >{entry.action}</span
+                >
               </td>
               <td class="text-2">{entry.target_type}</td>
               <td class="mono text-3">{entry.target_id?.slice(0, 8) ?? "–"}</td>
@@ -81,9 +86,15 @@
 </div>
 
 <style>
-  .panel { display: flex; flex-direction: column; gap: 12px; }
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 
-  .table-wrap { overflow-x: auto; }
+  .table-wrap {
+    overflow-x: auto;
+  }
 
   table {
     width: 100%;
@@ -106,10 +117,17 @@
     border-bottom: 1px solid var(--border);
   }
 
-  tr:hover { background: var(--surface-hover); }
+  tr:hover {
+    background: var(--surface-hover);
+  }
 
-  .nowrap { white-space: nowrap; }
-  .mono { font-family: monospace; font-size: 12px; }
+  .nowrap {
+    white-space: nowrap;
+  }
+  .mono {
+    font-family: monospace;
+    font-size: 12px;
+  }
 
   .action-tag {
     font-weight: 600;

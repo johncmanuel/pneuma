@@ -1,4 +1,4 @@
-import { AppDBGet, AppDBSet, AppDBDelete } from "../../wailsjs/go/desktop/App"
+import { AppDBGet, AppDBSet, AppDBDelete } from "../../wailsjs/go/desktop/App";
 
 /**
  * Async key-value store backed by the app's local SQLite database.
@@ -16,22 +16,26 @@ import { AppDBGet, AppDBSet, AppDBDelete } from "../../wailsjs/go/desktop/App"
 export const db = {
   async get(key: string): Promise<string | null> {
     try {
-      const v = await AppDBGet(key)
-      return v === "" ? null : v
+      const v = await AppDBGet(key);
+      return v === "" ? null : v;
     } catch {
-      return null
+      return null;
     }
   },
 
   async set(key: string, value: string): Promise<void> {
     try {
-      await AppDBSet(key, value)
-    } catch { /* non-fatal */ }
+      await AppDBSet(key, value);
+    } catch {
+      /* non-fatal */
+    }
   },
 
   async del(key: string): Promise<void> {
     try {
-      await AppDBDelete(key)
-    } catch { /* non-fatal */ }
-  },
-}
+      await AppDBDelete(key);
+    } catch {
+      /* non-fatal */
+    }
+  }
+};

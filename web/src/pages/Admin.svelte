@@ -1,39 +1,45 @@
 <script lang="ts">
-  import { currentUser } from "../lib/api"
-  import TracksPanel from "../lib/admin/TracksPanel.svelte"
-  import UsersPanel from "../lib/admin/UsersPanel.svelte"
-  import AuditPanel from "../lib/admin/AuditPanel.svelte"
+  import { currentUser } from "../lib/api";
+  import TracksPanel from "../lib/admin/TracksPanel.svelte";
+  import UsersPanel from "../lib/admin/UsersPanel.svelte";
+  import AuditPanel from "../lib/admin/AuditPanel.svelte";
 
-  type Tab = "tracks" | "users" | "audit"
+  type Tab = "tracks" | "users" | "audit";
 
-  $: isAdmin = $currentUser?.is_admin ?? false
+  $: isAdmin = $currentUser?.is_admin ?? false;
   $: hasAnyPerm =
     isAdmin ||
     ($currentUser?.can_upload ?? false) ||
     ($currentUser?.can_edit ?? false) ||
-    ($currentUser?.can_delete ?? false)
+    ($currentUser?.can_delete ?? false);
 
   // Determine default tab
-  $: defaultTab = hasAnyPerm ? "tracks" : "tracks"
-  let activeTab: Tab = "tracks"
+  $: defaultTab = hasAnyPerm ? "tracks" : "tracks";
+  let activeTab: Tab = "tracks";
 
-  $: availableTabs = buildTabs($currentUser)
+  $: availableTabs = buildTabs($currentUser);
 
   function buildTabs(user: typeof $currentUser): { id: Tab; label: string }[] {
-    const tabs: { id: Tab; label: string }[] = []
-    if (user && (user.is_admin || user.can_upload || user.can_edit || user.can_delete)) {
-      tabs.push({ id: "tracks", label: "Tracks" })
+    const tabs: { id: Tab; label: string }[] = [];
+    if (
+      user &&
+      (user.is_admin || user.can_upload || user.can_edit || user.can_delete)
+    ) {
+      tabs.push({ id: "tracks", label: "Tracks" });
     }
     if (user?.is_admin) {
-      tabs.push({ id: "users", label: "Users" })
-      tabs.push({ id: "audit", label: "Audit Log" })
+      tabs.push({ id: "users", label: "Users" });
+      tabs.push({ id: "audit", label: "Audit Log" });
     }
-    return tabs
+    return tabs;
   }
 
   // Reset to first available tab when permissions change
-  $: if (availableTabs.length > 0 && !availableTabs.find((t) => t.id === activeTab)) {
-    activeTab = availableTabs[0].id
+  $: if (
+    availableTabs.length > 0 &&
+    !availableTabs.find((t) => t.id === activeTab)
+  ) {
+    activeTab = availableTabs[0].id;
   }
 </script>
 
@@ -50,7 +56,9 @@
         <button
           class="tab-btn"
           class:active={activeTab === tab.id}
-          on:click={() => { activeTab = tab.id }}
+          on:click={() => {
+            activeTab = tab.id;
+          }}
         >
           {tab.label}
         </button>
@@ -84,7 +92,11 @@
     flex-shrink: 0;
   }
 
-  h2 { margin: 0; font-size: 20px; font-weight: 700; }
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+  }
 
   .tabs {
     display: flex;
@@ -99,9 +111,13 @@
     font-size: 14px;
     color: var(--text-2);
     border-bottom: 2px solid transparent;
-    transition: color 0.12s, border-color 0.12s;
+    transition:
+      color 0.12s,
+      border-color 0.12s;
   }
-  .tab-btn:hover { color: var(--text-1); }
+  .tab-btn:hover {
+    color: var(--text-1);
+  }
   .tab-btn.active {
     color: var(--accent);
     border-bottom-color: var(--accent);

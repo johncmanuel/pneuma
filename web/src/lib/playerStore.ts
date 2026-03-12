@@ -1,13 +1,13 @@
-import { writable, derived } from "svelte/store"
-import type { Track } from "./TrackRow.svelte"
+import { writable, derived } from "svelte/store";
+import type { Track } from "./TrackRow.svelte";
 
 export interface WebPlayerState {
-  trackId: string
-  track: Track | null
-  queue: string[]
-  queueIndex: number
-  positionMs: number
-  paused: boolean
+  trackId: string;
+  track: Track | null;
+  queue: string[];
+  queueIndex: number;
+  positionMs: number;
+  paused: boolean;
 }
 
 const initial: WebPlayerState = {
@@ -16,9 +16,12 @@ const initial: WebPlayerState = {
   queue: [],
   queueIndex: 0,
   positionMs: 0,
-  paused: true,
-}
+  paused: true
+};
 
-export const webPlayerState = writable<WebPlayerState>(initial)
+export const webPlayerState = writable<WebPlayerState>(initial);
 
-export const isPlaying = derived(webPlayerState, ($s) => !$s.paused && $s.trackId !== "")
+export const isPlaying = derived(
+  webPlayerState,
+  ($s) => !$s.paused && $s.trackId !== ""
+);

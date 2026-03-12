@@ -1,23 +1,23 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte"
-  import { loggedIn, tryAutoAuth } from "./lib/api"
-  import { connectWS, disconnectWS } from "./lib/ws"
-  import Login from "./lib/Login.svelte"
-  import Sidebar from "./lib/Sidebar.svelte"
-  import Admin from "./pages/Admin.svelte"
+  import { onMount, onDestroy } from "svelte";
+  import { loggedIn, tryAutoAuth } from "./lib/api";
+  import { connectWS, disconnectWS } from "./lib/ws";
+  import Login from "./lib/Login.svelte";
+  import Sidebar from "./lib/Sidebar.svelte";
+  import Admin from "./pages/Admin.svelte";
 
-  let ready = false
+  let ready = false;
 
   onMount(async () => {
-    await tryAutoAuth()
-    ready = true
-    if ($loggedIn) connectWS()
-  })
+    await tryAutoAuth();
+    ready = true;
+    if ($loggedIn) connectWS();
+  });
 
-  $: if (ready && $loggedIn) connectWS()
-  $: if (ready && !$loggedIn) disconnectWS()
+  $: if (ready && $loggedIn) connectWS();
+  $: if (ready && !$loggedIn) disconnectWS();
 
-  onDestroy(() => disconnectWS())
+  onDestroy(() => disconnectWS());
 </script>
 
 {#if !ready}

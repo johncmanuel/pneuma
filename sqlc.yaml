@@ -1,6 +1,6 @@
 version: "2"
 sql:
-  # Server database 
+  # Server database
   - engine: "sqlite"
     queries: "internal/store/sqlite/sql/server/query"
     schema: "internal/store/sqlite/sql/server/migrations"

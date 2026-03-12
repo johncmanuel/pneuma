@@ -1,171 +1,173 @@
 <!-- this'll be used in the web version of the desktop app later in the future -->
 
 <script lang="ts">
-  import { onMount } from "svelte"
-  import { apiFetch, artworkUrl, currentUser } from "../lib/api"
-  import { webPlayerState } from "../lib/playerStore"
-  import { libraryVersion } from "../lib/ws"
-  import TrackRow from "../lib/TrackRow.svelte"
-  import type { Track } from "../lib/TrackRow.svelte"
+  import { onMount } from "svelte";
+  import { apiFetch, artworkUrl, currentUser } from "../lib/api";
+  import { webPlayerState } from "../lib/playerStore";
+  import { libraryVersion } from "../lib/ws";
+  import TrackRow from "../lib/TrackRow.svelte";
+  import type { Track } from "../lib/TrackRow.svelte";
 
-  let tracks: Track[] = []
-  let loading = false
-  let selectedAlbum: string | null = null
+  let tracks: Track[] = [];
+  let loading = false;
+  let selectedAlbum: string | null = null;
 
   // Upload state
-  let uploading = false
-  let uploadProgress = ""
-  let fileInput: HTMLInputElement
-  let dragOver = false
+  let uploading = false;
+  let uploadProgress = "";
+  let fileInput: HTMLInputElement;
+  let dragOver = false;
 
-  $: canUpload = $currentUser?.is_admin || $currentUser?.can_upload
+  $: canUpload = $currentUser?.is_admin || $currentUser?.can_upload;
 
   interface AlbumGroup {
-    key: string
-    name: string
-    artist: string
-    tracks: Track[]
-    firstTrackId: string
+    key: string;
+    name: string;
+    artist: string;
+    tracks: Track[];
+    firstTrackId: string;
   }
 
-  const UNORGANIZED_KEY = "__unorganized__"
+  const UNORGANIZED_KEY = "__unorganized__";
 
   function buildAlbumGroups(allTracks: Track[]): AlbumGroup[] {
-    const map = new Map<string, AlbumGroup>()
+    const map = new Map<string, AlbumGroup>();
     for (const t of allTracks) {
-      const hasAlbum = (t.album_name ?? "").trim() !== ""
-      const name = hasAlbum ? t.album_name : "Unorganized"
-      const artist = hasAlbum ? (t.album_artist || "Unknown Artist") : "Various"
-      const key = hasAlbum ? `${name}|||${artist}` : UNORGANIZED_KEY
-      let g = map.get(key)
+      const hasAlbum = (t.album_name ?? "").trim() !== "";
+      const name = hasAlbum ? t.album_name : "Unorganized";
+      const artist = hasAlbum ? t.album_artist || "Unknown Artist" : "Various";
+      const key = hasAlbum ? `${name}|||${artist}` : UNORGANIZED_KEY;
+      let g = map.get(key);
       if (!g) {
-        g = { key, name, artist, tracks: [], firstTrackId: t.id }
-        map.set(key, g)
+        g = { key, name, artist, tracks: [], firstTrackId: t.id };
+        map.set(key, g);
       }
-      g.tracks.push(t)
+      g.tracks.push(t);
     }
-    const unorg = map.get(UNORGANIZED_KEY)
-    map.delete(UNORGANIZED_KEY)
-    const groups = Array.from(map.values())
-    groups.sort((a, b) => a.name.localeCompare(b.name))
+    const unorg = map.get(UNORGANIZED_KEY);
+    map.delete(UNORGANIZED_KEY);
+    const groups = Array.from(map.values());
+    groups.sort((a, b) => a.name.localeCompare(b.name));
     for (const g of groups) {
       g.tracks.sort(
         (a, b) =>
           (a.disc_number ?? 0) - (b.disc_number ?? 0) ||
-          (a.track_number ?? 0) - (b.track_number ?? 0),
-      )
+          (a.track_number ?? 0) - (b.track_number ?? 0)
+      );
     }
     if (unorg) {
-      unorg.tracks.sort((a, b) =>
-        (a.title || "").localeCompare(b.title || ""),
-      )
-      groups.push(unorg)
+      unorg.tracks.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+      groups.push(unorg);
     }
-    return groups
+    return groups;
   }
 
-  $: albumGroups = buildAlbumGroups(tracks)
+  $: albumGroups = buildAlbumGroups(tracks);
   $: currentAlbumGroup = selectedAlbum
-    ? albumGroups.find((g) => g.key === selectedAlbum) ?? null
-    : null
+    ? (albumGroups.find((g) => g.key === selectedAlbum) ?? null)
+    : null;
 
   onMount(async () => {
-    loading = true
+    loading = true;
     try {
-      await reloadTracks()
+      await reloadTracks();
     } finally {
-      loading = false
+      loading = false;
     }
-  })
+  });
 
   // Re-fetch whenever the server reports any library mutation via WebSocket.
-  let _prevLibVer: number | undefined
+  let _prevLibVer: number | undefined;
   $: {
-    const v = $libraryVersion
-    if (_prevLibVer !== undefined && v !== _prevLibVer) reloadTracks()
-    _prevLibVer = v
+    const v = $libraryVersion;
+    if (_prevLibVer !== undefined && v !== _prevLibVer) reloadTracks();
+    _prevLibVer = v;
   }
 
   function playTrack(track: Track, albumTracks: Track[]) {
-    const idx = albumTracks.findIndex((t) => t.id === track.id)
-    const queueIds = albumTracks.map((t) => t.id)
+    const idx = albumTracks.findIndex((t) => t.id === track.id);
+    const queueIds = albumTracks.map((t) => t.id);
     webPlayerState.set({
       trackId: track.id,
       track,
       queue: queueIds,
       queueIndex: idx >= 0 ? idx : 0,
       positionMs: 0,
-      paused: false,
-    })
+      paused: false
+    });
   }
 
   // ── Upload helpers ────────────────────────────────────────────
   async function uploadFiles(files: FileList | File[]) {
-    if (!files.length) return
-    uploading = true
-    let done = 0
-    const total = files.length
+    if (!files.length) return;
+    uploading = true;
+    let done = 0;
+    const total = files.length;
     try {
       for (const file of files) {
-        uploadProgress = `Uploading ${done + 1}/${total}: ${file.name}`
-        const form = new FormData()
-        form.append("file", file)
+        uploadProgress = `Uploading ${done + 1}/${total}: ${file.name}`;
+        const form = new FormData();
+        form.append("file", file);
         await apiFetch("/api/library/tracks/upload", {
           method: "POST",
-          body: form,
-        })
-        done++
+          body: form
+        });
+        done++;
       }
-      uploadProgress = `Uploaded ${done} file${done !== 1 ? "s" : ""}`
-      await reloadTracks()
+      uploadProgress = `Uploaded ${done} file${done !== 1 ? "s" : ""}`;
+      await reloadTracks();
     } catch (e: any) {
-      uploadProgress = `Upload error: ${e.message ?? e}`
+      uploadProgress = `Upload error: ${e.message ?? e}`;
     } finally {
-      uploading = false
-      if (fileInput) fileInput.value = ""
-      setTimeout(() => { uploadProgress = "" }, 4000)
+      uploading = false;
+      if (fileInput) fileInput.value = "";
+      setTimeout(() => {
+        uploadProgress = "";
+      }, 4000);
     }
   }
 
   async function reloadTracks() {
-    const r = await apiFetch("/api/library/tracks")
+    const r = await apiFetch("/api/library/tracks");
     if (r.ok) {
-      const data: Track[] = await r.json()
-      const seen = new Set<string>()
+      const data: Track[] = await r.json();
+      const seen = new Set<string>();
       tracks = data.filter((t) => {
-        if (seen.has(t.id)) return false
-        seen.add(t.id)
-        return true
-      })
+        if (seen.has(t.id)) return false;
+        seen.add(t.id);
+        return true;
+      });
     }
   }
 
   function handleDrop(e: DragEvent) {
-    e.preventDefault()
-    dragOver = false
-    if (!canUpload || !e.dataTransfer?.files?.length) return
-    const audioFiles = Array.from(e.dataTransfer.files).filter((f) =>
-      f.type.startsWith("audio/") || /\.(mp3|flac|ogg|opus|m4a|aac|wav|aiff|wma|ape|wv)$/i.test(f.name),
-    )
-    if (audioFiles.length) uploadFiles(audioFiles)
+    e.preventDefault();
+    dragOver = false;
+    if (!canUpload || !e.dataTransfer?.files?.length) return;
+    const audioFiles = Array.from(e.dataTransfer.files).filter(
+      (f) =>
+        f.type.startsWith("audio/") ||
+        /\.(mp3|flac|ogg|opus|m4a|aac|wav|aiff|wma|ape|wv)$/i.test(f.name)
+    );
+    if (audioFiles.length) uploadFiles(audioFiles);
   }
 
   function handleDragOver(e: DragEvent) {
-    e.preventDefault()
-    if (canUpload) dragOver = true
+    e.preventDefault();
+    if (canUpload) dragOver = true;
   }
 
   function handleDragLeave() {
-    dragOver = false
+    dragOver = false;
   }
 
   function handleFileInput() {
-    if (fileInput?.files?.length) uploadFiles(Array.from(fileInput.files))
+    if (fileInput?.files?.length) uploadFiles(Array.from(fileInput.files));
   }
 
   function hideImgOnError(e: Event) {
-    const img = e.currentTarget as HTMLImageElement
-    if (img) img.style.display = "none"
+    const img = e.currentTarget as HTMLImageElement;
+    if (img) img.style.display = "none";
   }
 </script>
 
@@ -177,14 +179,23 @@
 >
   {#if currentAlbumGroup}
     <div class="toolbar">
-      <button class="back-btn" on:click={() => { selectedAlbum = null }} title="Back to albums">← Back</button>
+      <button
+        class="back-btn"
+        on:click={() => {
+          selectedAlbum = null;
+        }}
+        title="Back to albums">← Back</button
+      >
       <h2>{currentAlbumGroup.name}</h2>
     </div>
-    <p class="album-meta text-2">{currentAlbumGroup.artist} · {currentAlbumGroup.tracks.length} tracks</p>
+    <p class="album-meta text-2">
+      {currentAlbumGroup.artist} · {currentAlbumGroup.tracks.length} tracks
+    </p>
 
     <div class="track-list">
       <div class="track-header">
-        <span>#</span><span>Title</span><span>Artist</span><span>Album</span><span>Duration</span>
+        <span>#</span><span>Title</span><span>Artist</span><span>Album</span
+        ><span>Duration</span>
       </div>
       {#each currentAlbumGroup.tracks as track (track.id)}
         <TrackRow
@@ -208,7 +219,11 @@
             on:change={handleFileInput}
             style="display:none"
           />
-          <button class="upload-btn" on:click={() => fileInput?.click()} disabled={uploading}>
+          <button
+            class="upload-btn"
+            on:click={() => fileInput?.click()}
+            disabled={uploading}
+          >
             {uploading ? "Uploading…" : "↑ Upload Music"}
           </button>
         </div>
@@ -235,8 +250,14 @@
         {#if canUpload}
           <p class="empty-icon">♫</p>
           <p>Your library is empty</p>
-          <p class="text-3">Drag and drop audio files here, or click the button below</p>
-          <button class="upload-btn lg" on:click={() => fileInput?.click()} disabled={uploading}>
+          <p class="text-3">
+            Drag and drop audio files here, or click the button below
+          </p>
+          <button
+            class="upload-btn lg"
+            on:click={() => fileInput?.click()}
+            disabled={uploading}
+          >
             ↑ Upload Music
           </button>
         {:else}
@@ -249,9 +270,14 @@
           <button
             class="album-card"
             class:unorganized={album.key === UNORGANIZED_KEY}
-            on:click={() => { selectedAlbum = album.key }}
+            on:click={() => {
+              selectedAlbum = album.key;
+            }}
           >
-            <div class="album-art" class:unorg-art={album.key === UNORGANIZED_KEY}>
+            <div
+              class="album-art"
+              class:unorg-art={album.key === UNORGANIZED_KEY}
+            >
               {#if album.key !== UNORGANIZED_KEY}
                 <img
                   src={artworkUrl(album.firstTrackId)}
@@ -259,10 +285,19 @@
                   on:error={hideImgOnError}
                 />
               {/if}
-              <div class="album-art-placeholder">{album.key === UNORGANIZED_KEY ? "📂" : "♫"}</div>
+              <div class="album-art-placeholder">
+                {album.key === UNORGANIZED_KEY ? "📂" : "♫"}
+              </div>
             </div>
-            <p class="album-title truncate" class:unorg-title={album.key === UNORGANIZED_KEY}>{album.name}</p>
-            <p class="album-artist truncate text-3">{album.artist} · {album.tracks.length} tracks</p>
+            <p
+              class="album-title truncate"
+              class:unorg-title={album.key === UNORGANIZED_KEY}
+            >
+              {album.name}
+            </p>
+            <p class="album-artist truncate text-3">
+              {album.artist} · {album.tracks.length} tracks
+            </p>
           </button>
         {/each}
       </div>
@@ -271,8 +306,18 @@
 </section>
 
 <style>
-  section { height: 100%; display: flex; flex-direction: column; overflow-y: auto; position: relative; }
-  section.drag-over { outline: 2px dashed var(--accent); outline-offset: -4px; border-radius: 8px; }
+  section {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    position: relative;
+  }
+  section.drag-over {
+    outline: 2px dashed var(--accent);
+    outline-offset: -4px;
+    border-radius: 8px;
+  }
 
   .toolbar {
     display: flex;
@@ -283,9 +328,17 @@
     flex-shrink: 0;
   }
 
-  .toolbar-actions { display: flex; gap: 8px; align-items: center; }
+  .toolbar-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
 
-  h2 { margin: 0; font-size: 20px; font-weight: 700; }
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+  }
 
   .upload-btn {
     padding: 7px 16px;
@@ -297,9 +350,17 @@
     white-space: nowrap;
     transition: opacity 0.15s;
   }
-  .upload-btn:hover:not(:disabled) { opacity: 0.9; }
-  .upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .upload-btn.lg { padding: 12px 28px; font-size: 15px; }
+  .upload-btn:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+  .upload-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .upload-btn.lg {
+    padding: 12px 28px;
+    font-size: 15px;
+  }
 
   .upload-status {
     font-size: 13px;
@@ -354,7 +415,10 @@
     padding: 4px 8px;
     border-radius: var(--r-sm);
   }
-  .back-btn:hover { color: var(--text-1); background: var(--surface-hover); }
+  .back-btn:hover {
+    color: var(--text-1);
+    background: var(--surface-hover);
+  }
 
   .album-meta {
     font-size: 13px;
@@ -372,7 +436,9 @@
     padding: 0;
     cursor: pointer;
   }
-  .album-card:hover .album-art { border-color: var(--accent); }
+  .album-card:hover .album-art {
+    border-color: var(--accent);
+  }
 
   .album-art {
     aspect-ratio: 1;
@@ -402,17 +468,29 @@
     color: var(--text-3);
   }
 
-  .album-title { margin: 0; font-size: 13px; font-weight: 600; }
-  .album-artist { margin: 2px 0 0; font-size: 11px; }
+  .album-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .album-artist {
+    margin: 2px 0 0;
+    font-size: 11px;
+  }
 
   .unorganized .album-art,
   .unorg-art {
     border: 2px dashed var(--text-3);
     background: transparent;
   }
-  .unorg-title { font-style: italic; }
+  .unorg-title {
+    font-style: italic;
+  }
 
-  .track-list { flex: 1; overflow-y: auto; }
+  .track-list {
+    flex: 1;
+    overflow-y: auto;
+  }
 
   .track-header {
     display: grid;

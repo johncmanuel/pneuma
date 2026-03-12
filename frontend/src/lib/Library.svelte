@@ -1,90 +1,123 @@
 <script lang="ts">
-  import { loading,
-           remoteAlbumGroups, remoteAlbumGroupsTotal,
-           loadRemoteAlbumGroupsPage, loadMoreRemoteAlbumGroups,
-           type RemoteAlbumGroup } from "../stores/library"
-  import { localLoading, localFolders, addLocalFolder, removeLocalFolder, scanLocalFolders, localAlbumGroups, localAlbumGroupsTotal, localAlbumGroupsOffset, localAlbumFilter, loadLocalAlbumGroups, loadMoreLocalAlbumGroups, fetchLocalAlbumTracks, localChangeSeq, type LocalAlbumGroup } from "../stores/localLibrary"
-  import { playerState } from "../stores/player"
-  import TrackRow from "./TrackRow.svelte"
+  import {
+    loading,
+    remoteAlbumGroups,
+    remoteAlbumGroupsTotal,
+    loadRemoteAlbumGroupsPage,
+    loadMoreRemoteAlbumGroups,
+    type RemoteAlbumGroup
+  } from "../stores/library";
+  import {
+    localLoading,
+    localFolders,
+    addLocalFolder,
+    removeLocalFolder,
+    scanLocalFolders,
+    localAlbumGroups,
+    localAlbumGroupsTotal,
+    localAlbumGroupsOffset,
+    localAlbumFilter,
+    loadLocalAlbumGroups,
+    loadMoreLocalAlbumGroups,
+    fetchLocalAlbumTracks,
+    localChangeSeq,
+    type LocalAlbumGroup
+  } from "../stores/localLibrary";
+  import { playerState } from "../stores/player";
+  import TrackRow from "./TrackRow.svelte";
 
-  import type { Track } from "../stores/player"
-  import type { LocalTrack } from "../stores/localLibrary"
-  import { serverFetch, artworkUrl, connected, isReconnecting, localBase } from "../utils/api"
-  import { wsSend } from "../stores/ws"
-  import { onMount } from "svelte"
-  import { activeTab, selectedAlbum, pushNav, type LibTab } from "../stores/ui"
-  import { get, derived } from "svelte/store"
-  import { recordRecentAlbum } from "../stores/recentAlbums"
-  import { createVirtualizer } from "@tanstack/svelte-virtual"
-  import { playlists, addTracksToPlaylist, type PlaylistSummary } from "../stores/playlists"
+  import type { Track } from "../stores/player";
+  import type { LocalTrack } from "../stores/localLibrary";
+  import {
+    serverFetch,
+    artworkUrl,
+    connected,
+    isReconnecting,
+    localBase
+  } from "../utils/api";
+  import { wsSend } from "../stores/ws";
+  import { onMount } from "svelte";
+  import { activeTab, selectedAlbum, pushNav, type LibTab } from "../stores/ui";
+  import { get, derived } from "svelte/store";
+  import { recordRecentAlbum } from "../stores/recentAlbums";
+  import { createVirtualizer } from "@tanstack/svelte-virtual";
+  import {
+    playlists,
+    addTracksToPlaylist,
+    type PlaylistSummary
+  } from "../stores/playlists";
 
-  const currentTrackId = derived(playerState, $s => $s.trackId);
+  const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
   // ─── Album detail: filter & sort ────────────────────────────────────────────
-  let albumFilter = ""
-  let trackListEl: HTMLDivElement
-  let albumGridFilter = ""
-  type SortField = "default" | "title" | "artist" | "duration"
-  let albumSortField: SortField = "default"
-  let albumSortDir: "asc" | "desc" = "asc"
+  let albumFilter = "";
+  let trackListEl: HTMLDivElement;
+  let albumGridFilter = "";
+  type SortField = "default" | "title" | "artist" | "duration";
+  let albumSortField: SortField = "default";
+  let albumSortDir: "asc" | "desc" = "asc";
 
   function toggleSort(field: SortField) {
     if (albumSortField === field) {
-      albumSortDir = albumSortDir === "asc" ? "desc" : "asc"
+      albumSortDir = albumSortDir === "asc" ? "desc" : "asc";
     } else {
-      albumSortField = field
-      albumSortDir = "asc"
+      albumSortField = field;
+      albumSortDir = "asc";
     }
   }
 
   function sortIndicator(field: SortField): string {
-    return albumSortField === field ? (albumSortDir === "asc" ? " ↑" : " ↓") : ""
+    return albumSortField === field
+      ? albumSortDir === "asc"
+        ? " ↑"
+        : " ↓"
+      : "";
   }
 
   // ─── Album group types (unified for local and remote display) ───────────────
 
   interface AlbumGroup {
-    key: string
-    name: string
-    artist: string
-    trackCount: number
-    firstTrackId: string  // for remote album art
-    isLocal?: boolean
-    firstLocalPath?: string // for local art
+    key: string;
+    name: string;
+    artist: string;
+    trackCount: number;
+    firstTrackId: string; // for remote album art
+    isLocal?: boolean;
+    firstLocalPath?: string; // for local art
   }
 
-  const UNORGANIZED_KEY = "__unorganized__"
+  const UNORGANIZED_KEY = "__unorganized__";
 
   // ─── Album detail state (on-demand loaded tracks) ───────────────────────────
 
-  let currentAlbumGroup: AlbumGroup | null = null
-  let albumDetailTracks: Track[] = []
-  let albumDetailLoading = false
+  let currentAlbumGroup: AlbumGroup | null = null;
+  let albumDetailTracks: Track[] = [];
+  let albumDetailLoading = false;
 
   // Convert local album groups to AlbumGroup shape
   function localGroupsAsAlbumGroups(groups: LocalAlbumGroup[]): AlbumGroup[] {
-    return (groups ?? []).map(g => ({
+    return (groups ?? []).map((g) => ({
       key: g.key,
       name: g.name,
       artist: g.artist,
       trackCount: g.track_count,
       firstTrackId: "",
       isLocal: true,
-      firstLocalPath: g.first_track_path,
-    }))
+      firstLocalPath: g.first_track_path
+    }));
   }
 
   // Convert remote album groups (from /albumgroups endpoint) to AlbumGroup shape
   function remoteGroupsAsAlbumGroups(groups: RemoteAlbumGroup[]): AlbumGroup[] {
-    return (groups ?? []).map(g => ({
+    return (groups ?? []).map((g) => ({
       key: g.key,
       name: g.name || "Unknown Album",
       artist: g.artist || "Unknown Artist",
       trackCount: g.track_count,
       firstTrackId: g.first_track_id,
       isLocal: false,
-      firstLocalPath: "",
-    }))
+      firstLocalPath: ""
+    }));
   }
 
   // Convert a LocalTrack to the Track shape used by TrackRow
@@ -105,154 +138,174 @@
       duration_ms: t.duration_ms,
       bitrate_kbps: 0,
       replay_gain_track: 0,
-      artwork_id: "",
-    }
+      artwork_id: ""
+    };
   }
 
   // ─── Reactive derivations ──────────────────────────────────────────────────
 
-  $: displayedGroups = $activeTab === "library"
-    ? remoteGroupsAsAlbumGroups($remoteAlbumGroups)
-    : localGroupsAsAlbumGroups($localAlbumGroups)
-  $: isLoading = $activeTab === "library" ? $loading : $localLoading
-  $: currentTotal = $activeTab === "library" ? $remoteAlbumGroupsTotal : $localAlbumGroupsTotal
-  $: hasMore = displayedGroups.length < currentTotal
+  $: displayedGroups =
+    $activeTab === "library"
+      ? remoteGroupsAsAlbumGroups($remoteAlbumGroups)
+      : localGroupsAsAlbumGroups($localAlbumGroups);
+  $: isLoading = $activeTab === "library" ? $loading : $localLoading;
+  $: currentTotal =
+    $activeTab === "library" ? $remoteAlbumGroupsTotal : $localAlbumGroupsTotal;
+  $: hasMore = displayedGroups.length < currentTotal;
 
   // Load the selected album's tracks on demand
   $: if ($selectedAlbum && !albumDetailLoading) {
-    const group = displayedGroups.find(g => g.key === $selectedAlbum) ?? null
+    const group = displayedGroups.find((g) => g.key === $selectedAlbum) ?? null;
     if (group && (!currentAlbumGroup || currentAlbumGroup.key !== group.key)) {
-      loadAlbumDetail(group)
+      loadAlbumDetail(group);
     }
   }
 
   // Clear album detail when deselecting
   $: if (!$selectedAlbum) {
-    currentAlbumGroup = null
-    albumDetailTracks = []
-    albumFilter = ""
-    albumSortField = "default"
-    albumSortDir = "asc"
+    currentAlbumGroup = null;
+    albumDetailTracks = [];
+    albumFilter = "";
+    albumSortField = "default";
+    albumSortDir = "asc";
   }
 
   // Re-fetch the open local album's track list whenever a file change is detected.
   $: if ($localChangeSeq && currentAlbumGroup?.isLocal) {
-    refreshCurrentAlbumDetail()
+    refreshCurrentAlbumDetail();
   }
 
   async function refreshCurrentAlbumDetail() {
-    if (!currentAlbumGroup?.isLocal) return
-    let albumName: string, albumArtist: string
+    if (!currentAlbumGroup?.isLocal) return;
+    let albumName: string, albumArtist: string;
     if (currentAlbumGroup.key === UNORGANIZED_KEY) {
-      albumName = ""
-      albumArtist = ""
+      albumName = "";
+      albumArtist = "";
     } else {
-      const parts = currentAlbumGroup.key.split("|||")
-      albumName = parts[0] ?? ""
-      albumArtist = parts[1] ?? ""
+      const parts = currentAlbumGroup.key.split("|||");
+      albumName = parts[0] ?? "";
+      albumArtist = parts[1] ?? "";
     }
     try {
-      const locals = await fetchLocalAlbumTracks(albumName, albumArtist)
-      albumDetailTracks = locals.map(localTrackToTrack)
+      const locals = await fetchLocalAlbumTracks(albumName, albumArtist);
+      albumDetailTracks = locals.map(localTrackToTrack);
       if (currentAlbumGroup) {
-        currentAlbumGroup = { ...currentAlbumGroup, trackCount: albumDetailTracks.length }
+        currentAlbumGroup = {
+          ...currentAlbumGroup,
+          trackCount: albumDetailTracks.length
+        };
       }
     } catch (e) {
-      console.warn("Failed to refresh album detail:", e)
+      console.warn("Failed to refresh album detail:", e);
     }
   }
 
   async function loadAlbumDetail(group: AlbumGroup) {
-    albumDetailLoading = true
-    currentAlbumGroup = group
-    albumFilter = ""
-    albumSortField = "default"
-    albumSortDir = "asc"
+    albumDetailLoading = true;
+    currentAlbumGroup = group;
+    albumFilter = "";
+    albumSortField = "default";
+    albumSortDir = "asc";
     try {
       if (group.isLocal) {
         // Parse albumName and albumArtist from the key
-        let albumName: string, albumArtist: string
+        let albumName: string, albumArtist: string;
         if (group.key === UNORGANIZED_KEY) {
-          albumName = ""
-          albumArtist = ""
+          albumName = "";
+          albumArtist = "";
         } else {
-          const parts = group.key.split("|||")
-          albumName = parts[0] ?? ""
-          albumArtist = parts[1] ?? ""
+          const parts = group.key.split("|||");
+          albumName = parts[0] ?? "";
+          albumArtist = parts[1] ?? "";
         }
-        const locals = await fetchLocalAlbumTracks(albumName, albumArtist)
-        albumDetailTracks = locals.map(localTrackToTrack)
+        const locals = await fetchLocalAlbumTracks(albumName, albumArtist);
+        albumDetailTracks = locals.map(localTrackToTrack);
         // Update track count with the actual number
         if (currentAlbumGroup) {
-          currentAlbumGroup = { ...currentAlbumGroup, trackCount: albumDetailTracks.length }
+          currentAlbumGroup = {
+            ...currentAlbumGroup,
+            trackCount: albumDetailTracks.length
+          };
         }
       } else {
         // Remote: fetch tracks for this album by album_name + album_artist
-        let albumName: string, albumArtist: string
+        let albumName: string, albumArtist: string;
         if (group.key === UNORGANIZED_KEY) {
-          albumName = ""
-          albumArtist = ""
+          albumName = "";
+          albumArtist = "";
         } else {
-          const parts = group.key.split("|||")
-          albumName = parts[0] ?? ""
-          albumArtist = parts[1] ?? ""
+          const parts = group.key.split("|||");
+          albumName = parts[0] ?? "";
+          albumArtist = parts[1] ?? "";
         }
-        const params = new URLSearchParams()
-        params.set("album_name", albumName)
-        if (albumArtist) params.set("album_artist", albumArtist)
-        const r = await serverFetch(`/api/library/tracks?${params}`)
-        const data = await r.json()
-        const fetched: Track[] = Array.isArray(data) ? data : (data.tracks ?? [])
-        albumDetailTracks = fetched
-          .sort((a, b) => (a.disc_number ?? 0) - (b.disc_number ?? 0) || (a.track_number ?? 0) - (b.track_number ?? 0))
+        const params = new URLSearchParams();
+        params.set("album_name", albumName);
+        if (albumArtist) params.set("album_artist", albumArtist);
+        const r = await serverFetch(`/api/library/tracks?${params}`);
+        const data = await r.json();
+        const fetched: Track[] = Array.isArray(data)
+          ? data
+          : (data.tracks ?? []);
+        albumDetailTracks = fetched.sort(
+          (a, b) =>
+            (a.disc_number ?? 0) - (b.disc_number ?? 0) ||
+            (a.track_number ?? 0) - (b.track_number ?? 0)
+        );
         if (currentAlbumGroup) {
-          currentAlbumGroup = { ...currentAlbumGroup, trackCount: albumDetailTracks.length }
+          currentAlbumGroup = {
+            ...currentAlbumGroup,
+            trackCount: albumDetailTracks.length
+          };
         }
       }
     } catch (e) {
-      console.warn("Failed to load album detail:", e)
-      albumDetailTracks = []
+      console.warn("Failed to load album detail:", e);
+      albumDetailTracks = [];
     } finally {
-      albumDetailLoading = false
+      albumDetailLoading = false;
     }
   }
 
   // Filtered + sorted tracks for album detail (client-side on the small album track set)
   $: filteredAlbumDetailTracks = (() => {
-    if (!currentAlbumGroup) return []
-    const f = albumFilter.toLowerCase()
-    let result = albumDetailTracks
+    if (!currentAlbumGroup) return [];
+    const f = albumFilter.toLowerCase();
+    let result = albumDetailTracks;
     if (f) {
-      result = result.filter(t =>
-        (t.title ?? "").toLowerCase().includes(f) ||
-        (t.artist_name ?? "").toLowerCase().includes(f)
-      )
+      result = result.filter(
+        (t) =>
+          (t.title ?? "").toLowerCase().includes(f) ||
+          (t.artist_name ?? "").toLowerCase().includes(f)
+      );
     }
     if (albumSortField !== "default") {
-      const dir = albumSortDir === "asc" ? 1 : -1
+      const dir = albumSortDir === "asc" ? 1 : -1;
       result = [...result].sort((a, b) => {
-        if (albumSortField === "title") return dir * (a.title ?? "").localeCompare(b.title ?? "")
-        if (albumSortField === "artist") return dir * (a.artist_name ?? "").localeCompare(b.artist_name ?? "")
-        if (albumSortField === "duration") return dir * ((a.duration_ms ?? 0) - (b.duration_ms ?? 0))
-        return 0
-      })
+        if (albumSortField === "title")
+          return dir * (a.title ?? "").localeCompare(b.title ?? "");
+        if (albumSortField === "artist")
+          return dir * (a.artist_name ?? "").localeCompare(b.artist_name ?? "");
+        if (albumSortField === "duration")
+          return dir * ((a.duration_ms ?? 0) - (b.duration_ms ?? 0));
+        return 0;
+      });
     }
-    return result
-  })()
+    return result;
+  })();
 
   // Album artwork for the detail header
   $: selectedAlbumArtUrl = (() => {
-    if (!currentAlbumGroup) return ""
-    return getArtUrl(currentAlbumGroup)
-  })()
+    if (!currentAlbumGroup) return "";
+    return getArtUrl(currentAlbumGroup);
+  })();
 
   // Virtualized track list for album detail view
   $: virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: filteredAlbumDetailTracks.length,
     getScrollElement: () => trackListEl,
     estimateSize: () => 38,
-    overscan: 5,
-  })
+    overscan: 5
+  });
 
   // On mount, load album groups.
   // Library is destroyed/re-created on every view switch (App.svelte uses {#if}),
@@ -262,77 +315,77 @@
   // table, which is instant and doesn't re-read the file system.
   onMount(() => {
     if ($activeTab === "library") {
-      loadRemoteAlbumGroupsPage(0)
+      loadRemoteAlbumGroupsPage(0);
     }
     if ($localFolders.length > 0) {
       if (get(localAlbumGroups).length === 0) {
         // First mount — populate the SQLite cache with a full scan.
-        scanLocalFolders()
+        scanLocalFolders();
       } else {
         // Returning from another view — data is in memory, just reload the page.
-        loadLocalAlbumGroups(0, get(localAlbumFilter))
+        loadLocalAlbumGroups(0, get(localAlbumFilter));
       }
     }
-  })
+  });
 
   // ─── Debounced album grid filter ───────────────────────────────────────────
 
-  let gridFilterDebounce: ReturnType<typeof setTimeout>
+  let gridFilterDebounce: ReturnType<typeof setTimeout>;
 
   function onAlbumGridFilterInput() {
-    clearTimeout(gridFilterDebounce)
+    clearTimeout(gridFilterDebounce);
     gridFilterDebounce = setTimeout(() => {
-      const q = albumGridFilter.trim()
+      const q = albumGridFilter.trim();
       if ($activeTab === "library") {
-        loadRemoteAlbumGroupsPage(0, q)
+        loadRemoteAlbumGroupsPage(0, q);
       } else {
-        localAlbumFilter.set(q)
-        loadLocalAlbumGroups(0, q)
+        localAlbumFilter.set(q);
+        loadLocalAlbumGroups(0, q);
       }
-    }, 300)
+    }, 300);
   }
 
   function clearAlbumGridFilter() {
-    albumGridFilter = ""
+    albumGridFilter = "";
     if ($activeTab === "library") {
-      loadRemoteAlbumGroupsPage(0)
+      loadRemoteAlbumGroupsPage(0);
     } else {
-      localAlbumFilter.set("")
-      loadLocalAlbumGroups(0, "")
+      localAlbumFilter.set("");
+      loadLocalAlbumGroups(0, "");
     }
   }
 
   // ─── Infinite scroll for album grid ────────────────────────────────────────
 
-  let gridScrollEl: HTMLDivElement
-  let loadingMore = false
+  let gridScrollEl: HTMLDivElement;
+  let loadingMore = false;
 
   function handleGridScroll() {
-    if (loadingMore || !hasMore || !gridScrollEl) return
-    const { scrollTop, scrollHeight, clientHeight } = gridScrollEl
+    if (loadingMore || !hasMore || !gridScrollEl) return;
+    const { scrollTop, scrollHeight, clientHeight } = gridScrollEl;
     if (scrollTop + clientHeight >= scrollHeight - 200) {
-      loadMorePage()
+      loadMorePage();
     }
   }
 
   async function loadMorePage() {
-    loadingMore = true
+    loadingMore = true;
     try {
       if ($activeTab === "library") {
-        await loadMoreRemoteAlbumGroups(albumGridFilter.trim())
+        await loadMoreRemoteAlbumGroups(albumGridFilter.trim());
       } else {
-        await loadMoreLocalAlbumGroups(get(localAlbumFilter))
+        await loadMoreLocalAlbumGroups(get(localAlbumFilter));
       }
     } finally {
-      loadingMore = false
+      loadingMore = false;
     }
   }
 
   // ─── Playback ──────────────────────────────────────────────────────────────
 
   async function playTrack(track: Track, albumTracks: Track[]) {
-    const idx = albumTracks.findIndex(t => t.id === track.id)
-    const queueIds = albumTracks.map(t => t.id)
+    const idx = albumTracks.findIndex((t) => t.id === track.id);
+    const queueIds = albumTracks.map((t) => t.id);
 
     if (currentAlbumGroup) {
       recordRecentAlbum({
@@ -341,13 +394,13 @@
         artist: currentAlbumGroup.artist,
         isLocal: currentAlbumGroup.isLocal ?? false,
         firstTrackId: currentAlbumGroup.firstTrackId,
-        firstLocalPath: currentAlbumGroup.firstLocalPath ?? "",
-      })
+        firstLocalPath: currentAlbumGroup.firstLocalPath ?? ""
+      });
     }
 
     if (get(activeTab) === "local") {
       // Local playback — just set state (Player.svelte handles audio)
-      playerState.update(s => ({
+      playerState.update((s) => ({
         ...s,
         trackId: track.id,
         track,
@@ -355,15 +408,15 @@
         baseQueue: queueIds,
         queueIndex: idx >= 0 ? idx : 0,
         positionMs: 0,
-        paused: false,
-      }))
-      return
+        paused: false
+      }));
+      return;
     }
 
-    if (!$connected) return
+    if (!$connected) return;
 
     // Update local state immediately — no round-trip needed.
-    playerState.update(s => ({
+    playerState.update((s) => ({
       ...s,
       trackId: track.id,
       track,
@@ -371,132 +424,158 @@
       baseQueue: queueIds,
       queueIndex: idx >= 0 ? idx : 0,
       positionMs: 0,
-      paused: false,
-    }))
+      paused: false
+    }));
 
     // Sync server state via WS (fire-and-forget).
-    wsSend("playback.queue", { device_id: "desktop", track_ids: queueIds, start_index: idx >= 0 ? idx : 0 })
-    wsSend("playback.play",  { device_id: "desktop", track_id: track.id, position_ms: 0 })
+    wsSend("playback.queue", {
+      device_id: "desktop",
+      track_ids: queueIds,
+      start_index: idx >= 0 ? idx : 0
+    });
+    wsSend("playback.play", {
+      device_id: "desktop",
+      track_id: track.id,
+      position_ms: 0
+    });
   }
 
   function addToQueue(track: Track) {
-    playerState.update(s => {
-      const insertAt = s.queueIndex + 1
+    playerState.update((s) => {
+      const insertAt = s.queueIndex + 1;
       const newQueue = [
         ...s.queue.slice(0, insertAt),
         track.id,
-        ...s.queue.slice(insertAt),
-      ]
-      return { ...s, queue: newQueue }
-    })
+        ...s.queue.slice(insertAt)
+      ];
+      return { ...s, queue: newQueue };
+    });
   }
 
   async function scanLibrary() {
-    if (!$connected) return
-    await serverFetch("/api/library/scan", { method: "POST" })
+    if (!$connected) return;
+    await serverFetch("/api/library/scan", { method: "POST" });
   }
 
   function switchTab(tab: LibTab) {
-    albumGridFilter = ""
-    pushNav({ tab, albumKey: null, subTab: "albums" })
+    albumGridFilter = "";
+    pushNav({ tab, albumKey: null, subTab: "albums" });
     // Reload album groups for the new tab
     if (tab === "library") {
-      loadRemoteAlbumGroupsPage(0)
+      loadRemoteAlbumGroupsPage(0);
     } else if (tab === "local") {
-      loadLocalAlbumGroups(0, "")
+      loadLocalAlbumGroups(0, "");
     }
   }
 
   function localArtUrl(track: Track): string {
-    const base = localBase()
-    if (!base) return ""
-    return `${base}/local/art?path=${encodeURIComponent(track.path)}`
+    const base = localBase();
+    if (!base) return "";
+    return `${base}/local/art?path=${encodeURIComponent(track.path)}`;
   }
 
   function getArtUrl(album: AlbumGroup): string {
     if (album.isLocal && album.firstLocalPath) {
-      return localArtUrl({ path: album.firstLocalPath } as Track)
+      return localArtUrl({ path: album.firstLocalPath } as Track);
     }
-    return artworkUrl(album.firstTrackId)
+    return artworkUrl(album.firstTrackId);
   }
 
   function openAlbum(album: AlbumGroup) {
-    pushNav({ albumKey: album.key })
+    pushNav({ albumKey: album.key });
   }
 
   // ─── Album card context menu ────────────────────────────────────────────────
 
-  let albumCtxMenu: { group: AlbumGroup; x: number; y: number } | null = null
-  let albumCtxPlaylistSub = false
+  let albumCtxMenu: { group: AlbumGroup; x: number; y: number } | null = null;
+  let albumCtxPlaylistSub = false;
 
   function portal(node: HTMLElement) {
-    document.body.appendChild(node)
-    return { destroy() { node.remove() } }
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        node.remove();
+      }
+    };
   }
 
   function onAlbumContext(e: MouseEvent, album: AlbumGroup) {
-    e.preventDefault()
-    albumCtxMenu = { group: album, x: e.clientX, y: e.clientY }
-    albumCtxPlaylistSub = false
+    e.preventDefault();
+    albumCtxMenu = { group: album, x: e.clientX, y: e.clientY };
+    albumCtxPlaylistSub = false;
     const close = (_: MouseEvent) => {
       // Don't close immediately on the right-click that opened it.
-      albumCtxMenu = null
-      window.removeEventListener("click", close)
-    }
-    window.addEventListener("click", close)
+      albumCtxMenu = null;
+      window.removeEventListener("click", close);
+    };
+    window.addEventListener("click", close);
   }
 
   async function addAlbumToPlaylist(pl: PlaylistSummary, group: AlbumGroup) {
-    albumCtxMenu = null
-    let tracksToAdd: Track[] = []
+    albumCtxMenu = null;
+    let tracksToAdd: Track[] = [];
 
     if (group.isLocal) {
-      const parts = group.key === UNORGANIZED_KEY ? ["", ""] : group.key.split("|||")
+      const parts =
+        group.key === UNORGANIZED_KEY ? ["", ""] : group.key.split("|||");
       try {
-        const locals = await fetchLocalAlbumTracks(parts[0] ?? "", parts[1] ?? "")
-        tracksToAdd = locals.map(localTrackToTrack)
-      } catch (e) { console.warn("addAlbumToPlaylist local:", e) }
+        const locals = await fetchLocalAlbumTracks(
+          parts[0] ?? "",
+          parts[1] ?? ""
+        );
+        tracksToAdd = locals.map(localTrackToTrack);
+      } catch (e) {
+        console.warn("addAlbumToPlaylist local:", e);
+      }
     } else {
-      const parts = group.key === UNORGANIZED_KEY ? ["", ""] : group.key.split("|||")
-      const params = new URLSearchParams()
-      params.set("album_name", parts[0] ?? "")
-      params.set("album_artist", parts[1] ?? "")
-      params.set("limit", "500")
+      const parts =
+        group.key === UNORGANIZED_KEY ? ["", ""] : group.key.split("|||");
+      const params = new URLSearchParams();
+      params.set("album_name", parts[0] ?? "");
+      params.set("album_artist", parts[1] ?? "");
+      params.set("limit", "500");
       try {
-        const r = await serverFetch(`/api/library/tracks?${params}`)
-        if (r.ok) { const d = await r.json(); tracksToAdd = Array.isArray(d) ? d : (d.tracks ?? []) }
-      } catch (e) { console.warn("addAlbumToPlaylist remote:", e) }
+        const r = await serverFetch(`/api/library/tracks?${params}`);
+        if (r.ok) {
+          const d = await r.json();
+          tracksToAdd = Array.isArray(d) ? d : (d.tracks ?? []);
+        }
+      } catch (e) {
+        console.warn("addAlbumToPlaylist remote:", e);
+      }
     }
 
-    await addTracksToPlaylist(pl.id, tracksToAdd, group.isLocal ?? false)
+    await addTracksToPlaylist(pl.id, tracksToAdd, group.isLocal ?? false);
   }
 
   async function handleAddFolder() {
-    await addLocalFolder()
+    await addLocalFolder();
   }
 
   function hideImgOnError(e: Event) {
-    const img = e.currentTarget as HTMLImageElement
-    if (img) img.style.display = "none"
+    const img = e.currentTarget as HTMLImageElement;
+    if (img) img.style.display = "none";
   }
 
   function handlePlay(e: CustomEvent<Track>) {
     // Always build the queue from the full unfiltered album tracks so that
     // clicking a filtered song still produces the correct album order queue.
-    playTrack(e.detail, albumDetailTracks)
+    playTrack(e.detail, albumDetailTracks);
   }
 
   function handleQueue(e: CustomEvent<Track>) {
-    addToQueue(e.detail)
+    addToQueue(e.detail);
   }
 
-  let isScrolling = false
-  let scrollTimer: ReturnType<typeof setTimeout>
+  let isScrolling = false;
+  let scrollTimer: ReturnType<typeof setTimeout>;
 
   function handleScroll() {
-    isScrolling = true
-    clearTimeout(scrollTimer)
-    scrollTimer = setTimeout(() => { isScrolling = false }, 150)
+    isScrolling = true;
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      isScrolling = false;
+    }, 150);
   }
 </script>
 
@@ -519,19 +598,26 @@
   </div>
 
   <div class="scroll-body">
-
     {#if currentAlbumGroup}
       <div class="album-detail-view">
         <div class="album-detail-header">
           <div class="album-art-hero">
             {#if selectedAlbumArtUrl}
-                <img src={selectedAlbumArtUrl} alt={currentAlbumGroup.name} on:error={hideImgOnError} loading="lazy" decoding="async" />
+              <img
+                src={selectedAlbumArtUrl}
+                alt={currentAlbumGroup.name}
+                on:error={hideImgOnError}
+                loading="lazy"
+                decoding="async"
+              />
             {/if}
             <div class="album-art-hero-placeholder">♫</div>
           </div>
           <div class="album-detail-info">
             <h2 class="album-detail-title">{currentAlbumGroup.name}</h2>
-      <p class="album-meta text-2">{currentAlbumGroup.artist} · {currentAlbumGroup.trackCount} tracks</p>
+            <p class="album-meta text-2">
+              {currentAlbumGroup.artist} · {currentAlbumGroup.trackCount} tracks
+            </p>
             <div class="album-filter-bar">
               <input
                 type="search"
@@ -545,16 +631,29 @@
 
         <div class="track-header album-detail-cols">
           <span>#</span>
-          <button class="col-sort" on:click={() => toggleSort("title")}>Title{sortIndicator("title")}</button>
-          <button class="col-sort" on:click={() => toggleSort("artist")}>Artist{sortIndicator("artist")}</button>
-          <button class="col-sort" on:click={() => toggleSort("duration")}>Duration{sortIndicator("duration")}</button>
+          <button class="col-sort" on:click={() => toggleSort("title")}
+            >Title{sortIndicator("title")}</button
+          >
+          <button class="col-sort" on:click={() => toggleSort("artist")}
+            >Artist{sortIndicator("artist")}</button
+          >
+          <button class="col-sort" on:click={() => toggleSort("duration")}
+            >Duration{sortIndicator("duration")}</button
+          >
         </div>
 
         {#if albumFilter && filteredAlbumDetailTracks.length === 0}
           <p class="no-results text-3">No songs match "{albumFilter}"</p>
         {:else}
-          <div class="track-list" class:scrolling={isScrolling} bind:this={trackListEl} on:scroll={handleScroll}>
-            <div style="position: relative; width: 100%; height: {$virtualizer.getTotalSize()}px;">
+          <div
+            class="track-list"
+            class:scrolling={isScrolling}
+            bind:this={trackListEl}
+            on:scroll={handleScroll}
+          >
+            <div
+              style="position: relative; width: 100%; height: {$virtualizer.getTotalSize()}px;"
+            >
               {#each $virtualizer.getVirtualItems() as row (row.index)}
                 <div
                   class="virtual-row"
@@ -564,7 +663,8 @@
                     track={filteredAlbumDetailTracks[row.index]}
                     hideAlbum={true}
                     isLocal={currentAlbumGroup?.isLocal ?? false}
-                    active={$currentTrackId === filteredAlbumDetailTracks[row.index]?.id}
+                    active={$currentTrackId ===
+                      filteredAlbumDetailTracks[row.index]?.id}
                     on:play={handlePlay}
                     on:select={() => {}}
                     on:addToQueue={handleQueue}
@@ -575,119 +675,179 @@
           </div>
         {/if}
       </div>
-  {:else}
-    <div class="grid-scroll-wrapper" bind:this={gridScrollEl} on:scroll={handleGridScroll}>
-    <div class="toolbar">
-      <h2>{$activeTab === "library" ? "Library" : "Local Albums"}</h2>
-      <div class="toolbar-actions">
-        {#if $activeTab === "library"}
-          <button on:click={scanLibrary} title="Rescan watch folders">↺ Scan</button>
-        {:else}
-          <button on:click={handleAddFolder} title="Add a local music folder">+ Add Folder</button>
-          {#if $localFolders.length > 0}
-            <button on:click={() => scanLocalFolders()} title="Rescan local folders">↺ Rescan</button>
-          {/if}
-        {/if}
-      </div>
-    </div>
-
-    <div class="album-grid-search">
-      <svg class="grid-search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-      <input
-        type="search"
-        class="album-grid-filter"
-        placeholder="Search albums…"
-        bind:value={albumGridFilter}
-        on:input={onAlbumGridFilterInput}
-      />
-      {#if albumGridFilter}
-        <button class="grid-filter-clear" on:click={clearAlbumGridFilter}>×</button>
-      {/if}
-    </div>
-
-    {#if $activeTab === "local" && $localFolders.length > 0}
-      <div class="folder-chips">
-        {#each $localFolders as dir}
-          <span class="folder-chip">
-            {dir.split("/").pop() || dir}
-            <button class="chip-remove" on:click={() => removeLocalFolder(dir)} title="Remove folder">×</button>
-          </span>
-        {/each}
-      </div>
-    {/if}
-
-    {#if $activeTab === "library" && !$connected}
-      <div class="offline-state">
-        <span class="offline-icon">⚠</span>
-        <p class="offline-title">{$isReconnecting ? "Reconnecting to server..." : "Not connected to a server"}</p>
-        <p class="offline-sub">{$isReconnecting ? "Your library will appear once the connection is restored." : "Open Settings to connect to your pneuma server."}</p>
-      </div>
-    {:else if isLoading}
-      <p class="text-3">Loading…</p>
-    {:else if displayedGroups.length === 0}
-      {#if $activeTab === "local"}
-        <p class="text-3">No local music. Click "Add Folder" to add a music directory.</p>
-      {:else}
-        <p class="text-3">No tracks found. Add a watch folder in Settings and scan.</p>
-      {/if}
     {:else}
-      {#if displayedGroups.length === 0}
-        <p class="text-3">No albums match "{albumGridFilter}"</p>
-      {:else}
-      <div class="album-grid">
-        {#each displayedGroups as album (album.key)}
-          <button
-            class="album-card"
-            class:unorganized={album.key === UNORGANIZED_KEY}
-            on:click={() => openAlbum(album)}
-            on:contextmenu={(e) => onAlbumContext(e, album)}
-          >
-            <div class="album-art" class:unorg-art={album.key === UNORGANIZED_KEY}>
-              {#if album.key !== UNORGANIZED_KEY}
-                  <img src={getArtUrl(album)} alt={album.name} on:error={hideImgOnError} loading="lazy"/>
-              {/if}
-              <div class="album-art-placeholder">{album.key === UNORGANIZED_KEY ? "📂" : "♫"}</div>
-            </div>
-            <p class="album-title truncate" class:unorg-title={album.key === UNORGANIZED_KEY}>{album.name}</p>
-            <p class="album-artist truncate text-3">{album.artist} · {album.trackCount} tracks</p>
-          </button>
-        {/each}
-      </div>
-      {#if hasMore}
-        <p class="text-3" style="text-align:center;padding:12px;">Loading more…</p>
-      {/if}
-    {/if}
-  {/if}
-
-  </div> 
-  {/if} 
-
-  </div>
-
-{#if albumCtxMenu}
-  {@const grp = albumCtxMenu.group}
-  <div class="album-ctx-menu" use:portal style="left:{albumCtxMenu.x}px;top:{albumCtxMenu.y}px">
-    {#if $playlists.length > 0}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="album-ctx-sub-wrap"
-        on:mouseenter={() => albumCtxPlaylistSub = true}
-        on:mouseleave={() => albumCtxPlaylistSub = false}
+      <div
+        class="grid-scroll-wrapper"
+        bind:this={gridScrollEl}
+        on:scroll={handleGridScroll}
       >
-        <button class="has-sub">Add all to playlist ›</button>
-        {#if albumCtxPlaylistSub}
-          <div class="album-ctx-submenu">
-            {#each $playlists as pl (pl.id)}
-              <button on:click={() => addAlbumToPlaylist(pl, grp)}>{pl.name}</button>
+        <div class="toolbar">
+          <h2>{$activeTab === "library" ? "Library" : "Local Albums"}</h2>
+          <div class="toolbar-actions">
+            {#if $activeTab === "library"}
+              <button on:click={scanLibrary} title="Rescan watch folders"
+                >↺ Scan</button
+              >
+            {:else}
+              <button
+                on:click={handleAddFolder}
+                title="Add a local music folder">+ Add Folder</button
+              >
+              {#if $localFolders.length > 0}
+                <button
+                  on:click={() => scanLocalFolders()}
+                  title="Rescan local folders">↺ Rescan</button
+                >
+              {/if}
+            {/if}
+          </div>
+        </div>
+
+        <div class="album-grid-search">
+          <svg
+            class="grid-search-icon"
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            ><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg
+          >
+          <input
+            type="search"
+            class="album-grid-filter"
+            placeholder="Search albums…"
+            bind:value={albumGridFilter}
+            on:input={onAlbumGridFilterInput}
+          />
+          {#if albumGridFilter}
+            <button class="grid-filter-clear" on:click={clearAlbumGridFilter}
+              >×</button
+            >
+          {/if}
+        </div>
+
+        {#if $activeTab === "local" && $localFolders.length > 0}
+          <div class="folder-chips">
+            {#each $localFolders as dir}
+              <span class="folder-chip">
+                {dir.split("/").pop() || dir}
+                <button
+                  class="chip-remove"
+                  on:click={() => removeLocalFolder(dir)}
+                  title="Remove folder">×</button
+                >
+              </span>
             {/each}
           </div>
         {/if}
+
+        {#if $activeTab === "library" && !$connected}
+          <div class="offline-state">
+            <span class="offline-icon">⚠</span>
+            <p class="offline-title">
+              {$isReconnecting
+                ? "Reconnecting to server..."
+                : "Not connected to a server"}
+            </p>
+            <p class="offline-sub">
+              {$isReconnecting
+                ? "Your library will appear once the connection is restored."
+                : "Open Settings to connect to your pneuma server."}
+            </p>
+          </div>
+        {:else if isLoading}
+          <p class="text-3">Loading…</p>
+        {:else if displayedGroups.length === 0}
+          {#if $activeTab === "local"}
+            <p class="text-3">
+              No local music. Click "Add Folder" to add a music directory.
+            </p>
+          {:else}
+            <p class="text-3">
+              No tracks found. Add a watch folder in Settings and scan.
+            </p>
+          {/if}
+        {:else if displayedGroups.length === 0}
+          <p class="text-3">No albums match "{albumGridFilter}"</p>
+        {:else}
+          <div class="album-grid">
+            {#each displayedGroups as album (album.key)}
+              <button
+                class="album-card"
+                class:unorganized={album.key === UNORGANIZED_KEY}
+                on:click={() => openAlbum(album)}
+                on:contextmenu={(e) => onAlbumContext(e, album)}
+              >
+                <div
+                  class="album-art"
+                  class:unorg-art={album.key === UNORGANIZED_KEY}
+                >
+                  {#if album.key !== UNORGANIZED_KEY}
+                    <img
+                      src={getArtUrl(album)}
+                      alt={album.name}
+                      on:error={hideImgOnError}
+                      loading="lazy"
+                    />
+                  {/if}
+                  <div class="album-art-placeholder">
+                    {album.key === UNORGANIZED_KEY ? "📂" : "♫"}
+                  </div>
+                </div>
+                <p
+                  class="album-title truncate"
+                  class:unorg-title={album.key === UNORGANIZED_KEY}
+                >
+                  {album.name}
+                </p>
+                <p class="album-artist truncate text-3">
+                  {album.artist} · {album.trackCount} tracks
+                </p>
+              </button>
+            {/each}
+          </div>
+          {#if hasMore}
+            <p class="text-3" style="text-align:center;padding:12px;">
+              Loading more…
+            </p>
+          {/if}
+        {/if}
       </div>
-    {:else}
-      <button disabled style="opacity:0.5">No playlists yet</button>
     {/if}
   </div>
-{/if}
 
+  {#if albumCtxMenu}
+    {@const grp = albumCtxMenu.group}
+    <div
+      class="album-ctx-menu"
+      use:portal
+      style="left:{albumCtxMenu.x}px;top:{albumCtxMenu.y}px"
+    >
+      {#if $playlists.length > 0}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="album-ctx-sub-wrap"
+          on:mouseenter={() => (albumCtxPlaylistSub = true)}
+          on:mouseleave={() => (albumCtxPlaylistSub = false)}
+        >
+          <button class="has-sub">Add all to playlist ›</button>
+          {#if albumCtxPlaylistSub}
+            <div class="album-ctx-submenu">
+              {#each $playlists as pl (pl.id)}
+                <button on:click={() => addAlbumToPlaylist(pl, grp)}
+                  >{pl.name}</button
+                >
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <button disabled style="opacity:0.5">No playlists yet</button>
+      {/if}
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -710,9 +870,13 @@
     font-size: 14px;
     color: var(--text-2);
     border-bottom: 2px solid transparent;
-    transition: color 0.12s, border-color 0.12s;
+    transition:
+      color 0.12s,
+      border-color 0.12s;
   }
-  .lib-tab:hover { color: var(--text-1); }
+  .lib-tab:hover {
+    color: var(--text-1);
+  }
   .lib-tab.active {
     color: var(--accent);
     border-bottom-color: var(--accent);
@@ -756,7 +920,11 @@
     align-items: center;
   }
 
-  h2 { margin: 0; font-size: 20px; font-weight: 700; }
+  h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+  }
 
   .album-meta {
     font-size: 13px;
@@ -788,7 +956,9 @@
     padding: 0 2px;
     line-height: 1;
   }
-  .chip-remove:hover { color: var(--danger); }
+  .chip-remove:hover {
+    color: var(--danger);
+  }
 
   .album-grid-search {
     display: flex;
@@ -802,9 +972,14 @@
     max-width: 280px;
     transition: border-color 0.15s;
   }
-  .album-grid-search:focus-within { border-color: var(--accent); }
+  .album-grid-search:focus-within {
+    border-color: var(--accent);
+  }
 
-  .grid-search-icon { color: var(--text-3); flex-shrink: 0; }
+  .grid-search-icon {
+    color: var(--text-3);
+    flex-shrink: 0;
+  }
 
   .album-grid-filter {
     flex: 1;
@@ -815,8 +990,12 @@
     outline: none;
     padding: 0;
   }
-  .album-grid-filter::placeholder { color: var(--text-3); }
-  .album-grid-filter::-webkit-search-cancel-button { display: none; }
+  .album-grid-filter::placeholder {
+    color: var(--text-3);
+  }
+  .album-grid-filter::-webkit-search-cancel-button {
+    display: none;
+  }
 
   .grid-filter-clear {
     background: none;
@@ -827,7 +1006,9 @@
     padding: 0;
     line-height: 1;
   }
-  .grid-filter-clear:hover { color: var(--fg); }
+  .grid-filter-clear:hover {
+    color: var(--fg);
+  }
 
   .album-grid {
     display: grid;
@@ -840,7 +1021,9 @@
     padding: 0;
     cursor: pointer;
   }
-  .album-card:hover .album-art { border-color: var(--accent); }
+  .album-card:hover .album-art {
+    border-color: var(--accent);
+  }
 
   .album-art {
     aspect-ratio: 1;
@@ -870,15 +1053,24 @@
     color: var(--text-3);
   }
 
-  .album-title { margin: 0; font-size: 13px; font-weight: 600; }
-  .album-artist { margin: 2px 0 0; font-size: 11px; }
+  .album-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .album-artist {
+    margin: 2px 0 0;
+    font-size: 11px;
+  }
 
   .unorganized .album-art,
   .unorg-art {
     border: 2px dashed var(--text-3);
     background: transparent;
   }
-  .unorg-title { font-style: italic; }
+  .unorg-title {
+    font-style: italic;
+  }
 
   .offline-state {
     display: flex;
@@ -890,9 +1082,21 @@
     padding: 60px 20px;
     text-align: center;
   }
-  .offline-icon { font-size: 36px; opacity: 0.4; }
-  .offline-title { margin: 0; font-size: 15px; font-weight: 600; color: var(--text-1); }
-  .offline-sub { margin: 0; font-size: 13px; color: var(--text-3); }
+  .offline-icon {
+    font-size: 36px;
+    opacity: 0.4;
+  }
+  .offline-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-1);
+  }
+  .offline-sub {
+    margin: 0;
+    font-size: 13px;
+    color: var(--text-3);
+  }
 
   .track-list {
     flex: 1;
@@ -941,7 +1145,9 @@
     text-align: left;
     white-space: nowrap;
   }
-  .col-sort:hover { color: var(--text-1); }
+  .col-sort:hover {
+    color: var(--text-1);
+  }
 
   .album-detail-header {
     display: flex;
@@ -1009,10 +1215,16 @@
     outline: none;
     transition: border-color 0.15s;
   }
-  .album-filter-input:focus { border-color: var(--accent); }
-  .album-filter-input::placeholder { color: var(--text-3); }
+  .album-filter-input:focus {
+    border-color: var(--accent);
+  }
+  .album-filter-input::placeholder {
+    color: var(--text-3);
+  }
   /* hide default search clear button */
-  .album-filter-input::-webkit-search-cancel-button { display: none; }
+  .album-filter-input::-webkit-search-cancel-button {
+    display: none;
+  }
 
   .no-results {
     padding: 16px 8px;
@@ -1026,7 +1238,7 @@
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     padding: 4px 0;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     min-width: 180px;
   }
   .album-ctx-menu button {
@@ -1039,9 +1251,15 @@
     border-radius: 0;
     cursor: pointer;
   }
-  .album-ctx-menu button:hover { background: var(--surface-hover); }
-  .album-ctx-sub-wrap { position: relative; }
-  .album-ctx-sub-wrap .has-sub { cursor: default; }
+  .album-ctx-menu button:hover {
+    background: var(--surface-hover);
+  }
+  .album-ctx-sub-wrap {
+    position: relative;
+  }
+  .album-ctx-sub-wrap .has-sub {
+    cursor: default;
+  }
   .album-ctx-submenu {
     position: absolute;
     left: 100%;
@@ -1050,7 +1268,7 @@
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     padding: 4px 0;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
     min-width: 160px;
     max-height: 240px;
     overflow-y: auto;
@@ -1064,5 +1282,7 @@
     color: var(--text-1);
     border-radius: 0;
   }
-  .album-ctx-submenu button:hover { background: var(--surface-hover); }
+  .album-ctx-submenu button:hover {
+    background: var(--surface-hover);
+  }
 </style>

@@ -1,35 +1,35 @@
 <script lang="ts" context="module">
   export interface Track {
-    id: string
-    path: string
-    title: string
-    artist_id: string
-    album_id: string
-    album_artist: string
-    album_name: string
-    genre: string
-    year: number
-    track_number: number
-    disc_number: number
-    duration_ms: number
-    bitrate_kbps: number
-    artwork_id: string
+    id: string;
+    path: string;
+    title: string;
+    artist_id: string;
+    album_id: string;
+    album_artist: string;
+    album_name: string;
+    genre: string;
+    year: number;
+    track_number: number;
+    disc_number: number;
+    duration_ms: number;
+    bitrate_kbps: number;
+    artwork_id: string;
   }
 
   export function formatDuration(ms: number): string {
-    const s = Math.floor(ms / 1000)
-    const m = Math.floor(s / 60)
-    return `${m}:${String(s % 60).padStart(2, "0")}`
+    const s = Math.floor(ms / 1000);
+    const m = Math.floor(s / 60);
+    return `${m}:${String(s % 60).padStart(2, "0")}`;
   }
 </script>
 
 <script lang="ts">
-  import { createEventDispatcher } from "svelte"
+  import { createEventDispatcher } from "svelte";
 
-  export let track: Track | null = null
-  export let active: boolean = false
+  export let track: Track | null = null;
+  export let active: boolean = false;
 
-  const dispatch = createEventDispatcher()
+  const dispatch = createEventDispatcher();
 </script>
 
 <button
@@ -58,8 +58,18 @@
     color: var(--text-1);
     transition: background 0.1s;
   }
-  .track-row:hover { background: var(--surface-hover); }
-  .track-row.active { color: var(--accent); }
-  .num { font-size: 12px; text-align: right; }
-  .duration { font-size: 12px; text-align: right; }
+  .track-row:hover {
+    background: var(--surface-hover);
+  }
+  .track-row.active {
+    color: var(--accent);
+  }
+  .num {
+    font-size: 12px;
+    text-align: right;
+  }
+  .duration {
+    font-size: 12px;
+    text-align: right;
+  }
 </style>

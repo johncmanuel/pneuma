@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { toasts, dismissToast, type Toast } from "../stores/toasts"
+  import { toasts, dismissToast, type Toast } from "../stores/toasts";
 
   const icons: Record<Toast["type"], string> = {
     info: "i",
     warning: "⚠",
     error: "✕",
-    success: "✓",
-  }
+    success: "✓"
+  };
 </script>
 
 {#if $toasts.length > 0}
@@ -15,7 +15,11 @@
       <div class="toast toast-{toast.type}">
         <span class="toast-icon">{icons[toast.type]}</span>
         <span class="toast-msg">{toast.message}</span>
-        <button class="toast-close" on:click={() => dismissToast(toast.id)} title="Dismiss">×</button>
+        <button
+          class="toast-close"
+          on:click={() => dismissToast(toast.id)}
+          title="Dismiss">×</button
+        >
       </div>
     {/each}
   </div>
@@ -43,22 +47,50 @@
     min-width: 260px;
     max-width: 420px;
     pointer-events: all;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     animation: slide-in 0.18s ease-out;
   }
 
   @keyframes slide-in {
-    from { transform: translateX(24px); opacity: 0; }
-    to   { transform: translateX(0);    opacity: 1; }
+    from {
+      transform: translateX(24px);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 
-  .toast-info    { background: var(--surface); border: 1px solid var(--border); color: var(--text-1); }
-  .toast-success { background: #1a3a1a; border: 1px solid #2d6a2d; color: #6ddb6d; }
-  .toast-warning { background: #3a2e0a; border: 1px solid #7a6010; color: #e0b030; }
-  .toast-error   { background: #3a100a; border: 1px solid #7a2010; color: #e06030; }
+  .toast-info {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+  }
+  .toast-success {
+    background: #1a3a1a;
+    border: 1px solid #2d6a2d;
+    color: #6ddb6d;
+  }
+  .toast-warning {
+    background: #3a2e0a;
+    border: 1px solid #7a6010;
+    color: #e0b030;
+  }
+  .toast-error {
+    background: #3a100a;
+    border: 1px solid #7a2010;
+    color: #e06030;
+  }
 
-  .toast-icon { font-size: 14px; flex-shrink: 0; }
-  .toast-msg  { flex: 1; line-height: 1.4; }
+  .toast-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .toast-msg {
+    flex: 1;
+    line-height: 1.4;
+  }
 
   .toast-close {
     font-size: 16px;
@@ -68,5 +100,7 @@
     padding: 0 2px;
     flex-shrink: 0;
   }
-  .toast-close:hover { opacity: 1; }
+  .toast-close:hover {
+    opacity: 1;
+  }
 </style>

@@ -1,39 +1,52 @@
 <script lang="ts">
-  import { ConnectToServer, DisconnectFromServer, ClearArtworkCache } from "../../wailsjs/go/desktop/App"
-  import { connected, serverURL, authToken, refreshConnection, saveSession, clearSession, isReconnecting, stopAutoReconnect } from "../utils/api"
+  import {
+    ConnectToServer,
+    DisconnectFromServer,
+    ClearArtworkCache
+  } from "../../wailsjs/go/desktop/App";
+  import {
+    connected,
+    serverURL,
+    authToken,
+    refreshConnection,
+    saveSession,
+    clearSession,
+    isReconnecting,
+    stopAutoReconnect
+  } from "../utils/api";
 
-  let connectURL = "http://127.0.0.1:8989"
-  let connectUser = ""
-  let connectPass = ""
-  let connectErr = ""
-  let connecting = false
+  let connectURL = "http://127.0.0.1:8989";
+  let connectUser = "";
+  let connectPass = "";
+  let connectErr = "";
+  let connecting = false;
 
-  let cacheCleared = false
+  let cacheCleared = false;
 
   async function connect() {
-    connectErr = ""
-    connecting = true
+    connectErr = "";
+    connecting = true;
     try {
-      await ConnectToServer(connectURL, connectUser, connectPass)
-      await refreshConnection()
-      stopAutoReconnect()
-      
+      await ConnectToServer(connectURL, connectUser, connectPass);
+      await refreshConnection();
+      stopAutoReconnect();
+
       // Persist only the URL + fresh token
-      saveSession(connectURL, $authToken)
-      
-      connectUser = ""
-      connectPass = ""
+      saveSession(connectURL, $authToken);
+
+      connectUser = "";
+      connectPass = "";
     } catch (e: any) {
-      connectErr = e?.toString() ?? "Connection failed"
+      connectErr = e?.toString() ?? "Connection failed";
     }
-    connecting = false
+    connecting = false;
   }
 
   async function disconnect() {
-    stopAutoReconnect()
-    clearSession()
-    await DisconnectFromServer()
-    await refreshConnection()
+    stopAutoReconnect();
+    clearSession();
+    await DisconnectFromServer();
+    await refreshConnection();
   }
 </script>
 
@@ -47,10 +60,13 @@
       </p>
       <button class="btn-danger" on:click={disconnect}>Disconnect</button>
     {:else if $isReconnecting}
-      <p class="text-3 reconnecting-status">
-        ↺ Reconnecting to server…
-      </p>
-      <button class="btn-danger" on:click={() => { stopAutoReconnect() }}>Cancel</button>
+      <p class="text-3 reconnecting-status">↺ Reconnecting to server…</p>
+      <button
+        class="btn-danger"
+        on:click={() => {
+          stopAutoReconnect();
+        }}>Cancel</button
+      >
     {:else}
       <div class="connect-form">
         <input
@@ -71,7 +87,10 @@
           autocomplete="current-password"
           on:keydown={(e) => e.key === "Enter" && connect()}
         />
-        <button on:click={connect} disabled={connecting || !connectURL || !connectUser || !connectPass}>
+        <button
+          on:click={connect}
+          disabled={connecting || !connectURL || !connectUser || !connectPass}
+        >
           {connecting ? "Connecting..." : "Connect"}
         </button>
         {#if connectErr}
@@ -83,28 +102,54 @@
 
   <div class="group">
     <h3>Cache</h3>
-    <p class="text-3">Thumbnail images are cached on disk. Clear the cache whenever issues with album artwork arise.</p>
-    <button on:click={async () => {
-      await ClearArtworkCache()
-      cacheCleared = true
-      setTimeout(() => cacheCleared = false, 3000)
-    }}>Clear Artwork Cache</button>
+    <p class="text-3">
+      Thumbnail images are cached on disk. Clear the cache whenever issues with
+      album artwork arise.
+    </p>
+    <button
+      on:click={async () => {
+        await ClearArtworkCache();
+        cacheCleared = true;
+        setTimeout(() => (cacheCleared = false), 3000);
+      }}>Clear Artwork Cache</button
+    >
     {#if cacheCleared}<p class="msg">Cache cleared.</p>{/if}
   </div>
 
   <div class="group">
     <h3>About</h3>
-    <p class="text-3">pneuma, an open-source, self-hostable, and local-first music player and server.</p>
+    <p class="text-3">
+      pneuma, an open-source, self-hostable, and local-first music player and
+      server.
+    </p>
     <p class="text-3">v0.1.0</p>
   </div>
 </section>
 
 <style>
-  section { height: 100%; display: flex; flex-direction: column; gap: 32px; overflow-y: auto; }
-  h2 { margin: 0 0 4px; font-size: 20px; font-weight: 700; }
+  section {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    overflow-y: auto;
+  }
+  h2 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 700;
+  }
 
-  .group { display: flex; flex-direction: column; gap: 8px; }
-  h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+  }
 
   .connect-form {
     display: flex;
@@ -127,14 +172,33 @@
     border-color: var(--accent);
   }
 
-  .connected-status { display: flex; align-items: center; gap: 6px; }
-  .reconnecting-status { display: flex; align-items: center; gap: 6px; color: var(--accent); }
+  .connected-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .reconnecting-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+  }
 
-  .btn-danger { color: #ef4444; }
-  .btn-danger:hover { background: color-mix(in srgb, #ef4444 15%, transparent); }
+  .btn-danger {
+    color: #ef4444;
+  }
+  .btn-danger:hover {
+    background: color-mix(in srgb, #ef4444 15%, transparent);
+  }
 
-  .msg { font-size: 13px; margin: 0; color: var(--accent); }
-  .msg.error { color: #ef4444; }
+  .msg {
+    font-size: 13px;
+    margin: 0;
+    color: var(--accent);
+  }
+  .msg.error {
+    color: #ef4444;
+  }
 
   code {
     background: var(--surface);

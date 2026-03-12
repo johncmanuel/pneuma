@@ -1,58 +1,77 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte"
-  import { initApi, connected } from "./utils/api"
-  import { connectWS, disconnectWS } from "./stores/ws"
-  import { loadRemoteAlbumGroupsPage } from "./stores/library"
-  import { initPlaylists } from "./stores/playlists"
-  import { activePanel, currentView, pushNav, goBack, goForward, canGoBack, canGoForward } from "./stores/ui"
+  import { onMount, onDestroy } from "svelte";
+  import { initApi, connected } from "./utils/api";
+  import { connectWS, disconnectWS } from "./stores/ws";
+  import { loadRemoteAlbumGroupsPage } from "./stores/library";
+  import { initPlaylists } from "./stores/playlists";
+  import {
+    activePanel,
+    currentView,
+    pushNav,
+    goBack,
+    goForward,
+    canGoBack,
+    canGoForward
+  } from "./stores/ui";
 
-  import Sidebar from "./lib/Sidebar.svelte"
-  import Player from "./lib/Player.svelte"
-  import Library from "./lib/Library.svelte"
-  import Playlists from "./lib/Playlists.svelte"
-  import SearchBar from "./lib/SearchBar.svelte"
-  import Queue from "./lib/Queue.svelte"
-  import Toasts from "./lib/Toasts.svelte"
-  import Settings from "./lib/Settings.svelte"
-  import DisconnectBanner from "./lib/DisconnectBanner.svelte"
+  import Sidebar from "./lib/Sidebar.svelte";
+  import Player from "./lib/Player.svelte";
+  import Library from "./lib/Library.svelte";
+  import Playlists from "./lib/Playlists.svelte";
+  import SearchBar from "./lib/SearchBar.svelte";
+  import Queue from "./lib/Queue.svelte";
+  import Toasts from "./lib/Toasts.svelte";
+  import Settings from "./lib/Settings.svelte";
+  import DisconnectBanner from "./lib/DisconnectBanner.svelte";
 
-  let wasConnected = false
-  let searchBar: SearchBar
+  let wasConnected = false;
+  let searchBar: SearchBar;
 
   onMount(async () => {
-    await initApi()
-    await initPlaylists()
-  })
+    await initApi();
+    await initPlaylists();
+  });
 
   onDestroy(() => {
-    disconnectWS()
-  })
+    disconnectWS();
+  });
 
   // Reactively connect/disconnect WS whenever connected state changes.
   // This covers: initial connect, autoReconnect success, and manual disconnect.
   $: if ($connected && !wasConnected) {
-    wasConnected = true
-    connectWS()
-    loadRemoteAlbumGroupsPage(0)
+    wasConnected = true;
+    connectWS();
+    loadRemoteAlbumGroupsPage(0);
   } else if (!$connected && wasConnected) {
-    wasConnected = false
-    disconnectWS()
+    wasConnected = false;
+    disconnectWS();
   }
 
   function handleNavigate(e: CustomEvent<string>) {
-    pushNav({ view: e.detail, tab: "library", subTab: "albums", albumKey: null, playlistId: null })
+    pushNav({
+      view: e.detail,
+      tab: "library",
+      subTab: "albums",
+      albumKey: null,
+      playlistId: null
+    });
   }
 
   function handleKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-      e.preventDefault()
-      searchBar?.focus()
+      e.preventDefault();
+      searchBar?.focus();
     }
   }
 
   function handleMouseUp(e: MouseEvent) {
-    if (e.button === 3) { e.preventDefault(); goBack() }
-    else if (e.button === 4) { e.preventDefault(); goForward() }
+    if (e.button === 3) {
+      e.preventDefault();
+      goBack();
+    } else if (e.button === 4) {
+      e.preventDefault();
+      goForward();
+    }
   }
 </script>
 
@@ -65,11 +84,39 @@
 
   <header class="topbar">
     <div class="nav-history">
-      <button class="nav-btn" disabled={!$canGoBack} on:click={goBack} title="Go back">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      <button
+        class="nav-btn"
+        disabled={!$canGoBack}
+        on:click={goBack}
+        title="Go back"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"><polyline points="15 18 9 12 15 6" /></svg
+        >
       </button>
-      <button class="nav-btn" disabled={!$canGoForward} on:click={goForward} title="Go forward">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>
+      <button
+        class="nav-btn"
+        disabled={!$canGoForward}
+        on:click={goForward}
+        title="Go forward"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="18"
+          height="18"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"><polyline points="9 6 15 12 9 18" /></svg
+        >
       </button>
     </div>
     <div class="search-wrapper">
@@ -87,7 +134,7 @@
     {/if}
   </main>
 
-  {#if $activePanel === 'queue'}
+  {#if $activePanel === "queue"}
     <div class="panel-area">
       <Queue />
     </div>
@@ -101,12 +148,18 @@
 </div>
 
 <style>
-  :global(*, *::before, *::after) { box-sizing: border-box; }
+  :global(*, *::before, *::after) {
+    box-sizing: border-box;
+  }
   :global(body) {
     margin: 0;
     background: var(--bg);
     color: var(--fg);
-    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-family:
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      sans-serif;
     overflow: hidden;
   }
 
@@ -167,11 +220,18 @@
     color: var(--text-1);
     border: none;
     cursor: pointer;
-    transition: background 0.12s, opacity 0.12s;
+    transition:
+      background 0.12s,
+      opacity 0.12s;
     padding: 0;
   }
-  .nav-btn:hover:not(:disabled) { background: var(--surface-hover); }
-  .nav-btn:disabled { opacity: 0.3; cursor: default; }
+  .nav-btn:hover:not(:disabled) {
+    background: var(--surface-hover);
+  }
+  .nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
 
   .search-wrapper {
     position: relative;
@@ -196,5 +256,7 @@
     flex-direction: column;
   }
 
-  :global(.player-wrapper > .player) { height: var(--player-h); }
+  :global(.player-wrapper > .player) {
+    height: var(--player-h);
+  }
 </style>

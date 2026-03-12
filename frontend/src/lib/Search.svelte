@@ -1,35 +1,45 @@
 <script lang="ts">
-  import { searchResults, albumSearchResults, searchTracks, searchAlbumGroups, clearSearch, type RemoteAlbumGroup } from "../stores/library"
-  import { searchLocalAlbumGroups, type LocalAlbumGroup } from "../stores/localLibrary"
-  import { playerState } from "../stores/player"
-  import TrackRow from "./TrackRow.svelte"
-  import type { Track } from "../stores/player"
-  import { connected, artworkUrl, localBase } from "../utils/api"
-  import { wsSend } from "../stores/ws"
-  import { pushNav } from "../stores/ui"
+  import {
+    searchResults,
+    albumSearchResults,
+    searchTracks,
+    searchAlbumGroups,
+    clearSearch,
+    type RemoteAlbumGroup
+  } from "../stores/library";
+  import {
+    searchLocalAlbumGroups,
+    type LocalAlbumGroup
+  } from "../stores/localLibrary";
+  import { playerState } from "../stores/player";
+  import TrackRow from "./TrackRow.svelte";
+  import type { Track } from "../stores/player";
+  import { connected, artworkUrl, localBase } from "../utils/api";
+  import { wsSend } from "../stores/ws";
+  import { pushNav } from "../stores/ui";
 
-  let query = ""
-  let debounce: number
-  let localAlbumResults: LocalAlbumGroup[] = []
+  let query = "";
+  let debounce: number;
+  let localAlbumResults: LocalAlbumGroup[] = [];
 
   function onInput() {
-    clearTimeout(debounce)
+    clearTimeout(debounce);
     debounce = window.setTimeout(async () => {
-      const q = query.trim()
+      const q = query.trim();
       if (q.length >= 2) {
-        searchTracks(q)
-        searchAlbumGroups(q)
-        localAlbumResults = await searchLocalAlbumGroups(q)
+        searchTracks(q);
+        searchAlbumGroups(q);
+        localAlbumResults = await searchLocalAlbumGroups(q);
       } else {
-        clearSearch()
-        localAlbumResults = []
+        clearSearch();
+        localAlbumResults = [];
       }
-    }, 300)
+    }, 300);
   }
 
   function playTrack(track: Track) {
-    if (!$connected) return
-    playerState.update(s => ({
+    if (!$connected) return;
+    playerState.update((s) => ({
       ...s,
       trackId: track.id,
       track,
@@ -37,34 +47,49 @@
       baseQueue: [track.id],
       queueIndex: 0,
       positionMs: 0,
-      paused: false,
-    }))
-    wsSend("playback.play", { device_id: "desktop", track_id: track.id, position_ms: 0 })
+      paused: false
+    }));
+    wsSend("playback.play", {
+      device_id: "desktop",
+      track_id: track.id,
+      position_ms: 0
+    });
   }
 
   function addToQueue(track: Track) {
-    playerState.update(s => ({
+    playerState.update((s) => ({
       ...s,
-      queue: [...s.queue, track.id],
-    }))
+      queue: [...s.queue, track.id]
+    }));
   }
 
   function openRemoteAlbum(album: RemoteAlbumGroup) {
-    pushNav({ view: "library", tab: "library", subTab: "albums", albumKey: album.key })
+    pushNav({
+      view: "library",
+      tab: "library",
+      subTab: "albums",
+      albumKey: album.key
+    });
   }
 
   function openLocalAlbum(album: LocalAlbumGroup) {
-    pushNav({ view: "library", tab: "local", subTab: "albums", albumKey: album.key })
+    pushNav({
+      view: "library",
+      tab: "local",
+      subTab: "albums",
+      albumKey: album.key
+    });
   }
 
   function localAlbumArtUrl(album: LocalAlbumGroup): string {
-    const base = localBase()
-    if (!base || !album.first_track_path) return ""
-    return `${base}/local/art?path=${encodeURIComponent(album.first_track_path)}`
+    const base = localBase();
+    if (!base || !album.first_track_path) return "";
+    return `${base}/local/art?path=${encodeURIComponent(album.first_track_path)}`;
   }
 
-  $: hasAlbumResults = $albumSearchResults.length > 0 || localAlbumResults.length > 0
-  $: hasResults = hasAlbumResults || $searchResults.length > 0
+  $: hasAlbumResults =
+    $albumSearchResults.length > 0 || localAlbumResults.length > 0;
+  $: hasResults = hasAlbumResults || $searchResults.length > 0;
 </script>
 
 <section>
@@ -84,12 +109,21 @@
         {#each localAlbumResults as album (album.key + "-local")}
           <button class="album-row" on:click={() => openLocalAlbum(album)}>
             <div class="album-art">
-              <img src={localAlbumArtUrl(album)} alt="" on:error={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+              <img
+                src={localAlbumArtUrl(album)}
+                alt=""
+                on:error={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
               <span class="album-art-ph">♫</span>
             </div>
             <div class="album-info">
               <span class="album-name">{album.name || "Unorganized"}</span>
-              <span class="album-meta">{album.artist || "Unknown Artist"} · {album.track_count} tracks · Local</span>
+              <span class="album-meta"
+                >{album.artist || "Unknown Artist"} · {album.track_count} tracks ·
+                Local</span
+              >
             </div>
             <span class="album-chevron">›</span>
           </button>
@@ -97,12 +131,20 @@
         {#each $albumSearchResults as album (album.key + "-remote")}
           <button class="album-row" on:click={() => openRemoteAlbum(album)}>
             <div class="album-art">
-              <img src={artworkUrl(album.first_track_id)} alt="" on:error={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+              <img
+                src={artworkUrl(album.first_track_id)}
+                alt=""
+                on:error={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+              />
               <span class="album-art-ph">♫</span>
             </div>
             <div class="album-info">
               <span class="album-name">{album.name || "Unorganized"}</span>
-              <span class="album-meta">{album.artist || "Unknown Artist"} · {album.track_count} tracks</span>
+              <span class="album-meta"
+                >{album.artist || "Unknown Artist"} · {album.track_count} tracks</span
+              >
             </div>
             <span class="album-chevron">›</span>
           </button>
@@ -130,8 +172,16 @@
 </section>
 
 <style>
-  section { height: 100%; display: flex; flex-direction: column; }
-  h2 { margin: 0 0 16px; font-size: 20px; font-weight: 700; }
+  section {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  h2 {
+    margin: 0 0 16px;
+    font-size: 20px;
+    font-weight: 700;
+  }
 
   .search-input {
     width: 100%;
@@ -145,8 +195,14 @@
     font-size: 14px;
   }
 
-  .search-input:focus { outline: none; border-color: var(--accent); }
-  .results { flex: 1; overflow-y: auto; }
+  .search-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .results {
+    flex: 1;
+    overflow-y: auto;
+  }
 
   .section-label {
     font-size: 11px;
@@ -172,7 +228,9 @@
     text-align: left;
     transition: background 0.1s;
   }
-  .album-row:hover { background: var(--surface-2); }
+  .album-row:hover {
+    background: var(--surface-2);
+  }
 
   .album-art {
     width: 40px;
@@ -186,11 +244,43 @@
     align-items: center;
     justify-content: center;
   }
-  .album-art img { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0; z-index: 1; }
-  .album-art-ph { font-size: 16px; color: var(--text-3); }
+  .album-art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+  }
+  .album-art-ph {
+    font-size: 16px;
+    color: var(--text-3);
+  }
 
-  .album-info { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 2px; }
-  .album-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .album-meta { font-size: 11px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .album-chevron { font-size: 18px; color: var(--text-3); flex-shrink: 0; }
+  .album-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    gap: 2px;
+  }
+  .album-name {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .album-meta {
+    font-size: 11px;
+    color: var(--text-3);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .album-chevron {
+    font-size: 18px;
+    color: var(--text-3);
+    flex-shrink: 0;
+  }
 </style>

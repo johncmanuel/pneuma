@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { albums, loading } from "../stores/library"
-  import { apiBase } from "../utils/api"
+  import { albums, loading } from "../stores/library";
+  import { apiBase } from "../utils/api";
 
   function artUrl(artworkId: string | null): string {
-    if (!artworkId) return ""
-    const base = apiBase()
-    if (!base) return ""
-    return `${base}/api/library/artwork/${artworkId}`
+    if (!artworkId) return "";
+    const base = apiBase();
+    if (!base) return "";
+    return `${base}/api/library/artwork/${artworkId}`;
   }
 </script>
 
@@ -23,7 +23,12 @@
         <div class="card">
           <div class="art">
             {#if album.artwork_id}
-              <img src={artUrl(album.artwork_id)} alt={album.title} loading="lazy" decoding="async"/>
+              <img
+                src={artUrl(album.artwork_id)}
+                alt={album.title}
+                loading="lazy"
+                decoding="async"
+              />
             {:else}
               <div class="placeholder">♫</div>
             {/if}
@@ -39,8 +44,15 @@
 </section>
 
 <style>
-  section { height: 100%; overflow-y: auto; }
-  h2 { margin: 0 0 20px; font-size: 20px; font-weight: 700; }
+  section {
+    height: 100%;
+    overflow-y: auto;
+  }
+  h2 {
+    margin: 0 0 20px;
+    font-size: 20px;
+    font-weight: 700;
+  }
 
   .grid {
     display: grid;
@@ -48,8 +60,12 @@
     gap: 16px;
   }
 
-  .card { cursor: pointer; }
-  .card:hover .art { border-color: var(--accent); }
+  .card {
+    cursor: pointer;
+  }
+  .card:hover .art {
+    border-color: var(--accent);
+  }
 
   .art {
     aspect-ratio: 1;
@@ -64,9 +80,23 @@
     transition: border-color 0.15s;
   }
 
-  .art img { width: 100%; height: 100%; object-fit: cover; }
-  .placeholder { font-size: 36px; color: var(--fg-3); }
+  .art img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .placeholder {
+    font-size: 36px;
+    color: var(--fg-3);
+  }
 
-  .album-title { margin: 0; font-size: 12px; font-weight: 600; }
-  .album-artist { margin: 2px 0 0; font-size: 11px; }
+  .album-title {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .album-artist {
+    margin: 2px 0 0;
+    font-size: 11px;
+  }
 </style>

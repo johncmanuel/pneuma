@@ -1,29 +1,29 @@
 <script lang="ts">
-  import { onMount } from "svelte"
-  import { apiFetch } from "../api"
+  import { onMount } from "svelte";
+  import { apiFetch } from "../api";
 
   interface User {
-    id: string
-    username: string
-    is_admin: boolean
-    can_upload: boolean
-    can_edit: boolean
-    can_delete: boolean
-    created_at: string
+    id: string;
+    username: string;
+    is_admin: boolean;
+    can_upload: boolean;
+    can_edit: boolean;
+    can_delete: boolean;
+    created_at: string;
   }
 
-  let users: User[] = []
-  let loading = false
+  let users: User[] = [];
+  let loading = false;
 
-  onMount(loadUsers)
+  onMount(loadUsers);
 
   async function loadUsers() {
-    loading = true
+    loading = true;
     try {
-      const r = await apiFetch("/api/admin/users")
-      if (r.ok) users = await r.json()
+      const r = await apiFetch("/api/admin/users");
+      if (r.ok) users = await r.json();
     } finally {
-      loading = false
+      loading = false;
     }
   }
 
@@ -33,22 +33,22 @@
       body: JSON.stringify({
         can_upload: user.can_upload,
         can_edit: user.can_edit,
-        can_delete: user.can_delete,
-      }),
-    })
+        can_delete: user.can_delete
+      })
+    });
   }
 
   async function deleteUser(id: string, username: string) {
-    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return
-    const r = await apiFetch(`/api/admin/users/${id}`, { method: "DELETE" })
-    if (r.ok) await loadUsers()
+    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+    const r = await apiFetch(`/api/admin/users/${id}`, { method: "DELETE" });
+    if (r.ok) await loadUsers();
   }
 
   function formatDate(iso: string): string {
     try {
-      return new Date(iso).toLocaleDateString()
+      return new Date(iso).toLocaleDateString();
     } catch {
-      return iso
+      return iso;
     }
   }
 </script>
@@ -110,7 +110,11 @@
               <td class="text-3">{formatDate(user.created_at)}</td>
               <td>
                 {#if !user.is_admin}
-                  <button class="sm-btn danger" on:click={() => deleteUser(user.id, user.username)}>Delete</button>
+                  <button
+                    class="sm-btn danger"
+                    on:click={() => deleteUser(user.id, user.username)}
+                    >Delete</button
+                  >
                 {/if}
               </td>
             </tr>
@@ -122,9 +126,15 @@
 </div>
 
 <style>
-  .panel { display: flex; flex-direction: column; gap: 12px; }
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
 
-  .table-wrap { overflow-x: auto; }
+  .table-wrap {
+    overflow-x: auto;
+  }
 
   table {
     width: 100%;
@@ -147,7 +157,9 @@
     border-bottom: 1px solid var(--border);
   }
 
-  tr:hover { background: var(--surface-hover); }
+  tr:hover {
+    background: var(--surface-hover);
+  }
 
   input[type="checkbox"] {
     width: 16px;
@@ -164,8 +176,14 @@
     border-radius: 999px;
     font-weight: 600;
   }
-  .badge.admin { background: var(--accent-dim); color: #000; }
-  .badge.user { background: var(--surface-2); color: var(--text-2); }
+  .badge.admin {
+    background: var(--accent-dim);
+    color: #000;
+  }
+  .badge.user {
+    background: var(--surface-2);
+    color: var(--text-2);
+  }
 
   .sm-btn {
     padding: 3px 10px;
@@ -174,6 +192,10 @@
     background: var(--surface-2);
     border: 1px solid var(--border);
   }
-  .sm-btn.danger { color: var(--danger); }
-  .sm-btn.danger:hover { background: rgba(248, 113, 113, 0.1); }
+  .sm-btn.danger {
+    color: var(--danger);
+  }
+  .sm-btn.danger:hover {
+    background: rgba(248, 113, 113, 0.1);
+  }
 </style>

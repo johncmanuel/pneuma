@@ -1,44 +1,71 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte"
-  import { recentAlbums, recentPlaylists, getRecentAlbumArtUrl, getRecentPlaylistArtUrl } from "../stores/recentAlbums"
-  import { pushNav } from "../stores/ui"
-  import { serverURL, authToken } from "../utils/api"
-  export let activeView: string = "library"
+  import { createEventDispatcher } from "svelte";
+  import {
+    recentAlbums,
+    recentPlaylists,
+    getRecentAlbumArtUrl,
+    getRecentPlaylistArtUrl
+  } from "../stores/recentAlbums";
+  import { pushNav } from "../stores/ui";
+  import { serverURL, authToken } from "../utils/api";
+  export let activeView: string = "library";
 
-  const dispatch = createEventDispatcher()
+  const dispatch = createEventDispatcher();
 
   const navItems = [
-    { id: "library",   label: "Library"  },
+    { id: "library", label: "Library" },
     { id: "playlists", label: "Playlists" },
-    { id: "settings",  label: "Settings" },
-  ]
+    { id: "settings", label: "Settings" }
+  ];
 
-  function openRecentAlbum(album: import("../stores/recentAlbums").RecentAlbum) {
+  function openRecentAlbum(
+    album: import("../stores/recentAlbums").RecentAlbum
+  ) {
     pushNav({
       view: "library",
       tab: album.isLocal ? "local" : "library",
       subTab: "albums",
-      albumKey: album.key,
-    })
+      albumKey: album.key
+    });
   }
 
-  function openRecentPlaylist(pl: import("../stores/recentAlbums").RecentPlaylist) {
-    pushNav({ view: "playlists", playlistId: pl.id, albumKey: null })
+  function openRecentPlaylist(
+    pl: import("../stores/recentAlbums").RecentPlaylist
+  ) {
+    pushNav({ view: "playlists", playlistId: pl.id, albumKey: null });
   }
 
   function hideImg(e: Event) {
-    const img = e.currentTarget as HTMLImageElement
-    if (img) img.style.display = "none"
+    const img = e.currentTarget as HTMLImageElement;
+    if (img) img.style.display = "none";
   }
 
   // Re-compute artwork URLs whenever auth state changes (needed for remote albums)
-  $: _authDeps = [$serverURL, $authToken]
+  $: _authDeps = [$serverURL, $authToken];
 
   // Merge and sort recent albums + playlists by playedAt descending (max 20).
   $: recentItems = [
-    ...$recentPlaylists.map(p => ({ kind: 'playlist' as const, key: 'pl-' + p.id, name: p.name, sub: 'Playlist', playedAt: p.playedAt, pl: p, album: null })),
-    ...$recentAlbums.map(a => ({ kind: 'album' as const, key: 'al-' + a.key, name: a.name, sub: a.artist, playedAt: a.playedAt ?? 0, pl: null, album: a })),
-  ].sort((a, b) => b.playedAt - a.playedAt).slice(0, 20)
+    ...$recentPlaylists.map((p) => ({
+      kind: "playlist" as const,
+      key: "pl-" + p.id,
+      name: p.name,
+      sub: "Playlist",
+      playedAt: p.playedAt,
+      pl: p,
+      album: null
+    })),
+    ...$recentAlbums.map((a) => ({
+      kind: "album" as const,
+      key: "al-" + a.key,
+      name: a.name,
+      sub: a.artist,
+      playedAt: a.playedAt ?? 0,
+      pl: null,
+      album: a
+    }))
+  ]
+    .sort((a, b) => b.playedAt - a.playedAt)
+    .slice(0, 20);
 </script>
 
 <nav>
@@ -62,11 +89,19 @@
       <ul class="recents-list">
         {#each recentItems as item (item.key)}
           <li>
-            {#if item.kind === 'playlist' && item.pl}
-              <button class="recent-row" on:click={() => openRecentPlaylist(item.pl)}>
+            {#if item.kind === "playlist" && item.pl}
+              <button
+                class="recent-row"
+                on:click={() => openRecentPlaylist(item.pl)}
+              >
                 <div class="recent-art">
                   {#if item.pl.artworkPath && getRecentPlaylistArtUrl(item.pl.artworkPath)}
-                    <img src={getRecentPlaylistArtUrl(item.pl.artworkPath)} alt={item.pl.name} on:error={hideImg} loading="lazy"/>
+                    <img
+                      src={getRecentPlaylistArtUrl(item.pl.artworkPath)}
+                      alt={item.pl.name}
+                      on:error={hideImg}
+                      loading="lazy"
+                    />
                   {/if}
                   <span class="recent-art-placeholder">♫</span>
                 </div>
@@ -75,17 +110,26 @@
                   <span class="recent-artist truncate">Playlist</span>
                 </div>
               </button>
-            {:else if item.kind === 'album' && item.album}
-              <button class="recent-row" on:click={() => openRecentAlbum(item.album)}>
+            {:else if item.kind === "album" && item.album}
+              <button
+                class="recent-row"
+                on:click={() => openRecentAlbum(item.album)}
+              >
                 <div class="recent-art">
                   {#if _authDeps && getRecentAlbumArtUrl(item.album)}
-                    <img src={_authDeps && getRecentAlbumArtUrl(item.album)} alt={item.album.name} on:error={hideImg} loading="lazy"/>
+                    <img
+                      src={_authDeps && getRecentAlbumArtUrl(item.album)}
+                      alt={item.album.name}
+                      on:error={hideImg}
+                      loading="lazy"
+                    />
                   {/if}
                   <span class="recent-art-placeholder">♫</span>
                 </div>
                 <div class="recent-info">
                   <span class="recent-name truncate">{item.album.name}</span>
-                  <span class="recent-artist truncate">{item.album.artist}</span>
+                  <span class="recent-artist truncate">{item.album.artist}</span
+                  >
                 </div>
               </button>
             {/if}
@@ -115,7 +159,11 @@
     padding: 0 16px 20px;
   }
 
-  ul { list-style: none; padding: 0; margin: 0; }
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
 
   li button {
     display: block;
@@ -125,11 +173,19 @@
     border-radius: 0;
     color: var(--text-2);
     font-size: 13px;
-    transition: background 0.1s, color 0.1s;
+    transition:
+      background 0.1s,
+      color 0.1s;
   }
 
-  li button:hover { background: var(--surface-hover); color: var(--text-1); }
-  li button.active { color: var(--text-1); font-weight: 600; }
+  li button:hover {
+    background: var(--surface-hover);
+    color: var(--text-1);
+  }
+  li button.active {
+    color: var(--text-1);
+    font-weight: 600;
+  }
 
   /* Recently Played */
   .recents-section {
@@ -151,7 +207,11 @@
     color: var(--text-3);
   }
 
-  .recents-list { list-style: none; padding: 0; margin: 0; }
+  .recents-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
 
   .recent-row {
     display: flex;
@@ -161,9 +221,14 @@
     padding: 5px 16px;
     text-align: left;
     color: var(--text-2);
-    transition: background 0.1s, color 0.1s;
+    transition:
+      background 0.1s,
+      color 0.1s;
   }
-  .recent-row:hover { background: var(--surface-hover); color: var(--text-1); }
+  .recent-row:hover {
+    background: var(--surface-hover);
+    color: var(--text-1);
+  }
 
   .recent-art {
     width: 36px;

@@ -1,83 +1,96 @@
 <script lang="ts">
-  import { onMount } from "svelte"
-  import { derived } from "svelte/store"
+  import { onMount } from "svelte";
+  import { derived } from "svelte/store";
   import {
-    playlists, selectedPlaylistId, selectedPlaylist,
-    selectedPlaylistItems, playlistsLoading,
-    loadPlaylists, createPlaylist, deletePlaylist,
-    selectPlaylist, playPlaylist, removePlaylistItem,
-    uploadPlaylist, updatePlaylist,
+    playlists,
+    selectedPlaylistId,
+    selectedPlaylist,
+    selectedPlaylistItems,
+    playlistsLoading,
+    loadPlaylists,
+    createPlaylist,
+    deletePlaylist,
+    selectPlaylist,
+    playPlaylist,
+    removePlaylistItem,
+    uploadPlaylist,
+    updatePlaylist,
     pickPlaylistArtwork,
-    type PlaylistItem, type PlaylistSummary,
-  } from "../stores/playlists"
-  import { selectedPlaylistView, pushNav } from "../stores/ui"
-  import { playerState, type Track } from "../stores/player"
-  import { connected, playlistArtUrl } from "../utils/api"
-  import TrackRow from "./TrackRow.svelte"
+    type PlaylistItem,
+    type PlaylistSummary
+  } from "../stores/playlists";
+  import { selectedPlaylistView, pushNav } from "../stores/ui";
+  import { playerState, type Track } from "../stores/player";
+  import { connected, playlistArtUrl } from "../utils/api";
+  import TrackRow from "./TrackRow.svelte";
 
-  const currentTrackId = derived(playerState, $s => $s.trackId)
+  const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
   // ─── List / detail view state ──────────────────────────────────
 
-  let showNewDialog = false
-  let newName = ""
-  let newDesc = ""
-  let editingId: string | null = null
-  let editName = ""
-  let editDesc = ""
+  let showNewDialog = false;
+  let newName = "";
+  let newDesc = "";
+  let editingId: string | null = null;
+  let editName = "";
+  let editDesc = "";
 
   // Track the playlist view from ui store
   $: if ($selectedPlaylistView) {
-    selectPlaylist($selectedPlaylistView)
+    selectPlaylist($selectedPlaylistView);
   } else {
-    selectedPlaylistId.set(null)
-    selectedPlaylist.set(null)
-    selectedPlaylistItems.set([])
+    selectedPlaylistId.set(null);
+    selectedPlaylist.set(null);
+    selectedPlaylistItems.set([]);
   }
 
   // ─── Detail: sort & filter ─────────────────────────────────────
 
-  let filter = ""
-  type SortField = "default" | "title" | "added_at" | "duration"
-  let sortField: SortField = "default"
-  let sortDir: "asc" | "desc" = "asc"
+  let filter = "";
+  type SortField = "default" | "title" | "added_at" | "duration";
+  let sortField: SortField = "default";
+  let sortDir: "asc" | "desc" = "asc";
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
-      sortDir = sortDir === "asc" ? "desc" : "asc"
+      sortDir = sortDir === "asc" ? "desc" : "asc";
     } else {
-      sortField = field
-      sortDir = "asc"
+      sortField = field;
+      sortDir = "asc";
     }
   }
 
   function sortIndicator(field: SortField): string {
-    return sortField === field ? (sortDir === "asc" ? " ↑" : " ↓") : ""
+    return sortField === field ? (sortDir === "asc" ? " ↑" : " ↓") : "";
   }
 
-  $: filteredItems =
-    $selectedPlaylistItems
-      .filter(i => {
-        if (!filter) return true
-        const q = filter.toLowerCase()
-        return i.ref_title.toLowerCase().includes(q) ||
-               i.ref_album.toLowerCase().includes(q) ||
-               i.ref_album_artist.toLowerCase().includes(q)
-      })
-      .sort((a, b) => {
-        if (sortField === "default") return a.position - b.position
-        let cmp = 0
-        if (sortField === "title") cmp = a.ref_title.localeCompare(b.ref_title)
-        else if (sortField === "added_at") cmp = a.added_at.localeCompare(b.added_at)
-        else if (sortField === "duration") cmp = a.ref_duration_ms - b.ref_duration_ms
-        return sortDir === "desc" ? -cmp : cmp
-      })
+  $: filteredItems = $selectedPlaylistItems
+    .filter((i) => {
+      if (!filter) return true;
+      const q = filter.toLowerCase();
+      return (
+        i.ref_title.toLowerCase().includes(q) ||
+        i.ref_album.toLowerCase().includes(q) ||
+        i.ref_album_artist.toLowerCase().includes(q)
+      );
+    })
+    .sort((a, b) => {
+      if (sortField === "default") return a.position - b.position;
+      let cmp = 0;
+      if (sortField === "title") cmp = a.ref_title.localeCompare(b.ref_title);
+      else if (sortField === "added_at")
+        cmp = a.added_at.localeCompare(b.added_at);
+      else if (sortField === "duration")
+        cmp = a.ref_duration_ms - b.ref_duration_ms;
+      return sortDir === "desc" ? -cmp : cmp;
+    });
 
   // Build Track from PlaylistItem for TrackRow
   function itemToTrack(item: PlaylistItem): Track {
-    const id = item.source === "local_ref" && item.local_path
-      ? item.local_path
-      : item.track_id || `missing-${item.position}`
+    const id =
+      item.source === "local_ref" && item.local_path
+        ? item.local_path
+        : item.track_id || `missing-${item.position}`;
     return {
       id,
       path: item.local_path || "",
@@ -94,102 +107,145 @@
       duration_ms: item.ref_duration_ms,
       bitrate_kbps: 0,
       replay_gain_track: 0,
-      artwork_id: "",
-    }
+      artwork_id: ""
+    };
   }
 
   // ─── Handlers ──────────────────────────────────────────────────
 
   async function handleCreate() {
-    if (!newName.trim()) return
-    const id = await createPlaylist(newName.trim(), newDesc.trim())
-    newName = ""
-    newDesc = ""
-    showNewDialog = false
+    if (!newName.trim()) return;
+    const id = await createPlaylist(newName.trim(), newDesc.trim());
+    newName = "";
+    newDesc = "";
+    showNewDialog = false;
     if (id) {
-      pushNav({ view: "playlists", playlistId: id })
+      pushNav({ view: "playlists", playlistId: id });
     }
   }
 
   function openPlaylist(pl: PlaylistSummary) {
-    pushNav({ view: "playlists", playlistId: pl.id, albumKey: null })
+    pushNav({ view: "playlists", playlistId: pl.id, albumKey: null });
   }
 
   function handlePlay(item: PlaylistItem) {
-    const idx = $selectedPlaylistItems.findIndex(i => i.position === item.position)
-    playPlaylist($selectedPlaylistItems, idx >= 0 ? idx : 0, $selectedPlaylistId ?? undefined)
+    const idx = $selectedPlaylistItems.findIndex(
+      (i) => i.position === item.position
+    );
+    playPlaylist(
+      $selectedPlaylistItems,
+      idx >= 0 ? idx : 0,
+      $selectedPlaylistId ?? undefined
+    );
   }
 
   async function handleRemove(item: PlaylistItem) {
     if ($selectedPlaylistId) {
-      await removePlaylistItem($selectedPlaylistId, item.position)
+      await removePlaylistItem($selectedPlaylistId, item.position);
     }
   }
 
   function formatDate(iso: string): string {
-    if (!iso) return "—"
-    const d = new Date(iso)
-    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
   }
 
   async function handleUpload() {
     if ($selectedPlaylistId) {
-      await uploadPlaylist($selectedPlaylistId)
+      await uploadPlaylist($selectedPlaylistId);
     }
   }
 
   function startEdit(pl: PlaylistSummary) {
-    editingId = pl.id
-    editName = pl.name
-    editDesc = pl.description
+    editingId = pl.id;
+    editName = pl.name;
+    editDesc = pl.description;
   }
 
   async function saveEdit() {
     if (editingId && editName.trim()) {
-      await updatePlaylist(editingId, editName.trim(), editDesc.trim())
-      editingId = null
+      await updatePlaylist(editingId, editName.trim(), editDesc.trim());
+      editingId = null;
     }
   }
 
   function cancelEdit() {
-    editingId = null
+    editingId = null;
   }
 
   function totalDuration(ms: number): string {
-    const totalMin = Math.floor(ms / 60000)
-    if (totalMin < 60) return `${totalMin} min`
-    const h = Math.floor(totalMin / 60)
-    const m = totalMin % 60
-    return `${h} hr ${m} min`
+    const totalMin = Math.floor(ms / 60000);
+    if (totalMin < 60) return `${totalMin} min`;
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return `${h} hr ${m} min`;
   }
 
   onMount(() => {
-    loadPlaylists()
-  })
+    loadPlaylists();
+  });
 </script>
 
 {#if $selectedPlaylistView && $selectedPlaylist}
   <div class="playlist-detail">
     <div class="detail-header">
       <div class="detail-hero">
-        <button class="detail-art" on:click={() => $selectedPlaylistId && pickPlaylistArtwork($selectedPlaylistId)} title="Change artwork">
+        <button
+          class="detail-art"
+          on:click={() =>
+            $selectedPlaylistId && pickPlaylistArtwork($selectedPlaylistId)}
+          title="Change artwork"
+        >
           {#if $selectedPlaylist.artwork_path}
-            <img src={playlistArtUrl($selectedPlaylist.artwork_path)} alt="" on:error={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+            <img
+              src={playlistArtUrl($selectedPlaylist.artwork_path)}
+              alt=""
+              on:error={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
           {/if}
           <span class="art-placeholder">♫</span>
           <div class="art-overlay">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+            <svg
+              viewBox="0 0 24 24"
+              width="24"
+              height="24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 20h9" /><path
+                d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"
+              />
             </svg>
           </div>
         </button>
         <div class="detail-meta">
           {#if editingId === $selectedPlaylist.id}
-            <input class="edit-input title-input" bind:value={editName} on:keydown={(e) => e.key === 'Enter' && saveEdit()} />
-            <input class="edit-input desc-input" bind:value={editDesc} placeholder="Description" on:keydown={(e) => e.key === 'Enter' && saveEdit()} />
+            <input
+              class="edit-input title-input"
+              bind:value={editName}
+              on:keydown={(e) => e.key === "Enter" && saveEdit()}
+            />
+            <input
+              class="edit-input desc-input"
+              bind:value={editDesc}
+              placeholder="Description"
+              on:keydown={(e) => e.key === "Enter" && saveEdit()}
+            />
             <div class="edit-actions">
               <button class="small-btn" on:click={saveEdit}>Save</button>
-              <button class="small-btn secondary" on:click={cancelEdit}>Cancel</button>
+              <button class="small-btn secondary" on:click={cancelEdit}
+                >Cancel</button
+              >
             </div>
           {:else}
             <h1 class="detail-name">{$selectedPlaylist.name}</h1>
@@ -207,29 +263,61 @@
       </div>
 
       <div class="detail-actions">
-        <button class="action-btn primary" on:click={() => playPlaylist($selectedPlaylistItems, 0, $selectedPlaylistId ?? undefined)} disabled={$selectedPlaylistItems.length === 0}>
+        <button
+          class="action-btn primary"
+          on:click={() =>
+            playPlaylist(
+              $selectedPlaylistItems,
+              0,
+              $selectedPlaylistId ?? undefined
+            )}
+          disabled={$selectedPlaylistItems.length === 0}
+        >
           Play
         </button>
-        <button class="action-btn" on:click={() => startEdit($selectedPlaylist)}>Edit</button>
+        <button class="action-btn" on:click={() => startEdit($selectedPlaylist)}
+          >Edit</button
+        >
         {#if $connected && !$selectedPlaylist.remote_playlist_id}
-          <button class="action-btn" on:click={handleUpload}>Upload to Server</button>
+          <button class="action-btn" on:click={handleUpload}
+            >Upload to Server</button
+          >
         {:else if $connected && $selectedPlaylist.remote_playlist_id}
-          <button class="action-btn" on:click={handleUpload}>Sync to Server</button>
+          <button class="action-btn" on:click={handleUpload}
+            >Sync to Server</button
+          >
         {/if}
-        <button class="action-btn danger" on:click={() => { if (confirm('Delete this playlist?')) deletePlaylist($selectedPlaylist.id) }}>
+        <button
+          class="action-btn danger"
+          on:click={() => {
+            if (confirm("Delete this playlist?"))
+              deletePlaylist($selectedPlaylist.id);
+          }}
+        >
           Delete
         </button>
         <div class="filter-spacer"></div>
-        <input type="text" class="filter-input" placeholder="Filter tracks…" bind:value={filter} />
+        <input
+          type="text"
+          class="filter-input"
+          placeholder="Filter tracks…"
+          bind:value={filter}
+        />
       </div>
     </div>
 
     <div class="track-headers">
       <span class="num">#</span>
-      <button class="sortable" on:click={() => toggleSort("title")}>Title{sortIndicator("title")}</button>
+      <button class="sortable" on:click={() => toggleSort("title")}
+        >Title{sortIndicator("title")}</button
+      >
       <span>Album</span>
-      <button class="sortable" on:click={() => toggleSort("added_at")}>Date Added{sortIndicator("added_at")}</button>
-      <button class="sortable" on:click={() => toggleSort("duration")}>Duration{sortIndicator("duration")}</button>
+      <button class="sortable" on:click={() => toggleSort("added_at")}
+        >Date Added{sortIndicator("added_at")}</button
+      >
+      <button class="sortable" on:click={() => toggleSort("duration")}
+        >Duration{sortIndicator("duration")}</button
+      >
     </div>
 
     <div class="track-list">
@@ -237,7 +325,9 @@
         <p class="text-3 loading-msg">Loading…</p>
       {:else if filteredItems.length === 0}
         <p class="text-3 empty-msg">
-          {filter ? "No matching tracks." : "This playlist is empty. Add tracks from the library."}
+          {filter
+            ? "No matching tracks."
+            : "This playlist is empty. Add tracks from the library."}
         </p>
       {:else}
         {#each filteredItems as item (item.position)}
@@ -257,42 +347,70 @@
       {/if}
     </div>
   </div>
-
 {:else}
   <div class="playlist-list">
     <div class="list-header">
       <h2>Playlists</h2>
-      <button class="new-btn" on:click={() => showNewDialog = true}>+ New Playlist</button>
+      <button class="new-btn" on:click={() => (showNewDialog = true)}
+        >+ New Playlist</button
+      >
     </div>
 
     {#if showNewDialog}
       <div class="new-dialog">
         <!-- svelte-ignore a11y_autofocus -->
-        <input class="new-input" placeholder="Playlist name" bind:value={newName} on:keydown={(e) => e.key === 'Enter' && handleCreate()} autofocus />
-        <input class="new-input" placeholder="Description (optional)" bind:value={newDesc} on:keydown={(e) => e.key === 'Enter' && handleCreate()} />
+        <input
+          class="new-input"
+          placeholder="Playlist name"
+          bind:value={newName}
+          on:keydown={(e) => e.key === "Enter" && handleCreate()}
+          autofocus
+        />
+        <input
+          class="new-input"
+          placeholder="Description (optional)"
+          bind:value={newDesc}
+          on:keydown={(e) => e.key === "Enter" && handleCreate()}
+        />
         <div class="new-actions">
           <button class="small-btn" on:click={handleCreate}>Create</button>
-          <button class="small-btn secondary" on:click={() => { showNewDialog = false; newName = ''; newDesc = '' }}>Cancel</button>
+          <button
+            class="small-btn secondary"
+            on:click={() => {
+              showNewDialog = false;
+              newName = "";
+              newDesc = "";
+            }}>Cancel</button
+          >
         </div>
       </div>
     {/if}
 
     {#if $playlists.length === 0}
-      <p class="text-3 empty-msg">No playlists yet. Create one to get started.</p>
+      <p class="text-3 empty-msg">
+        No playlists yet. Create one to get started.
+      </p>
     {:else}
       <div class="pl-grid">
         {#each $playlists as pl (pl.id)}
           <button class="pl-card" on:click={() => openPlaylist(pl)}>
             <div class="pl-art">
               {#if pl.artwork_path}
-                <img src={playlistArtUrl(pl.artwork_path)} alt="" on:error={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
+                <img
+                  src={playlistArtUrl(pl.artwork_path)}
+                  alt=""
+                  on:error={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display =
+                      "none";
+                  }}
+                />
               {/if}
               <span class="art-placeholder">♫</span>
             </div>
             <div class="pl-info">
               <span class="pl-name truncate">{pl.name}</span>
               <span class="pl-meta text-3">
-                {pl.item_count} song{pl.item_count !== 1 ? 's' : ''}
+                {pl.item_count} song{pl.item_count !== 1 ? "s" : ""}
                 {#if pl.total_duration_ms}
                   &middot; {totalDuration(pl.total_duration_ms)}
                 {/if}
@@ -306,7 +424,9 @@
 {/if}
 
 <style>
-  .playlist-list { padding: 0; }
+  .playlist-list {
+    padding: 0;
+  }
 
   .list-header {
     display: flex;
@@ -314,7 +434,11 @@
     justify-content: space-between;
     margin-bottom: 20px;
   }
-  .list-header h2 { margin: 0; font-size: 20px; font-weight: 700; }
+  .list-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+  }
 
   .new-btn {
     padding: 6px 14px;
@@ -325,7 +449,9 @@
     font-weight: 600;
     cursor: pointer;
   }
-  .new-btn:hover { filter: brightness(1.1); }
+  .new-btn:hover {
+    filter: brightness(1.1);
+  }
 
   .new-dialog {
     background: var(--surface);
@@ -346,7 +472,10 @@
     color: var(--text-1);
     font-size: 13px;
   }
-  .new-actions { display: flex; gap: 8px; }
+  .new-actions {
+    display: flex;
+    gap: 8px;
+  }
 
   .pl-grid {
     display: grid;
@@ -365,7 +494,9 @@
     text-align: left;
     border: 1px solid var(--border);
   }
-  .pl-card:hover { background: var(--surface-hover); }
+  .pl-card:hover {
+    background: var(--surface-hover);
+  }
 
   .pl-art {
     aspect-ratio: 1;
@@ -386,13 +517,30 @@
     object-fit: cover;
   }
 
-  .pl-info { padding: 12px; }
-  .pl-name { display: block; font-size: 14px; font-weight: 600; color: var(--text-1); }
-  .pl-meta { display: block; font-size: 12px; margin-top: 4px; }
+  .pl-info {
+    padding: 12px;
+  }
+  .pl-name {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-1);
+  }
+  .pl-meta {
+    display: block;
+    font-size: 12px;
+    margin-top: 4px;
+  }
 
-  .playlist-detail { display: flex; flex-direction: column; height: 100%; }
+  .playlist-detail {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
 
-  .detail-header { margin-bottom: 16px; }
+  .detail-header {
+    margin-bottom: 16px;
+  }
 
   .detail-hero {
     display: flex;
@@ -425,7 +573,7 @@
   .detail-art .art-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(0,0,0,0.5);
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -433,15 +581,35 @@
     transition: opacity 0.15s;
     color: #fff;
   }
-  .detail-art:hover .art-overlay { opacity: 1; }
+  .detail-art:hover .art-overlay {
+    opacity: 1;
+  }
 
-  .art-placeholder { font-size: 48px; color: var(--text-3); }
+  .art-placeholder {
+    font-size: 48px;
+    color: var(--text-3);
+  }
 
-  .detail-meta { display: flex; flex-direction: column; justify-content: flex-end; }
+  .detail-meta {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
 
-  .detail-name { margin: 0; font-size: 28px; font-weight: 700; }
-  .detail-desc { margin: 4px 0 0; font-size: 13px; color: var(--text-2); }
-  .detail-info { margin: 8px 0 0; font-size: 12px; }
+  .detail-name {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .detail-desc {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .detail-info {
+    margin: 8px 0 0;
+    font-size: 12px;
+  }
 
   .detail-actions {
     display: flex;
@@ -450,7 +618,9 @@
     margin-top: 12px;
   }
 
-  .filter-spacer { flex: 1; }
+  .filter-spacer {
+    flex: 1;
+  }
 
   .action-btn {
     padding: 8px 18px;
@@ -463,12 +633,27 @@
     border: 1px solid var(--border);
     transition: background 0.1s;
   }
-  .action-btn:hover { background: var(--surface-hover); }
-  .action-btn.primary { background: var(--accent); color: #fff; border: none; }
-  .action-btn.primary:hover { filter: brightness(1.1); }
-  .action-btn.danger { color: #e74c3c; }
-  .action-btn.danger:hover { background: rgba(231, 76, 60, 0.1); }
-  .action-btn:disabled { opacity: 0.4; cursor: default; }
+  .action-btn:hover {
+    background: var(--surface-hover);
+  }
+  .action-btn.primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+  }
+  .action-btn.primary:hover {
+    filter: brightness(1.1);
+  }
+  .action-btn.danger {
+    color: #e74c3c;
+  }
+  .action-btn.danger:hover {
+    background: rgba(231, 76, 60, 0.1);
+  }
+  .action-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
 
   .edit-input {
     padding: 6px 10px;
@@ -479,8 +664,15 @@
     font-size: 13px;
     width: 300px;
   }
-  .title-input { font-size: 20px; font-weight: 700; }
-  .edit-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .title-input {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .edit-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+  }
 
   .small-btn {
     padding: 5px 12px;
@@ -492,7 +684,11 @@
     color: #fff;
     border: none;
   }
-  .small-btn.secondary { background: var(--surface); color: var(--text-1); border: 1px solid var(--border); }
+  .small-btn.secondary {
+    background: var(--surface);
+    color: var(--text-1);
+    border: 1px solid var(--border);
+  }
 
   .track-headers {
     display: grid;
@@ -506,7 +702,9 @@
     color: var(--text-3);
     border-bottom: 1px solid var(--border);
   }
-  .track-headers .num { text-align: right; }
+  .track-headers .num {
+    text-align: right;
+  }
   .track-headers .sortable {
     cursor: pointer;
     color: var(--text-3);
@@ -516,7 +714,9 @@
     text-transform: inherit;
     letter-spacing: inherit;
   }
-  .track-headers .sortable:hover { color: var(--text-1); }
+  .track-headers .sortable:hover {
+    color: var(--text-1);
+  }
 
   .filter-input {
     width: 200px;
@@ -528,15 +728,30 @@
     font-size: 12px;
   }
 
-  .track-list { flex: 1; overflow-y: auto; }
+  .track-list {
+    flex: 1;
+    overflow-y: auto;
+  }
 
   .playlist-row {
     display: block;
   }
-  .playlist-row :global(.track-row) { flex: 1; }
-  .playlist-row.missing { opacity: 0.45; }
-  .playlist-row.missing :global(.track-row) { pointer-events: none; }
+  .playlist-row :global(.track-row) {
+    flex: 1;
+  }
+  .playlist-row.missing {
+    opacity: 0.45;
+  }
+  .playlist-row.missing :global(.track-row) {
+    pointer-events: none;
+  }
 
-  .empty-msg { padding: 40px 12px; text-align: center; }
-  .loading-msg { padding: 20px 12px; text-align: center; }
+  .empty-msg {
+    padding: 40px 12px;
+    text-align: center;
+  }
+  .loading-msg {
+    padding: 20px 12px;
+    text-align: center;
+  }
 </style>
