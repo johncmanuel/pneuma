@@ -105,6 +105,7 @@ func DefaultConfig(dataDir string) *Config {
 			Dir:       filepath.Join(dataDir, "uploads"),
 			MaxSizeMB: 500,
 		},
+		// fpcalc will be used for fingerprinting in the future (a stretch goal atm)
 		Transcoding: TranscodingConfig{
 			FFmpegPath: "ffmpeg",
 			FpcalcPath: "fpcalc",
