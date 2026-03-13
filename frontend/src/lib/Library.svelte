@@ -54,15 +54,19 @@
     ChevronRight,
     Search
   } from "@lucide/svelte";
+  import { portal } from "../utils/dom";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
   let albumFilter = "";
   let trackListEl: HTMLDivElement;
   let albumGridFilter = "";
+
   type SortField = "default" | "title" | "artist" | "duration";
+  type SortDir = "asc" | "desc";
+
   let albumSortField: SortField = "default";
-  let albumSortDir: "asc" | "desc" = "asc";
+  let albumSortDir: SortDir = "asc";
 
   function toggleSort(field: SortField) {
     if (albumSortField === field) {
@@ -73,14 +77,15 @@
     }
   }
 
-  function sortIndicator(field: SortField): string {
-    return albumSortField === field
-      ? albumSortDir === "asc"
-        ? " ↑"
-        : " ↓"
-      : "";
-  }
+  // function sortIndicator(field: SortField): string {
+  //   return albumSortField === field
+  //     ? albumSortDir === "asc"
+  //       ? " ↑"
+  //       : " ↓"
+  //     : "";
+  // }
 
+  // Library UI representation of an album group (local or remote)
   interface AlbumGroup {
     key: string;
     name: string;
@@ -91,18 +96,18 @@
     firstLocalPath?: string; // for local art
   }
 
+  // Unique key for albums without the appropriate metadata
   const UNORGANIZED_KEY = "__unorganized__";
 
   let currentAlbumGroup: AlbumGroup | null = null;
   let albumDetailTracks: Track[] = [];
   let albumDetailLoading = false;
 
-  // Convert local album groups to AlbumGroup shape
   function localGroupsAsAlbumGroups(groups: LocalAlbumGroup[]): AlbumGroup[] {
     return (groups ?? []).map((g) => ({
       key: g.key,
-      name: g.name,
-      artist: g.artist,
+      name: g.name || "Unknown Album",
+      artist: g.artist || "Unknown Artist",
       trackCount: g.track_count,
       firstTrackId: "",
       isLocal: true,
@@ -110,7 +115,6 @@
     }));
   }
 
-  // Convert remote album groups (from /albumgroups endpoint) to AlbumGroup shape
   function remoteGroupsAsAlbumGroups(groups: RemoteAlbumGroup[]): AlbumGroup[] {
     return (groups ?? []).map((g) => ({
       key: g.key,
@@ -123,7 +127,6 @@
     }));
   }
 
-  // Convert a LocalTrack to the Track shape used by TrackRow
   function localTrackToTrack(t: LocalTrack): Track {
     return {
       id: t.path,
@@ -145,6 +148,7 @@
     };
   }
 
+  // Display groups based on the current tab
   $: displayedGroups =
     $activeTab === "library"
       ? remoteGroupsAsAlbumGroups($remoteAlbumGroups)
@@ -154,7 +158,7 @@
     $activeTab === "library" ? $remoteAlbumGroupsTotal : $localAlbumGroupsTotal;
   $: hasMore = displayedGroups.length < currentTotal;
 
-  // Load the selected album's tracks on demand
+  // Load the selected album's tracks whenever the selected album changes
   $: if ($selectedAlbum && !albumDetailLoading) {
     const group = displayedGroups.find((g) => g.key === $selectedAlbum) ?? null;
     if (group && (!currentAlbumGroup || currentAlbumGroup.key !== group.key)) {
@@ -162,7 +166,7 @@
     }
   }
 
-  // Clear album detail when deselecting
+  // Clear album detail when deselecting an album
   $: if (!$selectedAlbum) {
     currentAlbumGroup = null;
     albumDetailTracks = [];
@@ -176,28 +180,30 @@
     refreshCurrentAlbumDetail();
   }
 
+  function getAlbumNameAndArtist(group: AlbumGroup): {
+    albumName: string;
+    albumArtist: string;
+  } {
+    if (group.key === UNORGANIZED_KEY) {
+      return { albumName: "", albumArtist: "" };
+    }
+    const parts = group.key.split("|||");
+    return { albumName: parts[0] ?? "", albumArtist: parts[1] ?? "" };
+  }
+
+  // Refresh the current album's track list to reflect local file changes
   async function refreshCurrentAlbumDetail() {
     if (!currentAlbumGroup?.isLocal) return;
-    let albumName: string, albumArtist: string;
-    if (currentAlbumGroup.key === UNORGANIZED_KEY) {
-      albumName = "";
-      albumArtist = "";
-    } else {
-      const parts = currentAlbumGroup.key.split("|||");
-      albumName = parts[0] ?? "";
-      albumArtist = parts[1] ?? "";
-    }
-    try {
-      const locals = await fetchLocalAlbumTracks(albumName, albumArtist);
-      albumDetailTracks = locals.map(localTrackToTrack);
-      if (currentAlbumGroup) {
-        currentAlbumGroup = {
-          ...currentAlbumGroup,
-          trackCount: albumDetailTracks.length
-        };
-      }
-    } catch (e) {
-      console.warn("Failed to refresh album detail:", e);
+
+    const { albumName, albumArtist } = getAlbumNameAndArtist(currentAlbumGroup);
+
+    const locals = await fetchLocalAlbumTracks(albumName, albumArtist);
+    albumDetailTracks = locals.map(localTrackToTrack);
+    if (currentAlbumGroup) {
+      currentAlbumGroup = {
+        ...currentAlbumGroup,
+        trackCount: albumDetailTracks.length
+      };
     }
   }
 
@@ -207,51 +213,32 @@
     albumFilter = "";
     albumSortField = "default";
     albumSortDir = "asc";
+
     try {
+      const { albumName, albumArtist } = getAlbumNameAndArtist(group);
+
       if (group.isLocal) {
-        // Parse albumName and albumArtist from the key
-        let albumName: string, albumArtist: string;
-        if (group.key === UNORGANIZED_KEY) {
-          albumName = "";
-          albumArtist = "";
-        } else {
-          const parts = group.key.split("|||");
-          albumName = parts[0] ?? "";
-          albumArtist = parts[1] ?? "";
-        }
         const locals = await fetchLocalAlbumTracks(albumName, albumArtist);
         albumDetailTracks = locals.map(localTrackToTrack);
-        // Update track count with the actual number
-        if (currentAlbumGroup) {
-          currentAlbumGroup = {
-            ...currentAlbumGroup,
-            trackCount: albumDetailTracks.length
-          };
-        }
       } else {
         // Remote: fetch tracks for this album by album_name + album_artist
-        let albumName: string, albumArtist: string;
-        if (group.key === UNORGANIZED_KEY) {
-          albumName = "";
-          albumArtist = "";
-        } else {
-          const parts = group.key.split("|||");
-          albumName = parts[0] ?? "";
-          albumArtist = parts[1] ?? "";
-        }
         const params = new URLSearchParams();
         params.set("album_name", albumName);
+
         if (albumArtist) params.set("album_artist", albumArtist);
+
         const r = await serverFetch(`/api/library/tracks?${params}`);
         const data = await r.json();
         const fetched: Track[] = Array.isArray(data)
           ? data
           : (data.tracks ?? []);
+
         albumDetailTracks = fetched.sort(
           (a, b) =>
             (a.disc_number ?? 0) - (b.disc_number ?? 0) ||
             (a.track_number ?? 0) - (b.track_number ?? 0)
         );
+
         if (currentAlbumGroup) {
           currentAlbumGroup = {
             ...currentAlbumGroup,
@@ -270,8 +257,10 @@
   // Filtered + sorted tracks for album detail (client-side on the small album track set)
   $: filteredAlbumDetailTracks = (() => {
     if (!currentAlbumGroup) return [];
+
     const f = albumFilter.toLowerCase();
     let result = albumDetailTracks;
+
     if (f) {
       result = result.filter(
         (t) =>
@@ -279,8 +268,16 @@
           (t.artist_name ?? "").toLowerCase().includes(f)
       );
     }
+
+    // sort priority (from highest to lowest):
+    // 1. disc number
+    // 2. track number
+    // 3. title
+    // 4. artist
+    // 5. duration
     if (albumSortField !== "default") {
       const dir = albumSortDir === "asc" ? 1 : -1;
+
       result = [...result].sort((a, b) => {
         if (albumSortField === "title")
           return dir * (a.title ?? "").localeCompare(b.title ?? "");
@@ -331,6 +328,9 @@
 
   let gridFilterDebounce: ReturnType<typeof setTimeout>;
 
+  // Load the remote album groups page if the active tab is library,
+  // else load the local album groups if the active tab is local.
+  // Uses a debounce to prevent too many requests.
   function onAlbumGridFilterInput() {
     clearTimeout(gridFilterDebounce);
     gridFilterDebounce = setTimeout(() => {
@@ -395,7 +395,6 @@
     }
 
     if (get(activeTab) === "local") {
-      // Local playback — just set state (Player.svelte handles audio)
       playerState.update((s) => ({
         ...s,
         trackId: track.id,
@@ -411,7 +410,7 @@
 
     if (!$connected) return;
 
-    // Update local state immediately — no round-trip needed.
+    // Update local state immediately, then sync server state
     playerState.update((s) => ({
       ...s,
       trackId: track.id,
@@ -423,7 +422,6 @@
       paused: false
     }));
 
-    // Sync server state via WS (fire-and-forget).
     wsSend("playback.queue", {
       device_id: "desktop",
       track_ids: queueIds,
@@ -456,6 +454,7 @@
   function switchTab(tab: LibTab) {
     albumGridFilter = "";
     pushNav({ tab, albumKey: null, subTab: "albums" });
+
     // Reload album groups for the new tab
     if (tab === "library") {
       loadRemoteAlbumGroupsPage(0);
@@ -484,19 +483,11 @@
   let albumCtxMenu: { group: AlbumGroup; x: number; y: number } | null = null;
   let albumCtxPlaylistSub = false;
 
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
-
   function onAlbumContext(e: MouseEvent, album: AlbumGroup) {
     e.preventDefault();
     albumCtxMenu = { group: album, x: e.clientX, y: e.clientY };
     albumCtxPlaylistSub = false;
+
     const close = (_: MouseEvent) => {
       // Don't close immediately on the right-click that opened it.
       albumCtxMenu = null;
@@ -508,10 +499,10 @@
   async function addAlbumToPlaylist(pl: PlaylistSummary, group: AlbumGroup) {
     albumCtxMenu = null;
     let tracksToAdd: Track[] = [];
+    const parts =
+      group.key === UNORGANIZED_KEY ? ["", ""] : group.key.split("|||");
 
     if (group.isLocal) {
-      const parts =
-        group.key === UNORGANIZED_KEY ? ["", ""] : group.key.split("|||");
       try {
         const locals = await fetchLocalAlbumTracks(
           parts[0] ?? "",
@@ -522,12 +513,11 @@
         console.warn("addAlbumToPlaylist local:", e);
       }
     } else {
-      const parts =
-        group.key === UNORGANIZED_KEY ? ["", ""] : group.key.split("|||");
       const params = new URLSearchParams();
       params.set("album_name", parts[0] ?? "");
       params.set("album_artist", parts[1] ?? "");
       params.set("limit", "500");
+
       try {
         const r = await serverFetch(`/api/library/tracks?${params}`);
         if (r.ok) {
@@ -538,7 +528,6 @@
         console.warn("addAlbumToPlaylist remote:", e);
       }
     }
-
     await addTracksToPlaylist(pl.id, tracksToAdd, group.isLocal ?? false);
   }
 
@@ -626,13 +615,13 @@
         <div class="track-header album-detail-cols">
           <span>#</span>
           <button class="col-sort" on:click={() => toggleSort("title")}
-            >Title{sortIndicator("title")}</button
+            >Title</button
           >
           <button class="col-sort" on:click={() => toggleSort("artist")}
-            >Artist{sortIndicator("artist")}</button
+            >Artist</button
           >
           <button class="col-sort" on:click={() => toggleSort("duration")}
-            >Duration{sortIndicator("duration")}</button
+            >Duration</button
           >
         </div>
 
@@ -1115,7 +1104,6 @@
     margin-bottom: 4px;
   }
 
-  /* Album detail columns — no Album column */
   .track-header.album-detail-cols {
     grid-template-columns: 32px 2fr 1fr 56px;
   }

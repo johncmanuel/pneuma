@@ -25,6 +25,7 @@ export function isRemoteTrack(id: string): boolean {
   return !id.startsWith("/") && !/^[a-zA-Z]:[/\\]/.test(id);
 }
 
+// TODO: want to migrate to svelte 5 syntax to make use of runes over stores
 export interface PlayerState {
   trackId: string;
   track: Track | null;
