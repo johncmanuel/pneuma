@@ -35,6 +35,17 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build Svelte Frontend
+        working-directory: ./web
+        run: |
+          npm ci
+          npm run build
+
       - name: Run go build
         env:
           GOOS: ${{ matrix.goos }}
