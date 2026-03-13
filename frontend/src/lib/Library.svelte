@@ -5,7 +5,8 @@
     remoteAlbumGroupsTotal,
     loadRemoteAlbumGroupsPage,
     loadMoreRemoteAlbumGroups,
-    type RemoteAlbumGroup
+    type RemoteAlbumGroup,
+    UNORGANIZED_KEY
   } from "../stores/library";
   import {
     localLoading,
@@ -24,6 +25,7 @@
   } from "../stores/localLibrary";
   import { playerState } from "../stores/player";
   import TrackRow from "./TrackRow.svelte";
+  import SortButton from "./SortButton.svelte";
 
   import type { Track } from "../stores/player";
   import type { LocalTrack } from "../stores/localLibrary";
@@ -68,23 +70,6 @@
   let albumSortField: SortField = "default";
   let albumSortDir: SortDir = "asc";
 
-  function toggleSort(field: SortField) {
-    if (albumSortField === field) {
-      albumSortDir = albumSortDir === "asc" ? "desc" : "asc";
-    } else {
-      albumSortField = field;
-      albumSortDir = "asc";
-    }
-  }
-
-  // function sortIndicator(field: SortField): string {
-  //   return albumSortField === field
-  //     ? albumSortDir === "asc"
-  //       ? " ↑"
-  //       : " ↓"
-  //     : "";
-  // }
-
   // Library UI representation of an album group (local or remote)
   interface AlbumGroup {
     key: string;
@@ -95,9 +80,6 @@
     isLocal?: boolean;
     firstLocalPath?: string; // for local art
   }
-
-  // Unique key for albums without the appropriate metadata
-  const UNORGANIZED_KEY = "__unorganized__";
 
   let currentAlbumGroup: AlbumGroup | null = null;
   let albumDetailTracks: Track[] = [];
@@ -483,6 +465,7 @@
   let albumCtxMenu: { group: AlbumGroup; x: number; y: number } | null = null;
   let albumCtxPlaylistSub = false;
 
+  // Handle right-click context menu for albums
   function onAlbumContext(e: MouseEvent, album: AlbumGroup) {
     e.preventDefault();
     albumCtxMenu = { group: album, x: e.clientX, y: e.clientY };
@@ -614,14 +597,23 @@
 
         <div class="track-header album-detail-cols">
           <span>#</span>
-          <button class="col-sort" on:click={() => toggleSort("title")}
-            >Title</button
+          <SortButton
+            class="col-sort"
+            bind:currentField={albumSortField}
+            bind:sortDir={albumSortDir}
+            field="title">Title</SortButton
           >
-          <button class="col-sort" on:click={() => toggleSort("artist")}
-            >Artist</button
+          <SortButton
+            class="col-sort"
+            bind:currentField={albumSortField}
+            bind:sortDir={albumSortDir}
+            field="artist">Artist</SortButton
           >
-          <button class="col-sort" on:click={() => toggleSort("duration")}
-            >Duration</button
+          <SortButton
+            class="col-sort"
+            bind:currentField={albumSortField}
+            bind:sortDir={albumSortDir}
+            field="duration">Duration</SortButton
           >
         </div>
 
@@ -1093,7 +1085,7 @@
 
   .track-header {
     display: grid;
-    grid-template-columns: 32px 2fr 1fr 1fr 56px;
+    grid-template-columns: 32px 2fr 1fr 1fr 76px;
     gap: 0 12px;
     padding: 4px 8px;
     font-size: 11px;
@@ -1105,22 +1097,22 @@
   }
 
   .track-header.album-detail-cols {
-    grid-template-columns: 32px 2fr 1fr 56px;
+    grid-template-columns: 32px 2fr 1fr 76px;
   }
 
-  .col-sort {
-    background: none;
-    border: none;
-    color: var(--fg-3);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+  :global(.col-sort) {
     cursor: pointer;
-    padding: 0;
+    color: var(--text-3);
     text-align: left;
-    white-space: nowrap;
+    font-size: inherit;
+    font-weight: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    border: none;
+    background: none;
+    padding: 0;
   }
-  .col-sort:hover {
+  :global(.col-sort:hover) {
     color: var(--text-1);
   }
 

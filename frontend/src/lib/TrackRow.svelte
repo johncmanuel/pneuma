@@ -16,6 +16,7 @@
   } from "../stores/playlists";
   import { connected } from "../utils/api";
   import { ChevronRight } from "@lucide/svelte";
+  import { portal } from "../utils/dom";
 
   export let track: Track | null = null;
   export let active: boolean = false;
@@ -32,17 +33,6 @@
   let menuX = 0;
   let menuY = 0;
   let showPlaylistSub = false;
-
-  // Portal action: moves the node to document.body so it is never clipped
-  // by any ancestor overflow or contain property.
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
 
   function onContext(e: MouseEvent) {
     e.preventDefault();
@@ -139,7 +129,7 @@
 <style>
   .track-row {
     display: grid;
-    grid-template-columns: 32px 2fr 1fr 1fr 56px;
+    grid-template-columns: 32px 2fr 1fr 1fr 76px;
     align-items: center;
     gap: 0 12px;
     padding: 6px 12px;
@@ -150,7 +140,7 @@
     transition: background 0.1s;
   }
   .track-row.hide-album {
-    grid-template-columns: 32px 2fr 1fr 56px;
+    grid-template-columns: 32px 2fr 1fr 76px;
   }
   .track-row:hover {
     background: var(--surface-hover);

@@ -22,6 +22,9 @@ export interface RemoteAlbumGroup {
   artwork_id: string;
 }
 
+// Unique key for albums without the appropriate metadata
+export const UNORGANIZED_KEY = "__unorganized__";
+
 export const tracks = writable<Track[]>([]);
 export const albums = writable<Album[]>([]);
 export const loading = writable(false);

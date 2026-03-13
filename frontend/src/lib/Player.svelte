@@ -1,6 +1,6 @@
 <script lang="ts">
   import { playerState, type Track, isRemoteTrack } from "../stores/player";
-  import { fetchTracksByIDs } from "../stores/library";
+  import { fetchTracksByIDs, UNORGANIZED_KEY } from "../stores/library";
   import { resolveLocalTracksByPaths } from "../stores/localLibrary";
   import {
     activePanel,
@@ -11,7 +11,7 @@
   import { formatDuration } from "./TrackRow.svelte";
   import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
-  import { onMount, onDestroy } from "svelte";
+  import { onMount } from "svelte";
   import { shuffle } from "../utils/algos";
   import { addToast } from "../stores/toasts";
   import {
@@ -35,6 +35,7 @@
 
   const VOLUME_KEY = "pneuma_volume";
 
+  // load volume upon mounting
   onMount(() => {
     const saved = parseFloat(localStorage.getItem(VOLUME_KEY) ?? "1");
     volume = isNaN(saved) ? 1 : Math.max(0, Math.min(1, saved));
@@ -42,22 +43,24 @@
     if (audio) audio.volume = volume;
   });
 
-  onDestroy(() => {});
   let audioDurationMs = 0; // actual duration from <audio> element
   let seeking = false; // true while user is dragging seekbar
   let seekSyncTimer: ReturnType<typeof setTimeout> | null = null;
-  // Track the URL we set on audio.src ourselves — do NOT compare against
+
+  // Track the URL we set on audio.src; don't compare against
   // audio.src directly because the browser normalizes percent-encoding
-  // (e.g. %27 → ') so the comparison never matches for paths with special
+  // (e.g. %27 -> ') so the comparison never matches for paths with special
   // characters, causing a continuous src reset that prevents playback.
   let currentAudioSrc = "";
 
   $: track = $playerState.track;
   $: hasTrack = !!$playerState.trackId;
+
   // Use the audio element's actual duration as primary source, fall back to metadata
   $: durationMs =
     audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0);
-  // Local tracks use their filesystem path as the ID — don't send WS events for them.
+
+  // Local tracks use their filesystem path as the ID; don't send WS events for them.
   $: isLocal = !!(
     $playerState.trackId?.startsWith("/") ||
     /^[a-zA-Z]:[/\\]/.test($playerState.trackId ?? "")
@@ -68,7 +71,7 @@
   let originalBaseQueue: string[] = [];
   let wasConnected = true;
 
-  // Filter queue when transitioning to disconnected - remove offline (remote) tracks
+  // Filter queue when transitioning to disconnected, remove any offline (remote) tracks
   $: if (wasConnected && !$connected) {
     wasConnected = false;
     const q = $playerState.queue;
@@ -112,7 +115,6 @@
     }
   }
 
-  /** Cache of resolved tracks — avoids re-fetching on every skip. */
   const trackCache = new Map<string, Track>();
   const isLocalPath = (id: string) =>
     id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(id);
@@ -160,15 +162,18 @@
     return null;
   }
 
+  // Navigate to the album of the current track
   function jumpToAlbum() {
     if (!track) return;
-    const UNORGANIZED_KEY = "__unorganized__";
+
     const albumName = track.album_name?.trim() ?? "";
     const albumArtist = track.album_artist?.trim() ?? "";
+
     const hasAlbum = albumName !== "";
     const albumKey = hasAlbum
       ? `${albumName}|||${albumArtist}`
       : UNORGANIZED_KEY;
+
     pushNav({
       view: "library",
       tab: isLocal ? "local" : "library",
@@ -180,7 +185,9 @@
   function togglePause() {
     if (!hasTrack) return;
     const newPaused = !$playerState.paused;
+
     playerState.update((s) => ({ ...s, paused: newPaused }));
+
     if (!isLocal)
       wsSend("playback.pause", {
         device_id: deviceId,
@@ -193,152 +200,145 @@
       });
   }
 
+  async function playQueueTrack(
+    trackId: string,
+    queue: string[],
+    queueIndex: number
+  ) {
+    const track = await findTrackById(trackId);
+    audioDurationMs = 0;
+    playerState.update((s) => ({
+      ...s,
+      trackId,
+      track,
+      queue,
+      queueIndex,
+      positionMs: 0,
+      paused: false
+    }));
+    if (!isLocalPath(trackId)) {
+      wsSend("playback.play", {
+        device_id: deviceId,
+        track_id: trackId,
+        position_ms: 0
+      });
+    }
+  }
+
+  function getNextAvailableTrack() {
+    const q = $playerState.queue;
+    const baseQueue = $playerState.baseQueue;
+
+    let nextIdx = $playerState.queueIndex + 1;
+    let nextQueue = q;
+
+    const wrapQueueIfNeeded = () => {
+      if (nextIdx >= nextQueue.length) {
+        nextQueue = baseQueue.length > 0 ? baseQueue : nextQueue;
+        nextIdx = 0;
+      }
+    };
+
+    wrapQueueIfNeeded();
+
+    let nextId = nextQueue[nextIdx];
+    let skippedCount = 0;
+    const maxSkips = q.length + (baseQueue.length || 0);
+
+    while (nextId && isRemoteTrack(nextId) && !$connected) {
+      skippedCount++;
+      nextIdx++;
+      wrapQueueIfNeeded();
+      nextId = nextQueue[nextIdx];
+
+      // If we've looped through all tracks and they're all offline, stop
+      if (!nextId || skippedCount >= maxSkips) {
+        return null;
+      }
+    }
+
+    return { nextId, nextIdx, nextQueue, skippedCount };
+  }
+
   async function skipNext() {
     if (!hasTrack) return;
+
     const q = $playerState.queue;
     if (q.length === 0) return;
 
     if ($playerState.repeat === 2) {
       // Repeat-one: restart the current track in-place
-      const id = q[$playerState.queueIndex];
-      const nextTrack = await findTrackById(id);
-      audioDurationMs = 0;
-      playerState.update((s) => ({
-        ...s,
-        track: nextTrack,
-        positionMs: 0,
-        paused: false
-      }));
-      if (!isLocalPath(id))
-        wsSend("playback.play", {
-          device_id: deviceId,
-          track_id: id,
-          position_ms: 0
-        });
+      await playQueueTrack(
+        q[$playerState.queueIndex],
+        q,
+        $playerState.queueIndex
+      );
       return;
     }
 
-    // For both repeat-off and repeat-queue: advance to next track. When the
-    // queue is exhausted, restore the base queue (original album order) so
-    // manually-inserted tracks don't become part of the permanent loop.
-    let nextIdx = $playerState.queueIndex + 1;
-    let nextQueue = q;
-    if (nextIdx >= q.length) {
-      // End of queue — restart from the base queue
-      const base =
-        $playerState.baseQueue.length > 0 ? $playerState.baseQueue : q;
-      nextQueue = base;
-      nextIdx = 0;
+    const nextInfo = getNextAvailableTrack();
+    if (!nextInfo) {
+      playerState.update((s) => ({
+        ...s,
+        paused: true,
+        trackId: "",
+        track: null
+      }));
+      addToast("All tracks are offline", "warning");
+      return;
     }
 
-    // Skip offline tracks (remote tracks when not connected to server)
-    let nextId = nextQueue[nextIdx];
-    let skippedCount = 0;
-    while (nextId && isRemoteTrack(nextId) && !$connected) {
-      skippedCount++;
-      nextIdx++;
-      if (nextIdx >= nextQueue.length) {
-        const base =
-          $playerState.baseQueue.length > 0
-            ? $playerState.baseQueue
-            : nextQueue;
-        nextQueue = base;
-        nextIdx = 0;
-      }
-      nextId = nextQueue[nextIdx];
-      // If we've looped through all tracks and they're all offline, stop
-      if (
-        !nextId ||
-        skippedCount >= q.length + ($playerState.baseQueue.length || 0)
-      ) {
-        playerState.update((s) => ({
-          ...s,
-          paused: true,
-          trackId: "",
-          track: null
-        }));
-        addToast("All tracks are offline", "warning");
-        return;
-      }
-    }
-
-    if (skippedCount > 0) {
+    if (nextInfo.skippedCount > 0) {
       addToast(
-        `Skipped ${skippedCount} offline track${skippedCount > 1 ? "s" : ""}`,
+        `Skipped ${nextInfo.skippedCount} offline track${nextInfo.skippedCount > 1 ? "s" : ""}`,
         "info"
       );
     }
 
-    const nextTrack = await findTrackById(nextId);
-    audioDurationMs = 0;
-    playerState.update((s) => ({
-      ...s,
-      trackId: nextId,
-      track: nextTrack,
-      queue: nextQueue,
-      queueIndex: nextIdx,
-      positionMs: 0,
-      paused: false
-    }));
-    if (!isLocalPath(nextId))
-      wsSend("playback.play", {
-        device_id: deviceId,
-        track_id: nextId,
-        position_ms: 0
-      });
+    await playQueueTrack(nextInfo.nextId, nextInfo.nextQueue, nextInfo.nextIdx);
   }
 
   async function skipPrev() {
     if (!hasTrack) return;
+
     const q = $playerState.queue;
     if (q.length === 0) return;
+
     let prevIdx = $playerState.queueIndex - 1;
     if (prevIdx < 0) prevIdx = q.length - 1;
-    const prevId = q[prevIdx];
-    const prevTrack = await findTrackById(prevId);
-    const prevIsLocal = isLocalPath(prevId);
-    audioDurationMs = 0;
-    playerState.update((s) => ({
-      ...s,
-      trackId: prevId,
-      track: prevTrack,
-      queueIndex: prevIdx,
-      positionMs: 0,
-      paused: false
-    }));
-    if (!prevIsLocal)
-      wsSend("playback.play", {
-        device_id: deviceId,
-        track_id: prevId,
-        position_ms: 0
-      });
+
+    await playQueueTrack(q[prevIdx], q, prevIdx);
   }
 
   function toggleShuffle() {
-    const enabled = !$playerState.shuffle;
+    const isShuffleEnabled = !$playerState.shuffle;
 
     // Shuffle/unshuffle is applied client-side for both local and remote tracks
-    // so the queue reorders immediately. For remote tracks we intentionally do
-    // NOT send playback.shuffle to the server: the server would apply its own
-    // independent random shuffle and echo back a different queue order (via
-    // playback.changed) which would override the order we just computed here.
+    // so the queue reorders immediately.
+    //
+    // For remote tracks, don't send playback.shuffle to the server via websockets.
+    // Otherwise, the server would apply its own independent random shuffle and echo back
+    // a different queue order (via playback.changed) which would override the order
+    // we just computed here.
+    //
     // Individual playback.play messages on each skip keep the server's
     // current-track pointer accurate without needing the full queue order.
     playerState.update((s) => {
-      if (enabled && s.queue.length > 1) {
-        // Pin current track at index 0, Fisher-Yates shuffle the rest
+      if (isShuffleEnabled && s.queue.length > 1) {
+        // Pin current track at index 0, then shuffle the rest
         const current = s.queue[s.queueIndex];
-        let rest = s.queue.filter((_, i) => i !== s.queueIndex);
-        rest = shuffle(rest);
+        const rest = s.queue.filter((_, i) => i !== s.queueIndex);
+        const shuffledRest = shuffle(rest);
+
         return {
           ...s,
           shuffle: true,
-          queue: [current, ...rest],
+          queue: [current, ...shuffledRest],
           queueIndex: 0
         };
       }
       // Turning shuffle off: restore the original album order from baseQueue
-      if (!enabled && s.baseQueue.length > 0) {
+      if (!isShuffleEnabled && s.baseQueue.length > 0) {
         const currentId = s.queue[s.queueIndex];
         const restoredIdx = s.baseQueue.indexOf(currentId);
         return {
@@ -348,13 +348,14 @@
           queueIndex: restoredIdx >= 0 ? restoredIdx : 0
         };
       }
-      return { ...s, shuffle: enabled };
+      return { ...s, shuffle: isShuffleEnabled };
     });
   }
 
   function toggleRepeat() {
     const nextMode = (($playerState.repeat + 1) % 3) as 0 | 1 | 2;
     playerState.update((s) => ({ ...s, repeat: nextMode }));
+
     if (!isLocal)
       wsSend("playback.repeat", { device_id: deviceId, mode: nextMode });
   }
@@ -371,10 +372,11 @@
   function onSeekChange(e: Event) {
     seeking = false;
     const ms = Number((e.target as HTMLInputElement).value);
-    if (audio) {
-      audio.currentTime = ms / 1000;
-    }
+
+    if (audio) audio.currentTime = ms / 1000;
+
     playerState.update((s) => ({ ...s, positionMs: ms }));
+
     if (!isLocal)
       wsSend("playback.seek", { device_id: deviceId, position_ms: ms });
   }
@@ -382,9 +384,11 @@
   function setVolume(e: Event) {
     const target = e.target as HTMLInputElement;
     volume = Number(target.value);
+
     if (audio) audio.volume = volume;
     if (volume > 0) prevVolume = volume;
-    localStorage.setItem("pneuma_volume", String(volume));
+
+    localStorage.setItem(VOLUME_KEY, String(volume));
   }
 
   function toggleMute() {
@@ -399,9 +403,8 @@
     }
   }
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
-  // Guards: don't intercept when typing in an input / textarea / contenteditable.
   function handleKeyDown(e: KeyboardEvent) {
+    // don't intercept when typing in an input / textarea / contenteditable.
     const target = e.target as HTMLElement;
     if (
       target.tagName === "INPUT" ||
@@ -412,49 +415,49 @@
 
     const ctrl = e.ctrlKey || e.metaKey; // Ctrl on Linux/Win, Cmd on macOS
 
-    // Space → play/pause
+    // Space -> play/pause
     if (e.code === "Space" && !ctrl && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       togglePause();
       return;
     }
-    // Ctrl/Cmd+S → shuffle
+    // Ctrl/Cmd+S -> shuffle
     if (ctrl && e.key === "s" && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       toggleShuffle();
       return;
     }
-    // Ctrl/Cmd+R → repeat
+    // Ctrl/Cmd+R -> repeat
     if (ctrl && e.key === "r" && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       toggleRepeat();
       return;
     }
-    // Ctrl/Cmd+, → open settings
+    // Ctrl/Cmd+, -> open settings
     if (ctrl && e.key === "," && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       currentView.set("settings");
       return;
     }
-    // Alt+Shift+Q → toggle queue panel
+    // Alt+Shift+Q -> toggle queue panel
     if (e.altKey && e.shiftKey && (e.key === "Q" || e.key === "q")) {
       e.preventDefault();
       toggleQueuePanel();
       return;
     }
-    // Left arrow → previous track
+    // Left arrow -> previous track
     if (e.code === "ArrowLeft" && !ctrl && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       skipPrev();
       return;
     }
-    // Right arrow → next track
+    // Right arrow -> next track
     if (e.code === "ArrowRight" && !ctrl && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       skipNext();
       return;
     }
-    // M → mute/unmute
+    // M -> mute/unmute
     if ((e.key === "m" || e.key === "M") && !ctrl && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       toggleMute();
@@ -465,17 +468,23 @@
   // Sync HTML audio element when track changes
   $: if (audio && $playerState.trackId) {
     const url = streamUrl($playerState.trackId, $playerState.track?.path);
+
     if (currentAudioSrc !== url && url) {
       currentAudioSrc = url;
       audio.src = url;
       audio.currentTime = $playerState.positionMs / 1000;
     }
-    if (!$playerState.paused && !audio.seeking) audio.play().catch(() => {});
+
+    if (!$playerState.paused && !audio.seeking)
+      audio.play().catch((e) => {
+        console.warn("Audio play failed", e);
+      });
     else if ($playerState.paused) audio.pause();
   }
 
   // When the track is forcefully cleared (e.g. file removed from disk),
-  // stop and reset the audio element immediately.
+  // stop and reset the audio element immediately. Maybe add a toast
+  // saying the file is no longer available.
   $: if (audio && !$playerState.trackId && currentAudioSrc) {
     audio.pause();
     audio.src = "";
@@ -493,7 +502,10 @@
         positionMs: audio.currentTime * 1000
       }));
     }
-    // Debounced position sync to server (every 5 s) — local tracks don't need this.
+
+    // Debounced position sync to server (every 5s) for remote tracks
+    // Local tracks don't need this.
+    const debounceMs = 5000;
     if (!isLocal && !seekSyncTimer) {
       seekSyncTimer = setTimeout(() => {
         seekSyncTimer = null;
@@ -501,17 +513,11 @@
           device_id: deviceId,
           position_ms: audio.currentTime * 1000
         });
-      }, 5000);
+      }, debounceMs);
     }
   }
 
-  function onLoadedMetadata() {
-    if (audio && isFinite(audio.duration)) {
-      audioDurationMs = audio.duration * 1000;
-    }
-  }
-
-  function onDurationChange() {
+  function changeAudioDuration() {
     if (audio && isFinite(audio.duration)) {
       audioDurationMs = audio.duration * 1000;
     }
@@ -525,8 +531,8 @@
     bind:this={audio}
     on:timeupdate={onTimeUpdate}
     on:ended={onEnded}
-    on:loadedmetadata={onLoadedMetadata}
-    on:durationchange={onDurationChange}
+    on:loadedmetadata={changeAudioDuration}
+    on:durationchange={changeAudioDuration}
     preload="metadata"
   ></audio>
   <div class="now-playing">
@@ -540,7 +546,7 @@
           }}
         />
         <div class="art-placeholder" style="position:absolute">
-          <Music size={24} />
+          <Music size={16} />
         </div>
       {:else}
         <div class="art-placeholder"><Music size={18} /></div>

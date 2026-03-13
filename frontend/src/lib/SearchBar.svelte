@@ -20,6 +20,7 @@
   import { pushNav } from "../stores/ui";
   import { tick } from "svelte";
   import { onDestroy } from "svelte";
+  import { portal } from "../utils/dom";
 
   // ── Public API ──────────────────────────────────────────────────────────────
   export let query = "";
@@ -47,15 +48,6 @@
   let menuY = 0;
   let showMenu = false;
   let closeMenuListener: (() => void) | null = null;
-
-  function portal(node: HTMLElement) {
-    document.body.appendChild(node);
-    return {
-      destroy() {
-        node.remove();
-      }
-    };
-  }
 
   function onTrackContext(e: MouseEvent, track: TaggedTrack) {
     e.preventDefault();

@@ -24,6 +24,7 @@
   import { connected, playlistArtUrl } from "../utils/api";
   import { Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "./TrackRow.svelte";
+  import SortButton from "./SortButton.svelte";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -46,19 +47,6 @@
   type SortField = "default" | "title" | "added_at" | "duration";
   let sortField: SortField = "default";
   let sortDir: "asc" | "desc" = "asc";
-
-  function toggleSort(field: SortField) {
-    if (sortField === field) {
-      sortDir = sortDir === "asc" ? "desc" : "asc";
-    } else {
-      sortField = field;
-      sortDir = "asc";
-    }
-  }
-
-  function sortIndicator(field: SortField): string {
-    return sortField === field ? (sortDir === "asc" ? " ↑" : " ↓") : "";
-  }
 
   $: filteredItems = $selectedPlaylistItems
     .filter((i) => {
@@ -288,15 +276,24 @@
 
     <div class="track-headers">
       <span class="num">#</span>
-      <button class="sortable" on:click={() => toggleSort("title")}
-        >Title{sortIndicator("title")}</button
+      <SortButton
+        class="sortable"
+        bind:currentField={sortField}
+        bind:sortDir
+        field="title">Title</SortButton
       >
       <span>Album</span>
-      <button class="sortable" on:click={() => toggleSort("added_at")}
-        >Date Added{sortIndicator("added_at")}</button
+      <SortButton
+        class="sortable"
+        bind:currentField={sortField}
+        bind:sortDir
+        field="added_at">Date Added</SortButton
       >
-      <button class="sortable" on:click={() => toggleSort("duration")}
-        >Duration{sortIndicator("duration")}</button
+      <SortButton
+        class="sortable"
+        bind:currentField={sortField}
+        bind:sortDir
+        field="duration">Duration</SortButton
       >
     </div>
 
@@ -673,7 +670,7 @@
 
   .track-headers {
     display: grid;
-    grid-template-columns: 32px 2fr 1fr 1fr 56px;
+    grid-template-columns: 32px 2fr 1fr 1fr 76px;
     gap: 0 12px;
     padding: 4px 12px;
     font-size: 11px;
@@ -686,7 +683,7 @@
   .track-headers .num {
     text-align: right;
   }
-  .track-headers .sortable {
+  .track-headers :global(.sortable) {
     cursor: pointer;
     color: var(--text-3);
     text-align: left;
@@ -695,7 +692,7 @@
     text-transform: inherit;
     letter-spacing: inherit;
   }
-  .track-headers .sortable:hover {
+  .track-headers :global(.sortable:hover) {
     color: var(--text-1);
   }
 
