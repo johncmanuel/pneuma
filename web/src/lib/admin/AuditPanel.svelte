@@ -46,7 +46,7 @@
 
 <div class="panel">
   {#if loading}
-    <p class="text-3">Loading…</p>
+    <p class="text-3">Loading...</p>
   {:else if entries.length === 0}
     <p class="text-3">No audit entries.</p>
   {:else}

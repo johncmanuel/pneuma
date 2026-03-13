@@ -21,7 +21,7 @@
 </script>
 
 {#if !ready}
-  <div class="loading-screen"><p>Connecting…</p></div>
+  <div class="loading-screen"><p>Connecting...</p></div>
 {:else if $loggedIn}
   <div class="shell">
     <div class="sidebar-area">

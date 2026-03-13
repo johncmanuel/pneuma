@@ -539,7 +539,7 @@
   <div class="actions-bar">
     <input
       type="text"
-      placeholder="Search tracks… (press /)"
+      placeholder="Search tracks... (press /)"
       bind:value={searchQuery}
       class="search-input admin-tracks-search"
     />

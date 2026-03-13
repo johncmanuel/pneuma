@@ -49,7 +49,7 @@
       {/if}
 
       <button type="submit" class="primary-btn" disabled={loading}>
-        {loading ? "…" : mode === "login" ? "Sign In" : "Register"}
+        {loading ? "..." : mode === "login" ? "Sign In" : "Register"}
       </button>
     </form>
 
