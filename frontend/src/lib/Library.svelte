@@ -50,14 +50,13 @@
     FolderOpen,
     RotateCcw,
     X,
-    AlertTriangle,
+    TriangleAlert,
     ChevronRight,
     Search
   } from "@lucide/svelte";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
-  // ─── Album detail: filter & sort ────────────────────────────────────────────
   let albumFilter = "";
   let trackListEl: HTMLDivElement;
   let albumGridFilter = "";
@@ -82,8 +81,6 @@
       : "";
   }
 
-  // ─── Album group types (unified for local and remote display) ───────────────
-
   interface AlbumGroup {
     key: string;
     name: string;
@@ -95,8 +92,6 @@
   }
 
   const UNORGANIZED_KEY = "__unorganized__";
-
-  // ─── Album detail state (on-demand loaded tracks) ───────────────────────────
 
   let currentAlbumGroup: AlbumGroup | null = null;
   let albumDetailTracks: Track[] = [];
@@ -149,8 +144,6 @@
       artwork_id: ""
     };
   }
-
-  // ─── Reactive derivations ──────────────────────────────────────────────────
 
   $: displayedGroups =
     $activeTab === "library"
@@ -336,8 +329,6 @@
     }
   });
 
-  // ─── Debounced album grid filter ───────────────────────────────────────────
-
   let gridFilterDebounce: ReturnType<typeof setTimeout>;
 
   function onAlbumGridFilterInput() {
@@ -363,11 +354,10 @@
     }
   }
 
-  // ─── Infinite scroll for album grid ────────────────────────────────────────
-
   let gridScrollEl: HTMLDivElement;
   let loadingMore = false;
 
+  // implement infinite scroll
   function handleGridScroll() {
     if (loadingMore || !hasMore || !gridScrollEl) return;
     const { scrollTop, scrollHeight, clientHeight } = gridScrollEl;
@@ -388,8 +378,6 @@
       loadingMore = false;
     }
   }
-
-  // ─── Playback ──────────────────────────────────────────────────────────────
 
   async function playTrack(track: Track, albumTracks: Track[]) {
     const idx = albumTracks.findIndex((t) => t.id === track.id);
@@ -492,8 +480,6 @@
   function openAlbum(album: AlbumGroup) {
     pushNav({ albumKey: album.key });
   }
-
-  // ─── Album card context menu ────────────────────────────────────────────────
 
   let albumCtxMenu: { group: AlbumGroup; x: number; y: number } | null = null;
   let albumCtxPlaylistSub = false;
@@ -745,7 +731,7 @@
 
         {#if $activeTab === "library" && !$connected}
           <div class="offline-state">
-            <span class="offline-icon"><AlertTriangle size={16} /></span>
+            <span class="offline-icon"><TriangleAlert size={16} /></span>
             <p class="offline-title">
               {$isReconnecting
                 ? "Reconnecting to server..."
