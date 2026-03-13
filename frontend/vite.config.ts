@@ -11,6 +11,10 @@ export default defineConfig({
           vendor: ["svelte"]
         }
       }
-    }
+    },
+    minify: "esbuild"
+  },
+  esbuild: {
+    drop: ["debugger"]
   }
 });
