@@ -7,9 +7,6 @@ export const activePanel = writable<PanelName>(null);
 /** The currently active main view (library | downloads | settings). */
 export const currentView = writable<string>("library");
 
-// Convenience derived stores for backward compat
-export const queuePanelOpen = derived(activePanel, ($p) => $p === "queue");
-
 export function togglePanel(name: "queue") {
   activePanel.update((v) => (v === name ? null : name));
 }
@@ -22,8 +19,6 @@ export function closePanel() {
   activePanel.set(null);
 }
 
-/* ── Library sub-navigation state ──────────────────────────────── */
-
 export type LibTab = "library" | "local";
 export type LocalSubTab = "albums";
 
@@ -33,8 +28,6 @@ export const selectedAlbum = writable<string | null>(null);
 
 /** Currently selected playlist ID (drives the playlist detail view). */
 export const selectedPlaylistView = writable<string | null>(null);
-
-/* ── Navigation history (back / forward) ───────────────────────── */
 
 export interface NavState {
   view: string;
@@ -80,24 +73,23 @@ export const canGoForward = derived(
 );
 
 /**
- * Record a navigation action.  Truncates any forward history, appends new
- * state, and advances the index.  Call this whenever the user navigates to
+ * Record a navigation action. Truncates any forward history, appends new
+ * state, and advances the index. Utilized whenever the user navigates to
  * a new "page" (tab switch, album click, sidebar item, etc.).
  */
 export function pushNav(partial?: Partial<NavState>) {
   const cur = currentNavState();
   const next: NavState = { ...cur, ...partial };
 
-  // Apply to stores
   applyNavState(next);
 
-  // Update history stack
   _navStack.update((stack) => {
     const idx = get(_navIndex);
-    // Truncate forward entries
+
+    // Truncate forward entries and avoid duplicate consecutive entries
     const trimmed = stack.slice(0, idx + 1);
-    // Avoid duplicate consecutive entries
     const prev = trimmed[trimmed.length - 1];
+
     if (
       prev &&
       prev.view === next.view &&
@@ -108,6 +100,7 @@ export function pushNav(partial?: Partial<NavState>) {
     ) {
       return trimmed;
     }
+
     trimmed.push(next);
     _navIndex.set(trimmed.length - 1);
     return trimmed;
@@ -116,9 +109,12 @@ export function pushNav(partial?: Partial<NavState>) {
 
 export function goBack() {
   const idx = get(_navIndex);
+
   if (idx <= 0) return;
+
   const newIdx = idx - 1;
   _navIndex.set(newIdx);
+
   const stack = get(_navStack);
   applyNavState(stack[newIdx]);
 }
@@ -126,8 +122,11 @@ export function goBack() {
 export function goForward() {
   const idx = get(_navIndex);
   const stack = get(_navStack);
+
   if (idx >= stack.length - 1) return;
+
   const newIdx = idx + 1;
+
   _navIndex.set(newIdx);
   applyNavState(stack[newIdx]);
 }

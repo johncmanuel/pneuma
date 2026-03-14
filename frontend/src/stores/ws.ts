@@ -149,7 +149,6 @@ export function connectWS() {
 export function disconnectWS() {
   intentionalClose = true;
   if (reconnectTimer) clearTimeout(reconnectTimer);
-  // Hide disconnect banner on intentional disconnect
   serverDisconnected.set(false);
   socket?.close();
 }
