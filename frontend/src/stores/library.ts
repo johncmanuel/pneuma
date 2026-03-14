@@ -12,7 +12,7 @@ export interface Album {
   artist_name?: string;
 }
 
-/** Album group derived from the tracks table (reliable regardless of albums table state). */
+/** Album group derived from the tracks table and is reliable regardless of albums table state. */
 export interface RemoteAlbumGroup {
   key: string; // "name|||artist" or "__unorganized__"
   name: string;
@@ -31,8 +31,6 @@ export const loading = writable(false);
 export const searchResults = writable<Track[]>([]);
 export const albumSearchResults = writable<RemoteAlbumGroup[]>([]);
 
-// ─── Remote album groups (derived from tracks table) ─────────────────────────
-
 export const remoteAlbumGroups = writable<RemoteAlbumGroup[]>([]);
 export const remoteAlbumGroupsTotal = writable(0);
 export const remoteAlbumGroupsOffset = writable(0);
@@ -41,11 +39,14 @@ const ALBUM_GROUP_PAGE_SIZE = 50;
 
 export async function loadRemoteAlbumGroupsPage(offset = 0, filter = "") {
   if (!get(connected)) return;
+
   const params = new URLSearchParams({
     offset: String(offset),
     limit: String(ALBUM_GROUP_PAGE_SIZE)
   });
+
   if (filter) params.set("filter", filter);
+
   try {
     const r = await serverFetch(`/api/library/albumgroups?${params}`);
     if (!r.ok) return;
@@ -53,22 +54,25 @@ export async function loadRemoteAlbumGroupsPage(offset = 0, filter = "") {
     remoteAlbumGroups.set(data.groups ?? []);
     remoteAlbumGroupsTotal.set(data.total ?? 0);
     remoteAlbumGroupsOffset.set(data.offset ?? 0);
-  } catch {
-    // ignore network errors silently
-  }
+  } catch {}
 }
 
 export async function loadMoreRemoteAlbumGroups(filter = "") {
   if (!get(connected)) return;
+
   const currentOffset = get(remoteAlbumGroupsOffset);
   const total = get(remoteAlbumGroupsTotal);
   const nextOffset = currentOffset + ALBUM_GROUP_PAGE_SIZE;
+
   if (nextOffset >= total) return;
+
   const params = new URLSearchParams({
     offset: String(nextOffset),
     limit: String(ALBUM_GROUP_PAGE_SIZE)
   });
+
   if (filter) params.set("filter", filter);
+
   try {
     const r = await serverFetch(`/api/library/albumgroups?${params}`);
     if (!r.ok) return;
@@ -78,12 +82,8 @@ export async function loadMoreRemoteAlbumGroups(filter = "") {
       ...(data.groups ?? [])
     ]);
     remoteAlbumGroupsOffset.set(nextOffset);
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
-
-// ─── Pagination state ────────────────────────────────────────────────────────
 
 export const tracksTotal = writable(0);
 export const tracksOffset = writable(0);
@@ -92,20 +92,23 @@ export const albumsOffset = writable(0);
 
 const PAGE_SIZE = 50;
 
-// ─── Paginated loading ───────────────────────────────────────────────────────
-
 /** Fetch the next page of albums and append. */
 export async function loadMoreAlbums(filter = "") {
   if (!get(connected)) return;
+
   const currentOffset = get(albumsOffset);
   const total = get(albumsTotal);
   const nextOffset = currentOffset + PAGE_SIZE;
+
   if (nextOffset >= total) return;
+
   const params = new URLSearchParams({
     offset: String(nextOffset),
     limit: String(PAGE_SIZE)
   });
+
   if (filter) params.set("filter", filter);
+
   const r = await serverFetch(`/api/library/albums?${params}`);
   const data = await r.json();
   albums.update((existing) => [...existing, ...(data.albums ?? [])]);
@@ -144,9 +147,12 @@ export async function searchAlbumGroups(
   q: string
 ): Promise<RemoteAlbumGroup[]> {
   if (!get(connected)) return [];
+
+  const limit = 10;
+
   try {
     const r = await serverFetch(
-      `/api/library/albumgroups?filter=${encodeURIComponent(q)}&limit=10`
+      `/api/library/albumgroups?filter=${encodeURIComponent(q)}&limit=${limit}`
     );
     if (!r.ok) {
       albumSearchResults.set([]);

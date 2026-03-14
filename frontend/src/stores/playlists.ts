@@ -14,11 +14,9 @@ import {
 import { addToast } from "./toasts";
 import { playerState, type Track } from "./player";
 import { fetchTracksByIDs } from "./library";
-import { resolveLocalTracksByPaths } from "./localLibrary";
+import { resolveLocalTracksByPaths, isLocalId } from "./localLibrary";
 import { recordRecentPlaylist } from "./recentAlbums";
 import { wsSend } from "./ws";
-
-/* ── Types ──────────────────────────────────────────────────────── */
 
 export interface PlaylistSummary {
   id: string;
@@ -46,27 +44,17 @@ export interface PlaylistItem {
   missing: boolean;
 }
 
-/* ── Stores ─────────────────────────────────────────────────────── */
-
-/** All local playlists (summary view). */
 export const playlists = writable<PlaylistSummary[]>([]);
 
-/** Currently selected playlist ID for detail view. */
 export const selectedPlaylistId = writable<string | null>(null);
 
-/** Items of the currently selected playlist (resolved). */
 export const selectedPlaylistItems = writable<PlaylistItem[]>([]);
 
-/** The currently selected playlist summary. */
 export const selectedPlaylist = writable<PlaylistSummary | null>(null);
 
-/** Loading state. */
 export const playlistsLoading = writable(false);
 
-/** ID of the playlist currently loaded into the playback queue (null if not from a playlist). */
 export const playingPlaylistId = writable<string | null>(null);
-
-/* ── Actions ────────────────────────────────────────────────────── */
 
 /** Load all local playlists from the desktop DB. */
 export async function loadPlaylists() {
@@ -78,7 +66,6 @@ export async function loadPlaylists() {
   }
 }
 
-/** Create a new playlist. */
 export async function createPlaylist(name: string, description = "") {
   try {
     const pl = await CreateLocalPlaylist(name, description);
@@ -93,7 +80,6 @@ export async function createPlaylist(name: string, description = "") {
   return null;
 }
 
-/** Delete a playlist. */
 export async function deletePlaylist(id: string) {
   try {
     await DeleteLocalPlaylist(id);
@@ -129,17 +115,15 @@ export async function updatePlaylist(
   }
 }
 
-/** Select a playlist and load its resolved items. */
 export async function selectPlaylist(id: string) {
   selectedPlaylistId.set(id);
   playlistsLoading.set(true);
+
   try {
-    // Find summary from the list.
     const list = get(playlists);
     const summary = list.find((p) => p.id === id) ?? null;
     selectedPlaylist.set(summary);
 
-    // Load and resolve items.
     const items = (await ResolvePlaylistItems(id)) as PlaylistItem[] | null;
     selectedPlaylistItems.set(items ?? []);
   } catch (e: any) {
@@ -166,7 +150,7 @@ export async function addTrackToPlaylist(
   const pl = get(playlists).find((p) => p.id === playlistId);
   const playlistName = pl?.name ?? "playlist";
 
-  // Duplicate check — use cached items if this is the selected playlist, else fetch.
+  // use cached items if this is the selected playlist, else fetch them.
   let currentItems: PlaylistItem[];
   if (get(selectedPlaylistId) === playlistId) {
     currentItems = get(selectedPlaylistItems);
@@ -183,6 +167,7 @@ export async function addTrackToPlaylist(
       ? item.local_path && item.local_path === (track as any).path
       : item.track_id && item.track_id === (track as Track).id
   );
+
   if (isDuplicate) {
     const proceed = window.confirm(
       `"${track.title}" is already in "${playlistName}". Add it again?`
@@ -222,8 +207,9 @@ export async function addTrackToPlaylist(
     if (get(selectedPlaylistId) === playlistId) {
       await selectPlaylist(playlistId);
     }
+
     await loadPlaylists();
-  } catch (e: any) {
+  } catch (_) {
     addToast(
       `Failed to add \"${track.title}\" to \"${playlistName}\"`,
       "error"
@@ -264,6 +250,7 @@ export async function addTracksToPlaylist(
         ? item.local_path && item.local_path === (track as any).path
         : item.track_id && item.track_id === track.id
     );
+
     if (isDuplicate) {
       skipped++;
       continue;
@@ -284,6 +271,7 @@ export async function addTracksToPlaylist(
         missing: false
       };
       await AddLocalPlaylistItem(playlistId, item);
+
       // Optimistically add to local list to catch same-batch duplicates.
       currentItems = [...currentItems, item];
       added++;
@@ -306,7 +294,6 @@ export async function addTracksToPlaylist(
   addToast(parts.join(" · "), added > 0 ? "success" : "info");
 }
 
-/** Reorder items in a playlist. */
 export async function reorderPlaylistItems(
   playlistId: string,
   items: PlaylistItem[]
@@ -343,7 +330,6 @@ export async function reorderPlaylistItems(
   }
 }
 
-/** Remove an item at a given position from a playlist. */
 export async function removePlaylistItem(playlistId: string, position: number) {
   const items = get(selectedPlaylistItems).filter(
     (i) => i.position !== position
@@ -351,7 +337,6 @@ export async function removePlaylistItem(playlistId: string, position: number) {
   await reorderPlaylistItems(playlistId, items);
 }
 
-/** Upload playlist to server. */
 export async function uploadPlaylist(playlistId: string) {
   try {
     const remoteId = await UploadPlaylistToServer(playlistId);
@@ -373,8 +358,8 @@ export async function playPlaylist(
   startIndex: number,
   playlistId?: string
 ) {
-  // Record as recently played and track active playlist.
   playingPlaylistId.set(playlistId ?? null);
+
   if (playlistId) {
     const pl = get(playlists).find((p) => p.id === playlistId);
     if (pl)
@@ -384,6 +369,7 @@ export async function playPlaylist(
         artworkPath: pl.artwork_path
       });
   }
+
   // Build queue IDs from resolved items.
   const queueIds: string[] = [];
   for (const item of items) {
@@ -392,7 +378,7 @@ export async function playPlaylist(
     } else if (item.source === "remote" && item.track_id) {
       queueIds.push(item.track_id);
     } else {
-      // Missing/unresolved — use a placeholder that will be skipped.
+      // Missing/unresolved, so use a placeholder that will be skipped.
       queueIds.push("");
     }
   }
@@ -415,10 +401,8 @@ export async function playPlaylist(
   // Resolve starting track metadata so now-playing displays immediately.
   const startId = validIds[adjustedStart];
   let startTrack: Track | null = null;
-  const isLocalPath = (id: string) =>
-    id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(id);
   try {
-    if (isLocalPath(startId)) {
+    if (isLocalId(startId)) {
       const locals = await resolveLocalTracksByPaths([startId]);
       if (locals.length > 0) {
         const lt = locals[0];
@@ -445,9 +429,7 @@ export async function playPlaylist(
       const remotes = await fetchTracksByIDs([startId]);
       if (remotes.length > 0) startTrack = remotes[0];
     }
-  } catch {
-    // Best-effort — Player.svelte will resolve on skip if needed.
-  }
+  } catch {}
 
   playerState.update((s) => ({
     ...s,
@@ -465,8 +447,8 @@ export async function playPlaylist(
   // state from the previous play, and a subsequent seek causes the server
   // to echo back the wrong track_id which switches playback to a different
   // song. Only send for remote tracks (local paths are unknown to the server).
-  if (!isLocalPath(startId)) {
-    const queueAllRemote = validIds.every((id) => !isLocalPath(id));
+  if (!isLocalId(startId)) {
+    const queueAllRemote = validIds.every((id) => !isLocalId(id));
     if (queueAllRemote) {
       wsSend("playback.queue", {
         device_id: "desktop",
@@ -486,18 +468,21 @@ export async function playPlaylist(
 export async function pickPlaylistArtwork(playlistId: string) {
   try {
     const artFile = await PickPlaylistArtwork(playlistId);
+
     if (!artFile) return; // user cancelled
+
     await loadPlaylists();
+
     if (get(selectedPlaylistId) === playlistId) {
       await selectPlaylist(playlistId);
     }
+
     addToast("Playlist artwork updated", "success");
   } catch (e: any) {
     addToast(`Failed to set artwork: ${e}`, "error");
   }
 }
 
-/** Initialize playlists on app startup. */
 export async function initPlaylists() {
   await loadPlaylists();
 }

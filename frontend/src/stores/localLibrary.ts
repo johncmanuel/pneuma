@@ -29,20 +29,27 @@ export interface LocalTrack {
   has_artwork: boolean;
 }
 
+/**
+ * Returns true if the given ID looks like a local filesystem path
+ * (Unix absolute path or Windows drive letter, e.g. C:\).
+ */
+export function isLocalId(id: string): boolean {
+  return id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(id);
+}
+
 const KEY_FOLDERS = "local_folders";
 
 let _initialized = false;
 
-/** List of local folder paths the user has added. */
 export const localFolders = writable<string[]>([]);
+
 localFolders.subscribe((v) => {
   if (_initialized) void db.set(KEY_FOLDERS, JSON.stringify(v));
 });
 
-/** All local tracks combined from all scanned folders. */
 export const localTracks = writable<LocalTrack[]>([]);
 
-/** Loading flag — true while an initial load or full rescan is in progress. */
+/** used for denoting when an initial load or full rescan is in progress. */
 export const localLoading = writable(false);
 
 /** Per-file scan progress: null when idle. */
@@ -65,15 +72,14 @@ function purgePathsFromQueue(removedPath: string) {
     const currentId = s.queue[s.queueIndex] ?? "";
     const currentRemoved = isRemoved(currentId);
 
-    // Filter both queue and baseQueue.
+    // Filter out removed tracks from both queues
     const newQueue = s.queue.filter((id) => !isRemoved(id));
     const newBase = s.baseQueue.filter((id) => !isRemoved(id));
 
     if (newQueue.length === 0 || currentRemoved) {
-      // Nothing left to play, or the currently-playing track was removed.
       if (currentRemoved) {
         addToast(
-          `"${s.track?.title ?? currentId}" was removed from disk — playback stopped.`,
+          `"${s.track?.title ?? currentId}" was removed from disk; playback stopped.`,
           "warning"
         );
       }
@@ -94,6 +100,7 @@ function purgePathsFromQueue(removedPath: string) {
     const removedBefore = s.queue
       .slice(0, s.queueIndex)
       .filter((id) => isRemoved(id)).length;
+
     const newIndex = Math.max(0, s.queueIndex - removedBefore);
 
     return {
@@ -115,8 +122,6 @@ async function injectTrackIntoQueue(newTrack: LocalTrack) {
   if (!s.trackId || !s.track) return;
 
   // Only act on local-track queues (IDs are filesystem paths).
-  const isLocalId = (id: string) =>
-    id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(id);
   if (!isLocalId(s.trackId)) return;
 
   // Match by album name + album artist (same logic as Go getLocalAlbumTracks).

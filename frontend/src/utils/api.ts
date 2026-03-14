@@ -1,5 +1,5 @@
 import { writable, get } from "svelte/store";
-import { initLocalLibrary } from "../stores/localLibrary";
+import { initLocalLibrary, isLocalId } from "../stores/localLibrary";
 import { initRecentAlbums } from "../stores/recentAlbums";
 import {
   IsConnected,
@@ -209,14 +209,6 @@ export async function serverFetch(
   return fetch(`${base}${path}`, { ...init, headers });
 }
 
-/* ── Stream / artwork URL helpers ───────────────────────────────── */
-
-/** Detect if a track ID is a local filesystem path rather than a server UUID. */
-function isLocalPath(id: string): boolean {
-  // Unix absolute path or Windows drive letter (e.g. C:\)
-  return id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(id);
-}
-
 /**
  * Returns the stream URL for a track.
  * Local files (identified by path-style IDs) always stream through the local
@@ -227,7 +219,7 @@ export function streamUrl(trackId: string, localPath?: string): string {
   const p = get(localPort);
 
   // If the track ID looks like a filesystem path, always use local server
-  if (isLocalPath(trackId) && p) {
+  if (isLocalId(trackId) && p) {
     return `http://127.0.0.1:${p}/local/stream?path=${encodeURIComponent(trackId)}`;
   }
 
@@ -249,7 +241,7 @@ export function streamUrl(trackId: string, localPath?: string): string {
 /** Returns the artwork URL for a track. Local tracks route to the local art server. */
 export function artworkUrl(trackId: string): string {
   const p = get(localPort);
-  if (isLocalPath(trackId) && p) {
+  if (isLocalId(trackId) && p) {
     return `http://127.0.0.1:${p}/local/art?path=${encodeURIComponent(trackId)}`;
   }
   const base = get(serverURL);

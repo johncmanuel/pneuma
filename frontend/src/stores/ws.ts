@@ -10,9 +10,9 @@ import {
   autoReconnect
 } from "../utils/api";
 import { addToast } from "./toasts";
+import { isLocalId } from "./localLibrary";
 import { get } from "svelte/store";
 
-/** True when the WS connection dropped unexpectedly (drives the banner). */
 export const serverDisconnected = writable(false);
 
 let socket: WebSocket | null = null;
@@ -81,8 +81,6 @@ export function connectWS() {
           // If the client queue contains local file paths the server can't know
           // about, don't let the server overwrite it — the desktop is the
           // authority for mixed local+remote queues.
-          const isLocalId = (id: string) =>
-            id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(id);
           const queueHasLocalTracks = s.queue.some(isLocalId);
 
           // Resolve the effective queue (prefer server's if we can use it)

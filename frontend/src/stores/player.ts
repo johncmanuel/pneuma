@@ -25,6 +25,14 @@ export function isRemoteTrack(id: string): boolean {
   return !id.startsWith("/") && !/^[a-zA-Z]:[/\\]/.test(id);
 }
 
+/**
+ * @deprecated Use `isLocalId` from `localLibrary.ts` for new code.
+ * Kept here to avoid circular imports (`localLibrary` → `player`).
+ */
+export function isLocalTrack(id: string): boolean {
+  return id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(id);
+}
+
 // TODO: want to migrate to svelte 5 syntax to make use of runes over stores
 export interface PlayerState {
   trackId: string;

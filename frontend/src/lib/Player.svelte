@@ -1,7 +1,7 @@
 <script lang="ts">
   import { playerState, type Track, isRemoteTrack } from "../stores/player";
   import { fetchTracksByIDs, UNORGANIZED_KEY } from "../stores/library";
-  import { resolveLocalTracksByPaths } from "../stores/localLibrary";
+  import { resolveLocalTracksByPaths, isLocalId } from "../stores/localLibrary";
   import {
     activePanel,
     toggleQueuePanel,
@@ -61,10 +61,7 @@
     audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0);
 
   // Local tracks use their filesystem path as the ID; don't send WS events for them.
-  $: isLocal = !!(
-    $playerState.trackId?.startsWith("/") ||
-    /^[a-zA-Z]:[/\\]/.test($playerState.trackId ?? "")
-  );
+  $: isLocal = isLocalId($playerState.trackId ?? "");
 
   // Store original queues for restoration when reconnected
   let originalQueue: string[] = [];
@@ -116,8 +113,7 @@
   }
 
   const trackCache = new Map<string, Track>();
-  const isLocalPath = (id: string) =>
-    id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(id);
+  const isLocalPath = isLocalId;
 
   /** Resolve a track ID to a Track object (server library OR local files). */
   async function findTrackById(id: string): Promise<Track | null> {

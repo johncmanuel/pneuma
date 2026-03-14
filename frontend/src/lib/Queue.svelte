@@ -1,7 +1,7 @@
 <script lang="ts">
   import { playerState, type Track, isRemoteTrack } from "../stores/player";
   import { fetchTracksByIDs } from "../stores/library";
-  import { resolveLocalTracksByPaths } from "../stores/localLibrary";
+  import { resolveLocalTracksByPaths, isLocalId } from "../stores/localLibrary";
   import { closePanel } from "../stores/ui";
   import { formatDuration } from "./TrackRow.svelte";
   import { artworkUrl, connected } from "../utils/api";
@@ -94,8 +94,7 @@
 
   function playFromQueue(track: Track, idx: number) {
     const newIndex = currentIndex + 1 + idx;
-    const isLocalTrack =
-      track.id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(track.id);
+    const isLocalTrack = isLocalId(track.id);
 
     // Don't play offline tracks - skip to next available
     if (!isLocalTrack && isRemoteTrack(track.id) && !$connected) {
