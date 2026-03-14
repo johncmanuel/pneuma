@@ -10,10 +10,10 @@
     searchLocalAlbumGroups,
     fetchLocalAlbumTracks,
     type LocalAlbumGroup,
-    type LocalTrack
+    type LocalTrack,
+    localTrackToTrack
   } from "../stores/localLibrary";
-  import { playerState } from "../stores/player";
-  import type { Track } from "../stores/player";
+  import { playerState, type Track } from "../stores/player";
   import { connected, serverFetch, artworkUrl, localBase } from "../utils/api";
   import { Music, Search } from "@lucide/svelte";
   import { wsSend } from "../stores/ws";
@@ -22,7 +22,9 @@
   import { onDestroy } from "svelte";
   import { portal } from "../utils/dom";
 
-  // ── Public API ──────────────────────────────────────────────────────────────
+  // uses similar search functionality to svelte.dev
+  // https://github.com/sveltejs/svelte.dev
+
   export let query = "";
   export function focus() {
     inputEl?.focus();
@@ -30,9 +32,8 @@
   }
   export const hasResults = () => query.trim().length >= 2;
 
-  // ── State ───────────────────────────────────────────────────────────────────
   let debounce: number;
-  let reqSeq = 0; // monotonic token — stale async responses are dropped
+  let reqSeq = 0; // monotonic token,  stale async responses are dropped
   let inputEl: HTMLInputElement;
   let resultsEl: HTMLDivElement;
   let focused = false;
@@ -42,7 +43,6 @@
   const NAV_INTERVAL_MS = 80;
   let lastNavAt = 0;
 
-  // ── Context menu ────────────────────────────────────────────────────────────
   let menuTrack: TaggedTrack | null = null;
   let menuX = 0;
   let menuY = 0;
@@ -51,12 +51,15 @@
 
   function onTrackContext(e: MouseEvent, track: TaggedTrack) {
     e.preventDefault();
+
     menuTrack = track;
     menuX = e.clientX;
     menuY = e.clientY;
     showMenu = true;
+
     if (closeMenuListener)
       window.removeEventListener("click", closeMenuListener);
+
     closeMenuListener = () => {
       showMenu = false;
       window.removeEventListener("click", closeMenuListener!);
@@ -90,6 +93,8 @@
 
   function onInput() {
     clearTimeout(debounce);
+
+    // debounce search queries made while typing
     debounce = window.setTimeout(async () => {
       const q = query.trim();
       if (q.length < 2) {
@@ -99,7 +104,10 @@
         localAlbumResults = [];
         return;
       }
+
       const id = ++reqSeq;
+
+      // then search remote and local libraries in parallel
       try {
         const [remoteResults, localResults, remoteAlbums, localAlbums] =
           await Promise.all([
@@ -108,8 +116,10 @@
             searchAlbumGroups(q),
             searchLocalAlbumGroups(q)
           ]);
+
         // Discard results from a superseded request
         if (id !== reqSeq) return;
+
         buildCombined(remoteResults ?? [], localResults ?? []);
         remoteAlbumResults = remoteAlbums ?? [];
         localAlbumResults = localAlbums ?? [];
@@ -119,30 +129,18 @@
     }, 300);
   }
 
+  // combine remote and local results
   function buildCombined(remoteResults: Track[], localResults: LocalTrack[]) {
     const remote: TaggedTrack[] = remoteResults.map((t) => ({
       ...t,
       _source: "remote" as const
     }));
+
     const local: TaggedTrack[] = localResults.slice(0, 20).map((t) => ({
-      id: t.path,
-      path: t.path,
-      title: t.title,
-      artist_id: "",
-      album_id: "",
-      artist_name: t.artist,
-      album_artist: t.album_artist,
-      album_name: t.album,
-      genre: t.genre,
-      year: t.year,
-      track_number: t.track_number,
-      disc_number: t.disc_number,
-      duration_ms: t.duration_ms,
-      bitrate_kbps: 0,
-      replay_gain_track: 0,
-      artwork_id: "",
+      ...localTrackToTrack(t),
       _source: "local" as const
     }));
+
     combinedResults = [...remote, ...local];
   }
 
@@ -155,86 +153,53 @@
     activeResultKey = null;
   }
 
-  function localTrackToTrack(t: LocalTrack): Track {
-    return {
-      id: t.path,
-      path: t.path,
-      title: t.title,
-      artist_id: "",
-      album_id: "",
-      artist_name: t.artist,
-      album_artist: t.album_artist,
-      album_name: t.album,
-      genre: t.genre,
-      year: t.year,
-      track_number: t.track_number,
-      disc_number: t.disc_number,
-      duration_ms: t.duration_ms,
-      bitrate_kbps: 0,
-      replay_gain_track: 0,
-      artwork_id: ""
-    };
+  function sortByDiscAndTrack<
+    T extends { disc_number?: number; track_number?: number }
+  >(tracks: T[]): T[] {
+    return [...tracks].sort(
+      (a, b) =>
+        (a.disc_number ?? 0) - (b.disc_number ?? 0) ||
+        (a.track_number ?? 0) - (b.track_number ?? 0)
+    );
   }
 
-  async function playTrack(track: TaggedTrack) {
-    if (track._source === "local") {
-      let albumTracks: Track[] = [];
-      try {
+  // Fetch the full album track list for a given track so we can build a
+  // proper queue starting from the selected song.
+  async function fetchAlbumTracksForQueue(
+    track: TaggedTrack
+  ): Promise<Track[]> {
+    try {
+      if (track._source === "local") {
         const locals = await fetchLocalAlbumTracks(
           track.album_name ?? "",
           track.album_artist ?? ""
         );
-        albumTracks = locals
-          .sort(
-            (a, b) =>
-              (a.disc_number ?? 0) - (b.disc_number ?? 0) ||
-              (a.track_number ?? 0) - (b.track_number ?? 0)
-          )
-          .map(localTrackToTrack);
-      } catch {}
-      if (albumTracks.length === 0)
-        albumTracks = combinedResults.filter((t) => t._source === "local");
-      const idx = albumTracks.findIndex((t) => t.id === track.id);
-      const queue = albumTracks.slice(Math.max(0, idx)).map((t) => t.id);
-      const baseQueue = albumTracks.map((t) => t.id);
-      playerState.update((s) => ({
-        ...s,
-        trackId: track.id,
-        track,
-        queue,
-        baseQueue,
-        queueIndex: 0,
-        positionMs: 0,
-        paused: false
-      }));
-      return;
-    }
+        return sortByDiscAndTrack(locals).map(localTrackToTrack);
+      }
 
-    if (!$connected) return;
-
-    let albumTracks: Track[] = [];
-    try {
       const params = new URLSearchParams();
       params.set("album_name", track.album_name ?? "");
       if (track.album_artist) params.set("album_artist", track.album_artist);
+
       const r = await serverFetch(`/api/library/tracks?${params}`);
       if (r.ok) {
         const data = await r.json();
         const fetched: Track[] = Array.isArray(data)
           ? data
           : (data.tracks ?? []);
-        albumTracks = fetched.sort(
-          (a, b) =>
-            (a.disc_number ?? 0) - (b.disc_number ?? 0) ||
-            (a.track_number ?? 0) - (b.track_number ?? 0)
-        );
+        return sortByDiscAndTrack(fetched);
       }
     } catch {}
-    if (albumTracks.length === 0)
-      albumTracks = combinedResults.filter((t) => t._source === "remote");
+
+    return [];
+  }
+
+  // Update local player state (and notify the server for remote tracks).
+  function startPlayback(track: TaggedTrack, albumTracks: Track[]) {
     const idx = albumTracks.findIndex((t) => t.id === track.id);
     const queue = albumTracks.slice(Math.max(0, idx)).map((t) => t.id);
     const baseQueue = albumTracks.map((t) => t.id);
+
     playerState.update((s) => ({
       ...s,
       trackId: track.id,
@@ -245,16 +210,34 @@
       positionMs: 0,
       paused: false
     }));
-    wsSend("playback.queue", {
-      device_id: "desktop",
-      track_ids: queue,
-      start_index: 0
-    });
-    wsSend("playback.play", {
-      device_id: "desktop",
-      track_id: track.id,
-      position_ms: 0
-    });
+
+    if (track._source === "remote") {
+      wsSend("playback.queue", {
+        device_id: "desktop",
+        track_ids: queue,
+        start_index: 0
+      });
+      wsSend("playback.play", {
+        device_id: "desktop",
+        track_id: track.id,
+        position_ms: 0
+      });
+    }
+  }
+
+  // Play a track from the search results. The queue is built from
+  // the track's album so subsequent songs play in album order.
+  async function playTrack(track: TaggedTrack) {
+    if (track._source === "remote" && !$connected) return;
+
+    let albumTracks = await fetchAlbumTracksForQueue(track);
+
+    // Fall back to the search results if the album fetch failed
+    if (albumTracks.length === 0) {
+      albumTracks = combinedResults.filter((t) => t._source === track._source);
+    }
+
+    startPlayback(track, albumTracks);
   }
 
   function addToQueue(track: TaggedTrack) {
@@ -320,8 +303,6 @@
     }
   }
 
-  // ── Focus-driven navigation ──────────────────────────────────────────────────
-
   /** All navigable result buttons in the dropdown. */
   function resultButtons(): HTMLElement[] {
     if (!resultsEl) return [];
@@ -342,10 +323,16 @@
     }
   }
 
-  function navDown() {
+  // Returns false if throttled (key held down too fast)
+  function throttledNav(): boolean {
     const now = Date.now();
-    if (now - lastNavAt < NAV_INTERVAL_MS) return;
+    if (now - lastNavAt < NAV_INTERVAL_MS) return false;
     lastNavAt = now;
+    return true;
+  }
+
+  function navDown() {
+    if (!throttledNav()) return;
     const btns = resultButtons();
     if (!btns.length) return;
     const idx = btns.indexOf(document.activeElement as HTMLElement);
@@ -355,9 +342,7 @@
   }
 
   function navUp() {
-    const now = Date.now();
-    if (now - lastNavAt < NAV_INTERVAL_MS) return;
-    lastNavAt = now;
+    if (!throttledNav()) return;
     const btns = resultButtons();
     if (!btns.length) return;
     const idx = btns.indexOf(document.activeElement as HTMLElement);
@@ -368,7 +353,6 @@
       prev.focus({ preventScroll: true });
       scrollResultIntoView(prev);
     }
-    // idx === -1 means input is already focused — do nothing
   }
 
   function activateFocused() {
@@ -377,7 +361,7 @@
       active.click();
       return;
     }
-    // Nothing focused yet — activate the first result
+    // Nothing focused yet, so activate the first result
     resultButtons()[0]?.click();
   }
 
@@ -402,6 +386,7 @@
     // If the context menu is open the focus departure is intentional and
     // temporary (menu is portalled outside the container). Don't collapse.
     if (showMenu) return;
+
     if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
       focused = false;
     }

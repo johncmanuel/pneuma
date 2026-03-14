@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from "svelte";
+  import { onDestroy } from "svelte";
   import type { Track } from "../stores/player";
   import {
     playlists,
@@ -22,23 +22,31 @@
   export let active: boolean = false;
   export let hideAlbum: boolean = false;
   export let isLocal: boolean = false;
+
   /** When set, the row is in playlist mode: artist column shows album, album column shows this date string. */
   export let dateAdded: string | undefined = undefined;
+
   /** When true, adds a "Remove from playlist" item to the context menu. */
   export let showRemove: boolean = false;
 
-  const dispatch = createEventDispatcher();
+  export let onplay: ((track: Track | null) => void) | undefined = undefined;
+  export let onselect: (() => void) | undefined = undefined;
+  export let onaddtoqueue: ((track: Track | null) => void) | undefined =
+    undefined;
+  export let onremove: ((track: Track | null) => void) | undefined = undefined;
 
   let showMenu = false;
   let menuX = 0;
   let menuY = 0;
   let showPlaylistSub = false;
 
+  // show the context menu on right click
   function onContext(e: MouseEvent) {
     e.preventDefault();
     menuX = e.clientX;
     menuY = e.clientY;
     showMenu = true;
+
     const close = () => {
       showMenu = false;
       window.removeEventListener("click", close);
@@ -47,7 +55,7 @@
   }
 
   function handleAddToQueue() {
-    dispatch("addToQueue", track);
+    onaddtoqueue?.(track);
     showMenu = false;
   }
 
@@ -60,7 +68,7 @@
   }
 
   function handleRemove() {
-    dispatch("remove", track);
+    onremove?.(track);
     showMenu = false;
   }
 
@@ -75,9 +83,9 @@
   class:active
   class:hide-album={hideAlbum}
   class:offline={!isLocal && !$connected}
-  on:dblclick={() => dispatch("play", track)}
-  on:click={() => dispatch("select")}
-  on:contextmenu={onContext}
+  ondblclick={() => onplay?.(track)}
+  onclick={() => onselect?.()}
+  oncontextmenu={onContext}
 >
   <span class="num text-3">{track?.track_number || "-"}</span>
   <span class="title truncate">{track?.title ?? "Unknown"}</span>
@@ -96,13 +104,13 @@
 
 {#if showMenu}
   <div class="ctx-menu" use:portal style="left:{menuX}px;top:{menuY}px">
-    <button on:click={handleAddToQueue}>Add to queue</button>
+    <button onclick={handleAddToQueue}>Add to queue</button>
     {#if $playlists.length > 0}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="ctx-submenu-wrap"
-        on:mouseenter={() => (showPlaylistSub = true)}
-        on:mouseleave={() => (showPlaylistSub = false)}
+        onmouseenter={() => (showPlaylistSub = true)}
+        onmouseleave={() => (showPlaylistSub = false)}
       >
         <button class="has-sub"
           >Add to playlist <ChevronRight size={14} /></button
@@ -110,8 +118,7 @@
         {#if showPlaylistSub}
           <div class="ctx-submenu">
             {#each $playlists as pl (pl.id)}
-              <button on:click={() => handleAddToPlaylist(pl)}>{pl.name}</button
-              >
+              <button onclick={() => handleAddToPlaylist(pl)}>{pl.name}</button>
             {/each}
           </div>
         {/if}
@@ -119,7 +126,7 @@
     {/if}
     {#if showRemove}
       <hr class="ctx-sep" />
-      <button class="ctx-danger" on:click={handleRemove}
+      <button class="ctx-danger" onclick={handleRemove}
         >Remove from playlist</button
       >
     {/if}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { createVirtualizer } from "@tanstack/svelte-virtual";
   import { derived } from "svelte/store";
   import {
     playlists,
@@ -25,6 +26,7 @@
   import { Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "./TrackRow.svelte";
   import SortButton from "./SortButton.svelte";
+  import "../assets/css/track-list.css";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -34,6 +36,7 @@
   let editingId: string | null = null;
   let editName = "";
   let editDesc = "";
+  let trackListEl: HTMLDivElement;
 
   $: if ($selectedPlaylistView) {
     selectPlaylist($selectedPlaylistView);
@@ -47,6 +50,13 @@
   type SortField = "default" | "title" | "added_at" | "duration";
   let sortField: SortField = "default";
   let sortDir: "asc" | "desc" = "asc";
+
+  $: virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
+    count: filteredItems.length,
+    getScrollElement: () => trackListEl,
+    estimateSize: () => 38,
+    overscan: 5
+  });
 
   $: filteredItems = $selectedPlaylistItems
     .filter((i) => {
@@ -297,7 +307,7 @@
       >
     </div>
 
-    <div class="track-list">
+    <div class="track-list" bind:this={trackListEl}>
       {#if $playlistsLoading}
         <p class="text-3 loading-msg">Loading...</p>
       {:else if filteredItems.length === 0}
@@ -307,21 +317,30 @@
             : "This playlist is empty. Add tracks from the library."}
         </p>
       {:else}
-        {#each filteredItems as item (item.position)}
-          {@const track = itemToTrack(item)}
-          <div class="playlist-row" class:missing={item.missing}>
-            <TrackRow
-              {track}
-              active={$currentTrackId === track.id}
-              dateAdded={formatDate(item.added_at)}
-              showRemove={true}
-              isLocal={item.source === "local_ref"}
-              on:play={() => handlePlay(item)}
-              on:addToQueue
-              on:remove={() => handleRemove(item)}
-            />
-          </div>
-        {/each}
+        <div
+          style="position: relative; width: 100%; height: {$virtualizer.getTotalSize()}px;"
+        >
+          {#each $virtualizer.getVirtualItems() as row (row.index)}
+            {@const item = filteredItems[row.index]}
+            {@const track = itemToTrack(item)}
+            <div
+              class="virtual-row playlist-row"
+              class:missing={item.missing}
+              style="height: {row.size}px; transform: translateY({row.start}px);"
+            >
+              <TrackRow
+                {track}
+                active={$currentTrackId === track.id}
+                dateAdded={formatDate(item.added_at)}
+                showRemove={true}
+                isLocal={item.source === "local_ref"}
+                onplay={() => handlePlay(item)}
+                onaddtoqueue={(t) => {}}
+                onremove={() => handleRemove(item)}
+              />
+            </div>
+          {/each}
+        </div>
       {/if}
     </div>
   </div>
@@ -668,34 +687,6 @@
     border: 1px solid var(--border);
   }
 
-  .track-headers {
-    display: grid;
-    grid-template-columns: 32px 2fr 1fr 1fr 76px;
-    gap: 0 12px;
-    padding: 4px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-3);
-    border-bottom: 1px solid var(--border);
-  }
-  .track-headers .num {
-    text-align: right;
-  }
-  .track-headers :global(.sortable) {
-    cursor: pointer;
-    color: var(--text-3);
-    text-align: left;
-    font-size: inherit;
-    font-weight: inherit;
-    text-transform: inherit;
-    letter-spacing: inherit;
-  }
-  .track-headers :global(.sortable:hover) {
-    color: var(--text-1);
-  }
-
   .filter-input {
     width: 200px;
     padding: 6px 10px;
@@ -706,14 +697,13 @@
     font-size: 12px;
   }
 
-  .track-list {
-    flex: 1;
-    overflow-y: auto;
+  .virtual-row {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
   }
 
-  .playlist-row {
-    display: block;
-  }
   .playlist-row :global(.track-row) {
     flex: 1;
   }

@@ -21,14 +21,15 @@
     loadMoreLocalAlbumGroups,
     fetchLocalAlbumTracks,
     localChangeSeq,
+    localTrackToTrack,
     type LocalAlbumGroup
   } from "../stores/localLibrary";
   import { playerState } from "../stores/player";
   import TrackRow from "./TrackRow.svelte";
   import SortButton from "./SortButton.svelte";
+  import "../assets/css/track-list.css";
 
   import type { Track } from "../stores/player";
-  import type { LocalTrack } from "../stores/localLibrary";
   import {
     serverFetch,
     artworkUrl,
@@ -107,27 +108,6 @@
       isLocal: false,
       firstLocalPath: ""
     }));
-  }
-
-  function localTrackToTrack(t: LocalTrack): Track {
-    return {
-      id: t.path,
-      path: t.path,
-      title: t.title,
-      artist_id: "",
-      album_id: "",
-      artist_name: t.artist,
-      album_artist: t.album_artist,
-      album_name: t.album,
-      genre: t.genre,
-      year: t.year,
-      track_number: t.track_number,
-      disc_number: t.disc_number,
-      duration_ms: t.duration_ms,
-      bitrate_kbps: 0,
-      replay_gain_track: 0,
-      artwork_id: ""
-    };
   }
 
   // Display groups based on the current tab
@@ -523,14 +503,14 @@
     if (img) img.style.display = "none";
   }
 
-  function handlePlay(e: CustomEvent<Track>) {
+  function handlePlay(track: Track | null) {
     // Always build the queue from the full unfiltered album tracks so that
     // clicking a filtered song still produces the correct album order queue.
-    playTrack(e.detail, albumDetailTracks);
+    if (track) playTrack(track, albumDetailTracks);
   }
 
-  function handleQueue(e: CustomEvent<Track>) {
-    addToQueue(e.detail);
+  function handleQueue(track: Track | null) {
+    if (track) addToQueue(track);
   }
 
   let isScrolling = false;
@@ -595,22 +575,22 @@
           </div>
         </div>
 
-        <div class="track-header album-detail-cols">
-          <span>#</span>
+        <div class="track-headers hide-album">
+          <span class="num">#</span>
           <SortButton
-            class="col-sort"
+            class="sortable"
             bind:currentField={albumSortField}
             bind:sortDir={albumSortDir}
             field="title">Title</SortButton
           >
           <SortButton
-            class="col-sort"
+            class="sortable"
             bind:currentField={albumSortField}
             bind:sortDir={albumSortDir}
             field="artist">Artist</SortButton
           >
           <SortButton
-            class="col-sort"
+            class="sortable"
             bind:currentField={albumSortField}
             bind:sortDir={albumSortDir}
             field="duration">Duration</SortButton
@@ -640,9 +620,9 @@
                     isLocal={currentAlbumGroup?.isLocal ?? false}
                     active={$currentTrackId ===
                       filteredAlbumDetailTracks[row.index]?.id}
-                    on:play={handlePlay}
-                    on:select={() => {}}
-                    on:addToQueue={handleQueue}
+                    onplay={handlePlay}
+                    onselect={() => {}}
+                    onaddtoqueue={handleQueue}
                   />
                 </div>
               {/each}
@@ -1066,12 +1046,6 @@
     color: var(--text-3);
   }
 
-  .track-list {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
   .virtual-row {
     position: absolute;
     top: 0;
@@ -1081,39 +1055,6 @@
 
   .track-list.scrolling .virtual-row {
     pointer-events: none;
-  }
-
-  .track-header {
-    display: grid;
-    grid-template-columns: 32px 2fr 1fr 1fr 76px;
-    gap: 0 12px;
-    padding: 4px 8px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--fg-3);
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 4px;
-  }
-
-  .track-header.album-detail-cols {
-    grid-template-columns: 32px 2fr 1fr 76px;
-  }
-
-  :global(.col-sort) {
-    cursor: pointer;
-    color: var(--text-3);
-    text-align: left;
-    font-size: inherit;
-    font-weight: inherit;
-    text-transform: inherit;
-    letter-spacing: inherit;
-    border: none;
-    background: none;
-    padding: 0;
-  }
-  :global(.col-sort:hover) {
-    color: var(--text-1);
   }
 
   .album-detail-header {

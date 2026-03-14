@@ -12,10 +12,8 @@ import {
 } from "../../wailsjs/go/desktop/App";
 import { EventsOn } from "../../wailsjs/runtime/runtime";
 import { db } from "../utils/db";
-import { playerState } from "./player";
+import { playerState, type Track } from "./player";
 import { addToast } from "./toasts";
-
-/* ── Types ──────────────────────────────────────────────────────── */
 
 export interface LocalTrack {
   path: string;
@@ -31,11 +29,7 @@ export interface LocalTrack {
   has_artwork: boolean;
 }
 
-/* ── DB keys (KV table — settings only, tracks are relational now) ── */
-
 const KEY_FOLDERS = "local_folders";
-
-/* ── Stores ─────────────────────────────────────────────────────── */
 
 let _initialized = false;
 
@@ -509,4 +503,25 @@ export async function scanLocalFolders() {
     localLoading.set(false);
     scanProgress.set(null);
   }
+}
+
+export function localTrackToTrack(t: LocalTrack): Track {
+  return {
+    id: t.path,
+    path: t.path,
+    title: t.title,
+    artist_id: "",
+    album_id: "",
+    artist_name: t.artist,
+    album_artist: t.album_artist,
+    album_name: t.album,
+    genre: t.genre,
+    year: t.year,
+    track_number: t.track_number,
+    disc_number: t.disc_number,
+    duration_ms: t.duration_ms,
+    bitrate_kbps: 0,
+    replay_gain_track: 0,
+    artwork_id: ""
+  };
 }

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
   import {
     recentAlbums,
     recentPlaylists,
@@ -9,9 +8,11 @@
   import { pushNav } from "../stores/ui";
   import { serverURL, authToken } from "../utils/api";
   import { Music } from "@lucide/svelte";
-  export let activeView: string = "library";
 
-  const dispatch = createEventDispatcher();
+  let {
+    activeView = "library",
+    onnavigate
+  }: { activeView?: string; onnavigate?: (id: string) => void } = $props();
 
   const navItems = [
     { id: "library", label: "Library" },
@@ -42,31 +43,33 @@
   }
 
   // Re-compute artwork URLs whenever auth state changes (needed for remote albums)
-  $: _authDeps = [$serverURL, $authToken];
+  let _authDeps = $derived([$serverURL, $authToken]);
 
-  // Merge and sort recent albums + playlists by playedAt descending (max 20).
-  $: recentItems = [
-    ...$recentPlaylists.map((p) => ({
-      kind: "playlist" as const,
-      key: "pl-" + p.id,
-      name: p.name,
-      sub: "Playlist",
-      playedAt: p.playedAt,
-      pl: p,
-      album: null
-    })),
-    ...$recentAlbums.map((a) => ({
-      kind: "album" as const,
-      key: "al-" + a.key,
-      name: a.name,
-      sub: a.artist,
-      playedAt: a.playedAt ?? 0,
-      pl: null,
-      album: a
-    }))
-  ]
-    .sort((a, b) => b.playedAt - a.playedAt)
-    .slice(0, 20);
+  // Merge and sort recent albums + playlists by playedAt in descending order
+  let recentItems = $derived(
+    [
+      ...$recentPlaylists.map((p) => ({
+        kind: "playlist" as const,
+        key: "pl-" + p.id,
+        name: p.name,
+        sub: "Playlist",
+        playedAt: p.playedAt,
+        pl: p,
+        album: null
+      })),
+      ...$recentAlbums.map((a) => ({
+        kind: "album" as const,
+        key: "al-" + a.key,
+        name: a.name,
+        sub: a.artist,
+        playedAt: a.playedAt ?? 0,
+        pl: null,
+        album: a
+      }))
+    ].sort((a, b) => b.playedAt - a.playedAt)
+    // no need to a limit for now; but if performance does get worst, i'm adding this back in
+    // .slice(0, 20)
+  );
 </script>
 
 <nav>
@@ -76,7 +79,7 @@
       <li>
         <button
           class:active={activeView === item.id}
-          on:click={() => dispatch("navigate", item.id)}
+          onclick={() => onnavigate?.(item.id)}
         >
           {item.label}
         </button>
@@ -93,14 +96,14 @@
             {#if item.kind === "playlist" && item.pl}
               <button
                 class="recent-row"
-                on:click={() => openRecentPlaylist(item.pl)}
+                onclick={() => openRecentPlaylist(item.pl)}
               >
                 <div class="recent-art">
                   {#if item.pl.artworkPath && getRecentPlaylistArtUrl(item.pl.artworkPath)}
                     <img
                       src={getRecentPlaylistArtUrl(item.pl.artworkPath)}
                       alt={item.pl.name}
-                      on:error={hideImg}
+                      onerror={hideImg}
                       loading="lazy"
                     />
                   {/if}
@@ -115,14 +118,14 @@
             {:else if item.kind === "album" && item.album}
               <button
                 class="recent-row"
-                on:click={() => openRecentAlbum(item.album)}
+                onclick={() => openRecentAlbum(item.album)}
               >
                 <div class="recent-art">
                   {#if _authDeps && getRecentAlbumArtUrl(item.album)}
                     <img
                       src={_authDeps && getRecentAlbumArtUrl(item.album)}
                       alt={item.album.name}
-                      on:error={hideImg}
+                      onerror={hideImg}
                       loading="lazy"
                     />
                   {/if}
@@ -190,14 +193,10 @@
     font-weight: 600;
   }
 
-  /* Recently Played */
   .recents-section {
     margin-top: 24px;
     flex: 1;
     min-height: 0;
-    /* display: flex;
-    flex-direction: column;
-    justify-content: flex-end; */
   }
 
   .recents-heading {

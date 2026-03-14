@@ -15,11 +15,12 @@
     }
   }
 
+  // i'll keep the character arrows for now
   $: indicator =
     currentField === field ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 </script>
 
-<button class={className} on:click={toggle}>
+<button class={className} onclick={toggle}>
   <slot />{indicator}
 </button>
 

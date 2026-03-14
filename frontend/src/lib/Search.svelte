@@ -159,9 +159,9 @@
             {track}
             active={$playerState.trackId === track.id}
             isLocal={false}
-            on:play={() => playTrack(track)}
-            on:select={() => {}}
-            on:addToQueue={() => addToQueue(track)}
+            onplay={() => playTrack(track)}
+            onselect={() => {}}
+            onaddtoqueue={() => addToQueue(track)}
           />
         {/each}
       {/if}

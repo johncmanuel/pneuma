@@ -48,9 +48,9 @@
     disconnectWS();
   }
 
-  function handleNavigate(e: CustomEvent<string>) {
+  function handleNavigate(view: string) {
     pushNav({
-      view: e.detail,
+      view: view,
       tab: "library",
       subTab: "albums",
       albumKey: null,
@@ -80,7 +80,7 @@
 
 <div class="shell" class:panel-open={$activePanel !== null}>
   <div class="sidebar-area">
-    <Sidebar activeView={$currentView} on:navigate={handleNavigate} />
+    <Sidebar activeView={$currentView} onnavigate={handleNavigate} />
   </div>
 
   <header class="topbar">
