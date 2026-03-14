@@ -21,6 +21,7 @@ let intentionalClose = false;
 
 export function connectWS() {
   if (!get(connected)) return;
+
   const base = wsBase();
   if (!base) return;
 
@@ -33,7 +34,6 @@ export function connectWS() {
   socket = new WebSocket(url);
 
   socket.onopen = () => {
-    // We (re)connected — hide the disconnect banner and show a brief toast
     if (get(serverDisconnected)) {
       serverDisconnected.set(false);
       addToast("Reconnected to server.", "success");
@@ -58,15 +58,16 @@ export function connectWS() {
         break;
       }
       case "playback.changed": {
-        // Resolve full track object from local store
         let currentTracks: Track[] = [];
+
         tracks.subscribe((v) => {
           currentTracks = v;
         })();
+
         let trackObj =
           currentTracks.find((t) => t.id === msg.payload.track_id) ?? null;
 
-        // If track not in local store (remote-only), fetch metadata from server
+        // If track not in local store, fetch metadata from server
         if (!trackObj && msg.payload.track_id) {
           fetchRemoteTrack(msg.payload.track_id).then((remote) => {
             if (remote) {
@@ -77,13 +78,16 @@ export function connectWS() {
           });
         }
 
+        // sync state accordingly since queue deals with mixed tracks, or tracks from both local and remote
+        // sources
         playerState.update((s) => {
           // If the client queue contains local file paths the server can't know
-          // about, don't let the server overwrite it — the desktop is the
-          // authority for mixed local+remote queues.
+          // about, don't let the server overwrite it. The client is the authority
+          // for mixed local+remote queues!
           const queueHasLocalTracks = s.queue.some(isLocalId);
 
-          // Resolve the effective queue (prefer server's if we can use it)
+          // If the server sent a new queue state and the desktop client currently doesn't
+          // have any local tracks in its queue, let the client accept the server's queue.
           const effectiveQueue =
             msg.payload.queue != null && !queueHasLocalTracks
               ? (msg.payload.queue as string[])
@@ -97,16 +101,20 @@ export function connectWS() {
           if (!queueHasLocalTracks && msg.payload.queue_index != null) {
             const serverIdx: number = msg.payload.queue_index;
             const serverTrackId: string = msg.payload.track_id ?? s.trackId;
+
+            // If the server's index is consistent with the track_id it claims
+            // is playing, trust it and update the queue index.
+            // Otherwise, the server's index is stale and requires recalculation
+            // from the track_id.
             if (effectiveQueue[serverIdx] === serverTrackId) {
-              // Server's index is consistent — trust it.
               resolvedIndex = serverIdx;
             } else {
-              // Server's index is stale; recalculate from the track_id.
               const computed = effectiveQueue.indexOf(serverTrackId);
               resolvedIndex = computed >= 0 ? computed : s.queueIndex;
             }
           }
 
+          // update state accordingly which will update the UI with its new state
           return {
             ...s,
             trackId: msg.payload.track_id ?? s.trackId,
@@ -128,13 +136,10 @@ export function connectWS() {
   socket.onclose = () => {
     if (intentionalClose) return;
 
-    // Mark server as disconnected to trigger UI updates (grey out tracks, filter queue)
     connected.set(false);
-
-    // Show disconnect banner
     serverDisconnected.set(true);
 
-    // Try to reconnect - use autoReconnect for full re-auth flow
+    // attempt to reconnect back
     autoReconnect(() => connectWS());
   };
 
@@ -149,14 +154,12 @@ export function disconnectWS() {
   socket?.close();
 }
 
-/** Fire-and-forget a message to the server over the open WebSocket. */
+/** Send a message to the server over the open WebSocket. */
 export function wsSend(type: string, payload: object) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type, payload }));
   }
 }
-
-/* ── Helpers ── */
 
 async function fetchRemoteTrack(trackId: string): Promise<Track | null> {
   try {
