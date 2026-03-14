@@ -16,7 +16,7 @@ import (
 // Service is the library domain service.
 type Service struct {
 	q     *serverdb.Queries
-	store *sqlite.Store // retained for dynamic queries (TracksByIDs, album groups)
+	store *sqlite.Store // retained for dynamic queries
 }
 
 // New creates a library Service.
@@ -111,6 +111,7 @@ func (s *Service) TracksByAlbum(ctx context.Context, albumName, albumArtist stri
 		}
 		return dbconv.ListTracksByAlbumUnorganizedToModels(rows), nil
 	}
+
 	if albumArtist != "" {
 		rows, err := s.q.ListTracksByAlbumNameAndArtist(ctx, serverdb.ListTracksByAlbumNameAndArtistParams{
 			AlbumName:   sql.NullString{String: albumName, Valid: true},
@@ -121,6 +122,7 @@ func (s *Service) TracksByAlbum(ctx context.Context, albumName, albumArtist stri
 		}
 		return dbconv.ListTracksByAlbumNameAndArtistToModels(rows), nil
 	}
+
 	rows, err := s.q.ListTracksByAlbumName(ctx, sql.NullString{String: albumName, Valid: true})
 	if err != nil {
 		return nil, err
@@ -133,10 +135,12 @@ func (s *Service) UpsertTrack(ctx context.Context, t *models.Track) error {
 	if t.ID == "" {
 		t.ID = uuid.NewString()
 	}
+
 	now := time.Now()
 	if t.CreatedAt.IsZero() {
 		t.CreatedAt = now
 	}
+
 	t.UpdatedAt = now
 	return s.q.UpsertTrack(ctx, serverdb.UpsertTrackParams{
 		ID:               t.ID,
@@ -208,6 +212,7 @@ func (s *Service) DuplicateByMeta(ctx context.Context, title, albumArtist, album
 		DurationMs:  sql.NullInt64{Int64: durationMS, Valid: true},
 		ExcludePath: excludePath,
 	})
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -235,6 +240,7 @@ func (s *Service) AddWatchFolder(ctx context.Context, path, userID string) error
 		UserID:    userID,
 		CreatedAt: time.Now(),
 	}
+
 	return s.q.UpsertWatchFolder(ctx, serverdb.UpsertWatchFolderParams{
 		ID:        wf.ID,
 		Path:      wf.Path,

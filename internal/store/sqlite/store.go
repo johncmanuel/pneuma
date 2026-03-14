@@ -80,10 +80,12 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("disable fk for migrations: %w", err)
 	}
+
 	if err := runMigrations(db); err != nil {
 		db.Close()
 		return nil, err
 	}
+
 	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("re-enable fk after migrations: %w", err)
@@ -110,14 +112,17 @@ func NewMigrator(db *sql.DB) (*migrate.Migrate, error) {
 	if err != nil {
 		return nil, fmt.Errorf("migration source: %w", err)
 	}
+
 	dbDriver, err := migratesqlite.WithInstance(db, &migratesqlite.Config{})
 	if err != nil {
 		return nil, fmt.Errorf("migration db driver: %w", err)
 	}
+
 	m, err := migrate.NewWithInstance("iofs", sourceDriver, "sqlite", dbDriver)
 	if err != nil {
 		return nil, fmt.Errorf("migrate new: %w", err)
 	}
+
 	return m, nil
 }
 
@@ -126,8 +131,10 @@ func runMigrations(db *sql.DB) error {
 	if err != nil {
 		return err
 	}
+
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return fmt.Errorf("run migrations: %w", err)
 	}
+
 	return nil
 }

@@ -7,21 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"pneuma/internal/store/sqlite"
 	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/desktopdb"
 )
-
-// LOCAL_TRACK_COLS is the shared column list for raw SQL queries against local_tracks.
-const LOCAL_TRACK_COLS = `path, folder, title, artist, album, album_artist, genre,
-year, track_number, disc_number, duration_ms, has_artwork`
-
-// UNORGANIZED_ALBUM is the special album name for unorganized tracks.
-// Includes SQL single quotes for direct use in query concatenation.
-const UNORGANIZED_ALBUM = "'__unorganized__'"
-
-// UNKNOWN_ARTIST is the fallback artist name for tracks without an album artist.
-// Includes SQL single quotes for direct use in query concatenation.
-const UNKNOWN_ARTIST = "'Unknown Artist'"
 
 // sqlPlaceholders returns n "?" strings for use in SQL IN clauses.
 func sqlPlaceholders(n int) []string {
@@ -48,16 +37,26 @@ func buildFolderIN(conditions []string, args []any, folders []string) ([]string,
 	return conditions, args
 }
 
-const MIN_PAGINATION_LIMIT = 50
-const MAX_PAGINATION_LIMIT = 200
+const (
+	minPaginationLimit = 50
+	maxPaginationLimit = 200
+
+	// localTrackCols is the shared column list for raw SQL queries against local_tracks.
+	localTrackCols = `path, folder, title, artist, album, album_artist, genre,
+						year, track_number, disc_number, duration_ms, has_artwork`
+
+	// unknownArtist is the fallback artist name for tracks without an album artist.
+	// Includes SQL single quotes for direct use in query concatenation.
+	unknownArtist = "'Unknown Artist'"
+)
 
 // clampPagination constrains offset and limit to fixed ranges.
 func clampPagination(offset, limit int) (int, int) {
 	if limit <= 0 {
-		limit = MIN_PAGINATION_LIMIT
+		limit = minPaginationLimit
 	}
-	if limit > MAX_PAGINATION_LIMIT {
-		limit = MAX_PAGINATION_LIMIT
+	if limit > maxPaginationLimit {
+		limit = maxPaginationLimit
 	}
 	if offset < 0 {
 		offset = 0
@@ -212,7 +211,7 @@ func (a *App) getLocalTracks(folders []string) ([]LocalTrack, error) {
 		args[i] = f
 	}
 
-	q := `SELECT ` + LOCAL_TRACK_COLS + ` FROM local_tracks WHERE folder IN (` +
+	q := `SELECT ` + localTrackCols + ` FROM local_tracks WHERE folder IN (` +
 		strings.Join(ph, ",") + `) ORDER BY folder, path`
 
 	rows, err := a.appDB.Query(q, args...)
@@ -282,7 +281,7 @@ func (a *App) getLocalTracksPage(folders []string, offset, limit int) ([]LocalTr
 
 	in := strings.Join(sqlPlaceholders(len(folders)), ",")
 	countQ := `SELECT COUNT(*) FROM local_tracks WHERE folder IN (` + in + `)`
-	dataQ := `SELECT ` + LOCAL_TRACK_COLS + ` FROM local_tracks WHERE folder IN (` + in + `) ORDER BY album COLLATE NOCASE, disc_number, track_number LIMIT ? OFFSET ?`
+	dataQ := `SELECT ` + localTrackCols + ` FROM local_tracks WHERE folder IN (` + in + `) ORDER BY album COLLATE NOCASE, disc_number, track_number LIMIT ? OFFSET ?`
 
 	var total int
 	_ = a.appDB.QueryRow(countQ, folderArgs...).Scan(&total)
@@ -330,7 +329,7 @@ func (a *App) searchLocalTracks(folders []string, query string) ([]LocalTrack, e
 	}
 
 	in := strings.Join(sqlPlaceholders(len(folders)), ",")
-	q := `SELECT ` + LOCAL_TRACK_COLS + ` FROM local_tracks
+	q := `SELECT ` + localTrackCols + ` FROM local_tracks
 	     WHERE folder IN (` + in + `)
 	       AND (title LIKE ? OR artist LIKE ? OR album LIKE ? OR path LIKE ?)
 	     ORDER BY title COLLATE NOCASE LIMIT 50`
@@ -360,7 +359,7 @@ func (a *App) getLocalTracksByPaths(paths []string) ([]LocalTrack, error) {
 	}
 
 	in := strings.Join(sqlPlaceholders(len(paths)), ",")
-	q := `SELECT ` + LOCAL_TRACK_COLS + ` FROM local_tracks WHERE path IN (` + in + `)`
+	q := `SELECT ` + localTrackCols + ` FROM local_tracks WHERE path IN (` + in + `)`
 
 	rows, err := a.appDB.Query(q, args...)
 	if err != nil {
@@ -400,8 +399,8 @@ func (a *App) getLocalAlbumGroups(folders []string, filter string, offset, limit
 
 	// grpKeyExpr groups tracks by album + album_artist. Tracks with an empty
 	// album are lumped into a single unorganized bucket.
-	const grpKeyExpr = `CASE WHEN TRIM(album) = '' THEN ` + UNORGANIZED_ALBUM + ` ` +
-		`ELSE album || '|||' || COALESCE(NULLIF(album_artist,''), artist, ` + UNKNOWN_ARTIST + `) END`
+	const grpKeyExpr = `CASE WHEN TRIM(album) = '' THEN ` + sqlite.UnorganizedAlbum + ` ` +
+		`ELSE album || '|||' || COALESCE(NULLIF(album_artist,''), artist, ` + unknownArtist + `) END`
 
 	// Count distinct album groups.
 	countQ := `SELECT COUNT(*) FROM (
@@ -417,13 +416,13 @@ func (a *App) getLocalAlbumGroups(folders []string, filter string, offset, limit
 	// The results are ordered alphabetically, meaning the unorganized bucket always appears last.
 	dataQ := `SELECT
 		` + grpKeyExpr + ` AS grp_key,
-		CASE WHEN TRIM(album) = '' THEN ` + UNORGANIZED_ALBUM + ` ELSE album END AS grp_name,
-		CASE WHEN TRIM(album) = '' THEN 'Various' ELSE COALESCE(NULLIF(album_artist,''), artist, ` + UNKNOWN_ARTIST + `) END AS grp_artist,
+		CASE WHEN TRIM(album) = '' THEN ` + sqlite.UnorganizedAlbum + ` ELSE album END AS grp_name,
+		CASE WHEN TRIM(album) = '' THEN 'Various' ELSE COALESCE(NULLIF(album_artist,''), artist, ` + unknownArtist + `) END AS grp_artist,
 		COUNT(*) AS track_count,
 		MIN(path) AS first_path
 	FROM local_tracks ` + where + `
 	GROUP BY grp_key
-	ORDER BY CASE WHEN grp_key = ` + UNORGANIZED_ALBUM + ` THEN 1 ELSE 0 END, grp_name COLLATE NOCASE
+	ORDER BY CASE WHEN grp_key = ` + sqlite.UnorganizedAlbum + ` THEN 1 ELSE 0 END, grp_name COLLATE NOCASE
 	LIMIT ? OFFSET ?`
 
 	dataArgs := append(args, limit, offset)
@@ -474,7 +473,7 @@ func (a *App) getLocalAlbumTracks(folders []string, albumName, albumArtist strin
 	}
 
 	// Fetch tracks for a specific album group
-	q := `SELECT ` + LOCAL_TRACK_COLS + ` FROM local_tracks ` + where + ` ORDER BY disc_number, track_number, title COLLATE NOCASE`
+	q := `SELECT ` + localTrackCols + ` FROM local_tracks ` + where + ` ORDER BY disc_number, track_number, title COLLATE NOCASE`
 
 	rows, err := a.appDB.Query(q, args...)
 	if err != nil {

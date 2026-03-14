@@ -15,37 +15,49 @@ import (
 	"pneuma/internal/models"
 )
 
+// UnorganizedAlbum is the special album name for unorganized tracks.
+// Includes SQL single quotes for direct use in query concatenation.
+const UnorganizedAlbum = "'__unorganized__'"
+
 // TracksByIDs returns tracks for the given IDs (dynamic IN-list, cannot be expressed as a static sqlc query).
 func (s *Store) TracksByIDs(ctx context.Context, ids []string) ([]*models.Track, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
+
 	placeholders := strings.Repeat("?,", len(ids))
 	placeholders = placeholders[:len(placeholders)-1]
+
 	args := make([]any, len(ids))
 	for i, id := range ids {
 		args[i] = id
 	}
+
 	q := `SELECT ` + trackColumns + ` FROM tracks WHERE id IN (` + placeholders + `)`
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
+
 	defer rows.Close()
 	return collectTracks(rows)
 }
 
-// ─── Track-derived album groups ───────────────────────────────────────────────
 // These functions derive album groups directly from the tracks table using
 // GROUP BY, so they work even when the albums table is empty or incomplete.
 
-const trackAlbumGroupKey = `CASE WHEN TRIM(COALESCE(album_name,''))='' THEN '__unorganized__'
+const trackAlbumGroupKey = `CASE WHEN TRIM(COALESCE(album_name,''))='' THEN ` + UnorganizedAlbum + `
 	ELSE album_name || '|||' || COALESCE(album_artist,'') END`
 
 // ListTrackAlbumGroupsPage returns paginated album groups derived from tracks.
 func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, offset, limit int) ([]*models.TrackAlbumGroup, error) {
 	var q string
 	var args []any
+
+	// The queries below dynamically group tracks into albums using a composite key of the
+	// album name and artist. This allows the application to generate album listings directly
+	// from track metadata, avoiding the need for a separate albums table.
+
 	if filter != "" {
 		q = `SELECT ` + trackAlbumGroupKey + ` AS grp_key,
 			COALESCE(NULLIF(TRIM(album_name),''),'') AS album_name,
@@ -58,6 +70,7 @@ func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, off
 		GROUP BY grp_key
 		ORDER BY album_name COLLATE NOCASE
 		LIMIT ? OFFSET ?`
+
 		like := "%" + filter + "%"
 		args = []any{like, like, limit, offset}
 	} else {
@@ -72,13 +85,16 @@ func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, off
 		GROUP BY grp_key
 		ORDER BY album_name COLLATE NOCASE
 		LIMIT ? OFFSET ?`
+
 		args = []any{limit, offset}
 	}
+
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+
 	var out []*models.TrackAlbumGroup
 	for rows.Next() {
 		var g models.TrackAlbumGroup
@@ -94,6 +110,7 @@ func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, off
 func (s *Store) CountTrackAlbumGroups(ctx context.Context, filter string) (int, error) {
 	var n int
 	var err error
+
 	if filter != "" {
 		like := "%" + filter + "%"
 		err = s.db.QueryRowContext(ctx,
@@ -106,8 +123,7 @@ func (s *Store) CountTrackAlbumGroups(ctx context.Context, filter string) (int, 
 	return n, err
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
+// trackColumns is the shared column list for raw SQL queries against tracks.
 const trackColumns = `id,path,title,
 	COALESCE(album_artist,''),COALESCE(album_name,''),COALESCE(genre,''),COALESCE(year,0),
 	COALESCE(track_number,0),COALESCE(disc_number,0),COALESCE(duration_ms,0),COALESCE(bitrate_kbps,0),COALESCE(sample_rate_hz,0),
@@ -122,6 +138,7 @@ type scanner interface {
 func scanTrack(row scanner) (*models.Track, error) {
 	var t models.Track
 	var deletedAt sql.NullString
+
 	err := row.Scan(
 		&t.ID, &t.Path, &t.Title,
 		&t.AlbumArtist, &t.AlbumName, &t.Genre, &t.Year,
@@ -138,6 +155,7 @@ func scanTrack(row scanner) (*models.Track, error) {
 	if err != nil {
 		return nil, fmt.Errorf("scanTrack: %w", err)
 	}
+
 	if deletedAt.Valid {
 		ts, _ := time.Parse(time.RFC3339, deletedAt.String)
 		t.DeletedAt = &ts
@@ -147,6 +165,7 @@ func scanTrack(row scanner) (*models.Track, error) {
 
 func collectTracks(rows *sql.Rows) ([]*models.Track, error) {
 	var out []*models.Track
+
 	for rows.Next() {
 		t, err := scanTrack(rows)
 		if err != nil {
