@@ -65,7 +65,6 @@ func main() {
 	userSvc := user.New(queries)
 	metaParser := parser.New(cfg.Transcoding.FFmpegPath)
 	playEngine := playback.New(queries, hub, libSvc)
-	handoffSvc := playback.NewHandoff(queries, playEngine)
 	playlistSvc := playlist.New(queries)
 
 	watcher, err := scanner.NewWatcher(libSvc, metaParser, hub)
@@ -84,7 +83,6 @@ func main() {
 		Library:     libSvc,
 		User:        userSvc,
 		Playback:    playEngine,
-		Handoff:     handoffSvc,
 		Playlist:    playlistSvc,
 		Hub:         hub,
 		Queries:     queries,

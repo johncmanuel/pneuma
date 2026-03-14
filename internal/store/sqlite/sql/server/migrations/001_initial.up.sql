@@ -69,24 +69,13 @@ CREATE TABLE IF NOT EXISTS watch_folders (
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
-CREATE TABLE IF NOT EXISTS devices (
-    id TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    last_seen_at TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (user_id) REFERENCES users (id)
-);
-
 CREATE TABLE IF NOT EXISTS playback_sessions (
     id TEXT PRIMARY KEY,
-    device_id TEXT NOT NULL UNIQUE,
-    user_id TEXT NOT NULL,
+    user_id TEXT NOT NULL UNIQUE,
     track_id TEXT,
     position_ms INTEGER DEFAULT 0,
     queue_json TEXT DEFAULT '[]',
     updated_at TEXT NOT NULL,
-    FOREIGN KEY (device_id) REFERENCES devices (id),
     FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
@@ -103,8 +92,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_tracks_path ON tracks (path);
-CREATE INDEX IF NOT EXISTS idx_devices_user ON devices (user_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_device ON playback_sessions (device_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON playback_sessions (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_log (target_type, target_id);

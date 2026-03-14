@@ -14,14 +14,6 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-type Device struct {
-	ID         string     `json:"id"`
-	UserID     string     `json:"user_id"`
-	Name       string     `json:"name"`
-	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
-}
-
 // TrackAlbumGroup is an album group derived directly from the tracks table
 // using GROUP BY. It does not require a separate albums table
 // and always reflects the actual music files present.
@@ -118,7 +110,6 @@ type WatchFolder struct {
 
 type PlaybackSession struct {
 	ID         string    `json:"id"`
-	DeviceID   string    `json:"device_id"`
 	UserID     string    `json:"user_id"`
 	TrackID    string    `json:"track_id"`
 	PositionMS int64     `json:"position_ms"`

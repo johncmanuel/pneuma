@@ -11,8 +11,6 @@ import (
 	"pneuma/internal/store/sqlite/serverdb"
 )
 
-// ─── User ────────────────────────────────────────────────────────────────────
-
 // UserToModel converts a generated serverdb.User row into a domain models.User.
 func UserToModel(u serverdb.User) *models.User {
 	return &models.User{
@@ -49,8 +47,6 @@ func BoolInt(b bool) int64 {
 func FormatTime(t time.Time) string {
 	return t.UTC().Format(time.RFC3339)
 }
-
-// ─── Audit ───────────────────────────────────────────────────────────────────
 
 // AuditToModel converts a generated serverdb.AuditLog row into a domain models.AuditEntry.
 func AuditToModel(a serverdb.AuditLog) models.AuditEntry {
@@ -89,24 +85,10 @@ func NullFloat(f float64) sql.NullFloat64 {
 	return sql.NullFloat64{Float64: f, Valid: true}
 }
 
-// ─── Playback Session ────────────────────────────────────────────────────────
-
-// sessionRow is the common shape of PlaybackSessionByDeviceRow and
-// PlaybackSessionsByUserRow (identical fields after COALESCE).
-type sessionRow struct {
-	ID         string
-	DeviceID   string
-	UserID     string
-	TrackID    string
-	PositionMs sql.NullInt64
-	QueueJson  sql.NullString
-	UpdatedAt  string
-}
-
-func sessionToModel(r sessionRow) *models.PlaybackSession {
+// SessionByUserToModel converts a PlaybackSessionByUserRow to a domain model.
+func SessionByUserToModel(r serverdb.PlaybackSessionByUserRow) *models.PlaybackSession {
 	ps := &models.PlaybackSession{
 		ID:         r.ID,
-		DeviceID:   r.DeviceID,
 		UserID:     r.UserID,
 		TrackID:    r.TrackID,
 		PositionMS: r.PositionMs.Int64,
@@ -121,22 +103,6 @@ func sessionToModel(r sessionRow) *models.PlaybackSession {
 	}
 	return ps
 }
-
-// SessionByDeviceToModel converts a PlaybackSessionByDeviceRow to a domain model.
-func SessionByDeviceToModel(r serverdb.PlaybackSessionByDeviceRow) *models.PlaybackSession {
-	return sessionToModel(sessionRow(r))
-}
-
-// SessionsByUserToModels converts PlaybackSessionsByUserRow slices.
-func SessionsByUserToModels(rows []serverdb.PlaybackSessionsByUserRow) []*models.PlaybackSession {
-	out := make([]*models.PlaybackSession, len(rows))
-	for i, r := range rows {
-		out[i] = sessionToModel(sessionRow(r))
-	}
-	return out
-}
-
-// ─── Track ───────────────────────────────────────────────────────────────────
 
 // trackRow is the common field layout shared by every sqlc-generated Track*Row
 // type. Because all track SELECT queries use the same column list, the
@@ -198,8 +164,6 @@ func trackToModel(r trackRow) *models.Track {
 	return t
 }
 
-// --- Track row converters (one per sqlc query) ---
-
 func TrackByPathToModel(r serverdb.TrackByPathRow) *models.Track { return trackToModel(trackRow(r)) }
 func TrackByIDToModel(r serverdb.TrackByIDRow) *models.Track     { return trackToModel(trackRow(r)) }
 func TrackByFPToModel(r serverdb.TrackByFingerprintRow) *models.Track {
@@ -257,8 +221,6 @@ func ListTracksByAlbumUnorganizedToModels(rows []serverdb.ListTracksByAlbumUnorg
 	return out
 }
 
-// ─── Watch Folder ────────────────────────────────────────────────────────────
-
 func WatchFolderToModel(wf serverdb.WatchFolder) *models.WatchFolder {
 	return &models.WatchFolder{
 		ID:        wf.ID,
@@ -275,8 +237,6 @@ func WatchFoldersToModels(rows []serverdb.WatchFolder) []*models.WatchFolder {
 	}
 	return out
 }
-
-// ─── Playlists ───────────────────────────────────────────────────────────────
 
 func PlaylistToModel(p serverdb.Playlist) *models.Playlist {
 	return &models.Playlist{
@@ -340,8 +300,6 @@ func PlaylistItemsToModels(rows []serverdb.ListPlaylistItemsRow) []models.Playli
 	}
 	return out
 }
-
-// ─── internal helpers ────────────────────────────────────────────────────────
 
 // ParseTime parses an RFC3339 string into a time.Time (exported for use by desktop layer).
 func ParseTime(s string) time.Time {

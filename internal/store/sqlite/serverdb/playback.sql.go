@@ -10,22 +10,20 @@ import (
 	"database/sql"
 )
 
-const playbackSessionByDevice = `-- name: PlaybackSessionByDevice :one
+const playbackSessionByUser = `-- name: PlaybackSessionByUser :one
 SELECT
     id,
-    device_id,
     user_id,
     COALESCE(track_id, '') AS track_id,
     position_ms,
     queue_json,
     updated_at
 FROM playback_sessions
-WHERE device_id = ? LIMIT 1
+WHERE user_id = ? LIMIT 1
 `
 
-type PlaybackSessionByDeviceRow struct {
+type PlaybackSessionByUserRow struct {
 	ID         string
-	DeviceID   string
 	UserID     string
 	TrackID    string
 	PositionMs sql.NullInt64
@@ -33,12 +31,11 @@ type PlaybackSessionByDeviceRow struct {
 	UpdatedAt  string
 }
 
-func (q *Queries) PlaybackSessionByDevice(ctx context.Context, deviceID string) (PlaybackSessionByDeviceRow, error) {
-	row := q.db.QueryRowContext(ctx, playbackSessionByDevice, deviceID)
-	var i PlaybackSessionByDeviceRow
+func (q *Queries) PlaybackSessionByUser(ctx context.Context, userID string) (PlaybackSessionByUserRow, error) {
+	row := q.db.QueryRowContext(ctx, playbackSessionByUser, userID)
+	var i PlaybackSessionByUserRow
 	err := row.Scan(
 		&i.ID,
-		&i.DeviceID,
 		&i.UserID,
 		&i.TrackID,
 		&i.PositionMs,
@@ -48,75 +45,18 @@ func (q *Queries) PlaybackSessionByDevice(ctx context.Context, deviceID string) 
 	return i, err
 }
 
-const playbackSessionsByUser = `-- name: PlaybackSessionsByUser :many
-SELECT
-    ps.id,
-    ps.device_id,
-    ps.user_id,
-    COALESCE(ps.track_id, '') AS track_id,
-    ps.position_ms,
-    ps.queue_json,
-    ps.updated_at
-FROM playback_sessions ps
-JOIN devices d ON d.id = ps.device_id
-WHERE ps.user_id = ?
-ORDER BY ps.updated_at DESC
-`
-
-type PlaybackSessionsByUserRow struct {
-	ID         string
-	DeviceID   string
-	UserID     string
-	TrackID    string
-	PositionMs sql.NullInt64
-	QueueJson  sql.NullString
-	UpdatedAt  string
-}
-
-func (q *Queries) PlaybackSessionsByUser(ctx context.Context, userID string) ([]PlaybackSessionsByUserRow, error) {
-	rows, err := q.db.QueryContext(ctx, playbackSessionsByUser, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []PlaybackSessionsByUserRow
-	for rows.Next() {
-		var i PlaybackSessionsByUserRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.DeviceID,
-			&i.UserID,
-			&i.TrackID,
-			&i.PositionMs,
-			&i.QueueJson,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const upsertPlaybackSession = `-- name: UpsertPlaybackSession :exec
 INSERT INTO playback_sessions (
-    id, device_id, user_id, track_id, position_ms, queue_json, updated_at
+    id, user_id, track_id, position_ms, queue_json, updated_at
 )
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (device_id) DO UPDATE SET
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT (user_id) DO UPDATE SET
     track_id = excluded.track_id, position_ms = excluded.position_ms,
     queue_json = excluded.queue_json, updated_at = excluded.updated_at
 `
 
 type UpsertPlaybackSessionParams struct {
 	ID         string
-	DeviceID   string
 	UserID     string
 	TrackID    sql.NullString
 	PositionMs sql.NullInt64
@@ -127,7 +67,6 @@ type UpsertPlaybackSessionParams struct {
 func (q *Queries) UpsertPlaybackSession(ctx context.Context, arg UpsertPlaybackSessionParams) error {
 	_, err := q.db.ExecContext(ctx, upsertPlaybackSession,
 		arg.ID,
-		arg.DeviceID,
 		arg.UserID,
 		arg.TrackID,
 		arg.PositionMs,

@@ -51,7 +51,6 @@
       paused: false
     }));
     wsSend("playback.play", {
-      device_id: "desktop",
       track_id: track.id,
       position_ms: 0
     });

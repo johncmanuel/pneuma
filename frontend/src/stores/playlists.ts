@@ -451,13 +451,11 @@ export async function playPlaylist(
     const queueAllRemote = validIds.every((id) => !isLocalId(id));
     if (queueAllRemote) {
       wsSend("playback.queue", {
-        device_id: "desktop",
         track_ids: validIds,
         start_index: adjustedStart
       });
     }
     wsSend("playback.play", {
-      device_id: "desktop",
       track_id: startId,
       position_ms: 0
     });

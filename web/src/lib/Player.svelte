@@ -8,7 +8,6 @@
   import type { Track } from "./TrackRow.svelte";
 
   let audio: HTMLAudioElement;
-  let deviceId = "web";
   let volume = 1;
   let audioDurationMs = 0;
   let seeking = false;
@@ -57,7 +56,6 @@
       paused: false
     }));
     wsSend("playback.play", {
-      device_id: deviceId,
       track_id: nextId,
       position_ms: 0
     });
@@ -81,7 +79,6 @@
       paused: false
     }));
     wsSend("playback.play", {
-      device_id: deviceId,
       track_id: prevId,
       position_ms: 0
     });
@@ -92,7 +89,6 @@
     const newPaused = !$webPlayerState.paused;
     webPlayerState.update((s) => ({ ...s, paused: newPaused }));
     wsSend("playback.pause", {
-      device_id: deviceId,
       paused: newPaused,
       position_ms: audio
         ? Math.round(audio.currentTime * 1000)
@@ -111,7 +107,7 @@
     const ms = Number((e.target as HTMLInputElement).value);
     if (audio) audio.currentTime = ms / 1000;
     webPlayerState.update((s) => ({ ...s, positionMs: ms }));
-    wsSend("playback.seek", { device_id: deviceId, position_ms: ms });
+    wsSend("playback.seek", { position_ms: ms });
   }
 
   function setVolume(e: Event) {
@@ -145,7 +141,6 @@
       seekSyncTimer = setTimeout(() => {
         seekSyncTimer = null;
         wsSend("playback.seek", {
-          device_id: deviceId,
           position_ms: audio.currentTime * 1000
         });
       }, 5000);

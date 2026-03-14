@@ -385,12 +385,10 @@
     }));
 
     wsSend("playback.queue", {
-      device_id: "desktop",
       track_ids: queueIds,
       start_index: idx >= 0 ? idx : 0
     });
     wsSend("playback.play", {
-      device_id: "desktop",
       track_id: track.id,
       position_ms: 0
     });

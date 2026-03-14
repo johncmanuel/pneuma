@@ -18,17 +18,8 @@ type AuditLog struct {
 	CreatedAt  string
 }
 
-type Device struct {
-	ID         string
-	UserID     string
-	Name       string
-	LastSeenAt sql.NullString
-	CreatedAt  string
-}
-
 type PlaybackSession struct {
 	ID         string
-	DeviceID   string
 	UserID     string
 	TrackID    sql.NullString
 	PositionMs sql.NullInt64

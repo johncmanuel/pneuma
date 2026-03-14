@@ -29,7 +29,6 @@
   } from "@lucide/svelte";
 
   let audio: HTMLAudioElement;
-  let deviceId = "desktop";
   let volume = 1;
   let prevVolume = 1; // last non-zero volume, restored on unmute
 
@@ -186,7 +185,6 @@
 
     if (!isLocal)
       wsSend("playback.pause", {
-        device_id: deviceId,
         paused: newPaused,
         // Include current playhead so the server stores the accurate position
         // and echoes it back in playback.changed (prevents seek-point regression).
@@ -214,7 +212,6 @@
     }));
     if (!isLocalPath(trackId)) {
       wsSend("playback.play", {
-        device_id: deviceId,
         track_id: trackId,
         position_ms: 0
       });
@@ -352,8 +349,7 @@
     const nextMode = (($playerState.repeat + 1) % 3) as 0 | 1 | 2;
     playerState.update((s) => ({ ...s, repeat: nextMode }));
 
-    if (!isLocal)
-      wsSend("playback.repeat", { device_id: deviceId, mode: nextMode });
+    if (!isLocal) wsSend("playback.repeat", { mode: nextMode });
   }
 
   const repeatLabels = ["Off", "All", "One"] as const;
@@ -373,8 +369,7 @@
 
     playerState.update((s) => ({ ...s, positionMs: ms }));
 
-    if (!isLocal)
-      wsSend("playback.seek", { device_id: deviceId, position_ms: ms });
+    if (!isLocal) wsSend("playback.seek", { position_ms: ms });
   }
 
   function setVolume(e: Event) {
@@ -506,7 +501,6 @@
       seekSyncTimer = setTimeout(() => {
         seekSyncTimer = null;
         wsSend("playback.seek", {
-          device_id: deviceId,
           position_ms: audio.currentTime * 1000
         });
       }, debounceMs);

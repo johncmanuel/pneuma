@@ -213,12 +213,10 @@
 
     if (track._source === "remote") {
       wsSend("playback.queue", {
-        device_id: "desktop",
         track_ids: queue,
         start_index: 0
       });
       wsSend("playback.play", {
-        device_id: "desktop",
         track_id: track.id,
         position_ms: 0
       });
