@@ -1,19 +1,14 @@
 package desktop
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"image"
-	"image/jpeg"
-	_ "image/png"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/dhowden/tag"
-	"golang.org/x/image/draw"
 )
 
 // handleLocalStream serves a local audio file for the <audio> element.
@@ -43,7 +38,6 @@ func (a *App) handleLocalStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set MIME type.
 	switch ext {
 	case ".mp3":
 		w.Header().Set("Content-Type", "audio/mpeg")
@@ -93,7 +87,7 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 	// cached artwork hash so we re-read the file on the next request.
 	fileKey := thumbCacheKey(path, info)
 
-	// Fast path: file identity → artwork hash already known.
+	// if the artwork hash is already known, serve the thumbnail.
 	if v, ok := artworkHashCache.Load(fileKey); ok {
 		artHash := v.(string)
 		thumbPath := filepath.Join(a.thumbDir, artHash+".jpg")
@@ -101,10 +95,8 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 			http.ServeFile(w, r, thumbPath)
 			return
 		}
-		// Thumb was deleted from disk — fall through to regenerate.
 	}
 
-	// Open file and extract embedded art.
 	f, err := os.Open(path)
 	if err != nil {
 		http.Error(w, "file not found", http.StatusNotFound)
@@ -128,59 +120,20 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 
 	thumbPath := filepath.Join(a.thumbDir, artHash+".jpg")
 
+	// serve artwork for that particular track if it is already cached
 	if _, err := os.Stat(thumbPath); err == nil {
-		// Another track already cached this exact artwork — serve it directly.
 		http.ServeFile(w, r, thumbPath)
 		return
 	}
 
-	// Decode, resize, and persist.
-	src, _, err := image.Decode(bytes.NewReader(artData))
+	// then resize and persist the thumbnail.
+	thumbData, err := resizeToThumbnail(artData)
 	if err != nil {
-		http.Error(w, "failed to decode artwork", http.StatusInternalServerError)
+		http.Error(w, "failed to process artwork", http.StatusInternalServerError)
 		return
 	}
 
-	b := src.Bounds()
-	srcW, srcH := b.Dx(), b.Dy()
-	dstW, dstH := srcW, srcH
-	if srcW > thumbMaxDim || srcH > thumbMaxDim {
-		if srcW >= srcH {
-			dstW = thumbMaxDim
-			dstH = srcH * thumbMaxDim / srcW
-		} else {
-			dstH = thumbMaxDim
-			dstW = srcW * thumbMaxDim / srcH
-		}
-	}
-	if dstW < 1 {
-		dstW = 1
-	}
-	if dstH < 1 {
-		dstH = 1
-	}
-
-	dst := image.NewNRGBA(image.Rect(0, 0, dstW, dstH))
-	draw.BiLinear.Scale(dst, dst.Bounds(), src, b, draw.Over, nil)
-
-	// Write to a temp file then atomically rename to avoid serving partial files.
-	tmp, err := os.CreateTemp(a.thumbDir, "tmp-*.jpg")
-	if err != nil {
-		http.Error(w, "cache write failed", http.StatusInternalServerError)
-		return
-	}
-	tmpName := tmp.Name()
-
-	if err := jpeg.Encode(tmp, dst, &jpeg.Options{Quality: 82}); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		http.Error(w, "encode failed", http.StatusInternalServerError)
-		return
-	}
-	tmp.Close()
-
-	if err := os.Rename(tmpName, thumbPath); err != nil {
-		os.Remove(tmpName)
+	if err := writeThumbnail(a.thumbDir, artHash+".jpg", thumbData); err != nil {
 		http.Error(w, "cache write failed", http.StatusInternalServerError)
 		return
 	}
@@ -197,7 +150,7 @@ func (a *App) handlePlaylistArt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitise: only allow basenames, no path traversal.
+	// only allow basenames and prevent path traversal.
 	file = filepath.Base(file)
 	artPath := filepath.Join(a.thumbDir, file)
 

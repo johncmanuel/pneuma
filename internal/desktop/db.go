@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"pneuma/internal/store/sqlite"
+	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/desktopdb"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -28,10 +29,12 @@ func openAppDB() (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("user cache dir: %w", err)
 	}
+
 	dir := filepath.Join(cacheDir, "pneuma")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("mkdir appdb: %w", err)
 	}
+
 	db, err := sql.Open("sqlite", filepath.Join(dir, "app.db"))
 	if err != nil {
 		return nil, err
@@ -57,18 +60,6 @@ func openAppDB() (*sql.DB, error) {
 		}
 	}
 
-	// Migration: drop the old local_tracks table if it still has the
-	// now-removed fingerprint / acoustic_fingerprint columns.  The table
-	// is a pure scan cache so data loss is safe — next scan repopulates it.
-	var hasOldSchema bool
-	if err := db.QueryRow(
-		`SELECT count(*) > 0 FROM pragma_table_info('local_tracks') WHERE name='fingerprint'`,
-	).Scan(&hasOldSchema); err == nil && hasOldSchema {
-		slog.Info("appdb: removing obsolete fingerprint columns — table will be rebuilt on next scan")
-		_, _ = db.Exec(`DROP TABLE IF EXISTS local_tracks`)
-		_, _ = db.Exec(`DELETE FROM kv WHERE key = 'local_dupes_cache'`)
-	}
-
 	// Run versioned schema migrations via golang-migrate.
 	{
 		sourceDriver, migrErr := iofs.New(sqlite.DesktopMigrations, "sql/desktop/migrations")
@@ -76,16 +67,19 @@ func openAppDB() (*sql.DB, error) {
 			db.Close()
 			return nil, fmt.Errorf("desktop migration source: %w", migrErr)
 		}
+
 		dbDriver, migrErr := migratesqlite.WithInstance(db, &migratesqlite.Config{})
 		if migrErr != nil {
 			db.Close()
 			return nil, fmt.Errorf("desktop migration db driver: %w", migrErr)
 		}
+
 		m, migrErr := migrate.NewWithInstance("iofs", sourceDriver, "sqlite", dbDriver)
 		if migrErr != nil {
 			db.Close()
 			return nil, fmt.Errorf("desktop migrate new: %w", migrErr)
 		}
+
 		if migrErr = m.Up(); migrErr != nil && !errors.Is(migrErr, migrate.ErrNoChange) {
 			db.Close()
 			return nil, fmt.Errorf("apply desktop migrations: %w", migrErr)
@@ -113,10 +107,12 @@ func (a *App) AppDBGet(key string) string {
 	if a.dq == nil {
 		return ""
 	}
+
 	val, err := a.dq.GetKV(context.Background(), key)
 	if err != nil {
 		return ""
 	}
+
 	return val
 }
 
@@ -160,10 +156,12 @@ func (a *App) GetRecentAlbums() []RecentAlbum {
 	if a.dq == nil {
 		return nil
 	}
+
 	albums, err := a.dq.GetRecentAlbums(context.Background())
 	if err != nil {
 		return nil
 	}
+
 	result := make([]RecentAlbum, len(albums))
 	for i, al := range albums {
 		result[i] = RecentAlbum{
@@ -184,13 +182,14 @@ func (a *App) SetRecentAlbum(album RecentAlbum) error {
 	if a.dq == nil {
 		return fmt.Errorf("appDB not initialised")
 	}
+
 	return a.dq.SetRecentAlbum(context.Background(), desktopdb.SetRecentAlbumParams{
 		Key:            album.Key,
 		Name:           album.Name,
 		Artist:         album.Artist,
-		IsLocal:        boolToInt(album.IsLocal),
-		FirstTrackID:   nullString(album.FirstTrackID),
-		FirstLocalPath: nullString(album.FirstLocalPath),
+		IsLocal:        dbconv.BoolInt(album.IsLocal),
+		FirstTrackID:   dbconv.NullStr(album.FirstTrackID),
+		FirstLocalPath: dbconv.NullStr(album.FirstLocalPath),
 		PlayedAt:       album.PlayedAt,
 	})
 }
@@ -200,10 +199,12 @@ func (a *App) GetRecentPlaylists() []RecentPlaylist {
 	if a.dq == nil {
 		return nil
 	}
+
 	playlists, err := a.dq.GetRecentPlaylists(context.Background())
 	if err != nil {
 		return nil
 	}
+
 	result := make([]RecentPlaylist, len(playlists))
 	for i, pl := range playlists {
 		result[i] = RecentPlaylist{
@@ -221,24 +222,11 @@ func (a *App) SetRecentPlaylist(playlist RecentPlaylist) error {
 	if a.dq == nil {
 		return fmt.Errorf("appDB not initialised")
 	}
+
 	return a.dq.SetRecentPlaylist(context.Background(), desktopdb.SetRecentPlaylistParams{
 		ID:          playlist.ID,
 		Name:        playlist.Name,
-		ArtworkPath: nullString(playlist.ArtworkPath),
+		ArtworkPath: dbconv.NullStr(playlist.ArtworkPath),
 		PlayedAt:    playlist.PlayedAt,
 	})
-}
-
-func boolToInt(b bool) int64 {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-func nullString(s string) sql.NullString {
-	if s == "" {
-		return sql.NullString{}
-	}
-	return sql.NullString{String: s, Valid: true}
 }

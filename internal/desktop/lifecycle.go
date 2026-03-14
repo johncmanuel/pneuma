@@ -14,11 +14,9 @@ import (
 	"pneuma/internal/store/sqlite/desktopdb"
 )
 
-// Startup is called by Wails when the application starts.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 
-	// Open the app-local SQLite KV store for persisting desktop client state.
 	if db, err := openAppDB(); err != nil {
 		slog.Warn("app db open failed — local state will not be persisted", "err", err)
 	} else {
@@ -26,7 +24,6 @@ func (a *App) Startup(ctx context.Context) {
 		a.dq = desktopdb.New(db)
 	}
 
-	// Initialise thumbnail cache directory.
 	if cacheDir, err := os.UserCacheDir(); err == nil {
 		a.thumbDir = filepath.Join(cacheDir, "pneuma", "thumbs")
 	} else {
@@ -63,16 +60,16 @@ func (a *App) Startup(ctx context.Context) {
 	slog.Info("pneuma desktop started", "local_stream_port", a.localPort)
 }
 
-// Shutdown is called by Wails when the application is closing.
 func (a *App) Shutdown(_ context.Context) {
 	a.mu.Lock()
 	if a.stopRefresh != nil {
 		a.stopRefresh()
 	}
 	a.mu.Unlock()
+
 	a.stopLocalWatcher()
 	if a.localSrv != nil {
-		a.localSrv.Close() //nolint:errcheck
+		a.localSrv.Close()
 	}
 	a.closeAppDB()
 }

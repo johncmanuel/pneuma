@@ -198,6 +198,7 @@ func (a *App) ChooseLocalFolder() (string, error) {
 	dir, err := wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title: "Add Local Music Folder",
 	})
+
 	if err != nil {
 		return "", err
 	}
@@ -218,6 +219,7 @@ func (a *App) OpenLocalFiles() ([]string, error) {
 	if path == "" {
 		return nil, nil
 	}
+
 	return []string{path}, nil
 }
 
@@ -229,6 +231,7 @@ func (a *App) OpenLocalFolder() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if dir == "" {
 		return nil, nil
 	}

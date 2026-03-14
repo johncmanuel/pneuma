@@ -28,6 +28,7 @@ func (a *App) RestoreSession(serverURL, token string) error {
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
 	}
+
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -72,6 +73,7 @@ func (a *App) ConnectToServer(serverURL, username, password string) (*ConnectRes
 		"username": username,
 		"password": password,
 	})
+
 	resp, err := http.Post(serverURL+"/api/auth/login", "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("server unreachable: %w", err)
@@ -151,8 +153,9 @@ func (a *App) UploadLocalFile(filePath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// Stream the multipart body via io.Pipe — the file is never fully buffered
-	// in memory, which is important for large audio files.
+
+	// Stream the multipart body via io.Pipe so the file is never fully buffered in memory.
+	// this way, large audio files can be uploaded without consuming excessive memory.
 	pr, pw := io.Pipe()
 	mw := multipart.NewWriter(pw)
 	go func() {
@@ -192,9 +195,8 @@ func (a *App) UploadLocalFile(filePath string) (string, error) {
 	return string(respBody), nil
 }
 
-// refreshLoop periodically refreshes the JWT before it expires.
+// refreshLoop periodically refreshes the JWT every 20 hours before it expires.
 func (a *App) refreshLoop(ctx context.Context) {
-	// Refresh every 20 hours (token TTL is 24h).
 	ticker := time.NewTicker(20 * time.Hour)
 	defer ticker.Stop()
 
@@ -208,8 +210,6 @@ func (a *App) refreshLoop(ctx context.Context) {
 	}
 }
 
-// ── Playlist server helpers ──────────────────────────────────────────────────
-
 // createServerPlaylist creates a new playlist on the server, sets its items,
 // and returns the remote playlist ID.
 func (a *App) createServerPlaylist(serverURL, token, name, description string, items []models.PlaylistItem) (string, error) {
@@ -217,6 +217,7 @@ func (a *App) createServerPlaylist(serverURL, token, name, description string, i
 		"name":        name,
 		"description": description,
 	})
+
 	req, err := http.NewRequest("POST", serverURL+"/api/playlists", bytes.NewReader(body))
 	if err != nil {
 		return "", err
@@ -242,10 +243,10 @@ func (a *App) createServerPlaylist(serverURL, token, name, description string, i
 		return "", fmt.Errorf("invalid response: %w", err)
 	}
 
-	// Set items on the newly created playlist.
 	if len(items) > 0 {
 		if err := a.updateServerPlaylistItems(serverURL, token, result.ID, items); err != nil {
-			return result.ID, err // playlist was created, items failed
+			// playlist was created but setting items failed
+			return result.ID, err
 		}
 	}
 
@@ -259,6 +260,7 @@ func (a *App) updateServerPlaylistItems(serverURL, token, playlistID string, ite
 	if err != nil {
 		return err
 	}
+
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 

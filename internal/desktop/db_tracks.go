@@ -11,6 +11,61 @@ import (
 	"pneuma/internal/store/sqlite/desktopdb"
 )
 
+// LOCAL_TRACK_COLS is the shared column list for raw SQL queries against local_tracks.
+const LOCAL_TRACK_COLS = `path, folder, title, artist, album, album_artist, genre,
+year, track_number, disc_number, duration_ms, has_artwork`
+
+// UNORGANIZED_ALBUM is the special album name for unorganized tracks.
+// Includes SQL single quotes for direct use in query concatenation.
+const UNORGANIZED_ALBUM = "'__unorganized__'"
+
+// UNKNOWN_ARTIST is the fallback artist name for tracks without an album artist.
+// Includes SQL single quotes for direct use in query concatenation.
+const UNKNOWN_ARTIST = "'Unknown Artist'"
+
+// sqlPlaceholders returns n "?" strings for use in SQL IN clauses.
+func sqlPlaceholders(n int) []string {
+	ph := make([]string, n)
+	for i := range ph {
+		ph[i] = "?"
+	}
+	return ph
+}
+
+// buildFolderIN appends a folder IN clause to conditions/args if folders is non-empty.
+func buildFolderIN(conditions []string, args []any, folders []string) ([]string, []any) {
+	if len(folders) == 0 {
+		return conditions, args
+	}
+
+	ph := sqlPlaceholders(len(folders))
+	conditions = append(conditions, "folder IN ("+strings.Join(ph, ",")+")")
+
+	for _, f := range folders {
+		args = append(args, f)
+	}
+
+	return conditions, args
+}
+
+const MIN_PAGINATION_LIMIT = 50
+const MAX_PAGINATION_LIMIT = 200
+
+// clampPagination constrains offset and limit to fixed ranges.
+func clampPagination(offset, limit int) (int, int) {
+	if limit <= 0 {
+		limit = MIN_PAGINATION_LIMIT
+	}
+	if limit > MAX_PAGINATION_LIMIT {
+		limit = MAX_PAGINATION_LIMIT
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	return offset, limit
+}
+
 // localTrackFromDB converts a desktopdb.LocalTrack to a desktop.LocalTrack.
 func localTrackFromDB(row desktopdb.LocalTrack) LocalTrack {
 	return LocalTrack{
@@ -74,19 +129,23 @@ func (a *App) deleteLocalTrackByPath(path string) error {
 	return a.dq.DeleteLocalTrackByPath(context.Background(), path)
 }
 
-// pruneStaleLocalTracks removes rows for the given folder whose paths are NOT
-// in livePaths. Returns the slice of deleted paths.
+// pruneStaleLocalTracks removes rows for the given folder whose paths aren't in
+// livePaths. Returns the slice of deleted paths.
+//
 // NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
 // cannot be used to update this method.
 func (a *App) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}) ([]string, error) {
 	if a.dq == nil || len(livePaths) == 0 {
 		return nil, nil
 	}
-	// Fetch all stored paths for this folder.
+
 	stored, err := a.dq.ListPathsByFolder(context.Background(), folder)
 	if err != nil {
 		return nil, err
 	}
+
+	// find paths that are in stored but not in livePaths
+	// aka stale paths
 	var staleAny []any
 	var stalePaths []string
 	for _, p := range stored {
@@ -95,30 +154,33 @@ func (a *App) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}
 			stalePaths = append(stalePaths, p)
 		}
 	}
+
 	if len(staleAny) == 0 {
 		return nil, nil
 	}
-	placeholders := make([]string, len(staleAny))
-	for i := range staleAny {
-		placeholders[i] = "?"
-	}
+
+	ph := sqlPlaceholders(len(staleAny))
+
 	_, err = a.appDB.Exec(
-		`DELETE FROM local_tracks WHERE path IN (`+strings.Join(placeholders, ",")+`)`,
+		`DELETE FROM local_tracks WHERE path IN (`+strings.Join(ph, ",")+`)`,
 		staleAny...,
 	)
+
 	if err != nil {
 		return nil, err
 	}
+
 	return stalePaths, nil
 }
 
 // deleteLocalTracksByPathPrefix removes all tracks whose path starts with
-// prefix+"/" — used when an entire directory is moved or deleted.
+// prefix+"/". Used when an entire directory is moved or deleted.
 // Returns the number of rows deleted.
 func (a *App) deleteLocalTracksByPathPrefix(prefix string) (int64, error) {
 	if a.dq == nil {
 		return 0, nil
 	}
+
 	return a.dq.DeleteLocalTracksByPathPrefix(context.Background(), desktopdb.DeleteLocalTracksByPathPrefixParams{
 		Path:   prefix,
 		Path_2: prefix + string(filepath.Separator) + "%",
@@ -127,6 +189,9 @@ func (a *App) deleteLocalTracksByPathPrefix(prefix string) (int64, error) {
 
 // getLocalTracks returns all tracks whose folder is in the given list.
 // If folders is empty it returns all rows.
+//
+// NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
+// cannot be used to update this method.
 func (a *App) getLocalTracks(folders []string) ([]LocalTrack, error) {
 	if a.dq == nil {
 		return nil, nil
@@ -137,21 +202,20 @@ func (a *App) getLocalTracks(folders []string) ([]LocalTrack, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return localTracksFromDB(rows), nil
 	}
 
-	const cols = `path, folder, title, artist, album, album_artist, genre,
-year, track_number, disc_number, duration_ms, has_artwork`
-
-	placeholders := make([]string, len(folders))
+	ph := sqlPlaceholders(len(folders))
 	args := make([]any, len(folders))
 	for i, f := range folders {
-		placeholders[i] = "?"
 		args[i] = f
 	}
-	query := `SELECT ` + cols + ` FROM local_tracks WHERE folder IN (` +
-		strings.Join(placeholders, ",") + `) ORDER BY folder, path`
-	rows, err := a.appDB.Query(query, args...)
+
+	q := `SELECT ` + LOCAL_TRACK_COLS + ` FROM local_tracks WHERE folder IN (` +
+		strings.Join(ph, ",") + `) ORDER BY folder, path`
+
+	rows, err := a.appDB.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -163,42 +227,43 @@ year, track_number, disc_number, duration_ms, has_artwork`
 // scanLocalTrackRows reads local_tracks rows into []LocalTrack.
 func scanLocalTrackRows(rows *sql.Rows) ([]LocalTrack, error) {
 	var tracks []LocalTrack
+
 	for rows.Next() {
 		var lt LocalTrack
 		var folder string
 		var hasArt int
+
 		if err := rows.Scan(
 			&lt.Path, &folder, &lt.Title, &lt.Artist, &lt.Album, &lt.AlbumArtist, &lt.Genre,
 			&lt.Year, &lt.TrackNumber, &lt.DiscNumber, &lt.DurationMs, &hasArt,
 		); err != nil {
 			continue
 		}
+
 		lt.HasArtwork = hasArt != 0
 		tracks = append(tracks, lt)
 	}
+
 	return tracks, rows.Err()
 }
 
 // getLocalTracksPage returns a paginated slice of tracks from the given folders.
+//
+// NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
+// cannot be used to update this method.
 func (a *App) getLocalTracksPage(folders []string, offset, limit int) ([]LocalTrack, int, error) {
 	if a.dq == nil {
 		return nil, 0, nil
 	}
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 200 {
-		limit = 200
-	}
-	if offset < 0 {
-		offset = 0
-	}
+
+	offset, limit = clampPagination(offset, limit)
 
 	if len(folders) == 0 {
 		total, err := a.dq.CountAllLocalTracks(context.Background())
 		if err != nil {
 			return nil, 0, err
 		}
+
 		rows, err := a.dq.AllLocalTracksPage(context.Background(), desktopdb.AllLocalTracksPageParams{
 			Limit:  int64(limit),
 			Offset: int64(offset),
@@ -206,27 +271,24 @@ func (a *App) getLocalTracksPage(folders []string, offset, limit int) ([]LocalTr
 		if err != nil {
 			return nil, 0, err
 		}
+
 		return localTracksFromDB(rows), int(total), nil
 	}
 
-	const cols = `path, folder, title, artist, album, album_artist, genre,
-year, track_number, disc_number, duration_ms, has_artwork`
-
-	placeholders := make([]string, len(folders))
 	folderArgs := make([]any, len(folders))
 	for i, f := range folders {
-		placeholders[i] = "?"
 		folderArgs[i] = f
 	}
-	in := strings.Join(placeholders, ",")
-	countQuery := `SELECT COUNT(*) FROM local_tracks WHERE folder IN (` + in + `)`
-	dataQuery := `SELECT ` + cols + ` FROM local_tracks WHERE folder IN (` + in + `) ORDER BY album COLLATE NOCASE, disc_number, track_number LIMIT ? OFFSET ?`
+
+	in := strings.Join(sqlPlaceholders(len(folders)), ",")
+	countQ := `SELECT COUNT(*) FROM local_tracks WHERE folder IN (` + in + `)`
+	dataQ := `SELECT ` + LOCAL_TRACK_COLS + ` FROM local_tracks WHERE folder IN (` + in + `) ORDER BY album COLLATE NOCASE, disc_number, track_number LIMIT ? OFFSET ?`
 
 	var total int
-	_ = a.appDB.QueryRow(countQuery, folderArgs...).Scan(&total)
+	_ = a.appDB.QueryRow(countQ, folderArgs...).Scan(&total)
 
 	args := append(folderArgs, limit, offset)
-	rows, err := a.appDB.Query(dataQuery, args...)
+	rows, err := a.appDB.Query(dataQ, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -241,6 +303,7 @@ func (a *App) searchLocalTracks(folders []string, query string) ([]LocalTrack, e
 	if a.dq == nil {
 		return nil, nil
 	}
+
 	if query == "" {
 		return nil, nil
 	}
@@ -257,23 +320,21 @@ func (a *App) searchLocalTracks(folders []string, query string) ([]LocalTrack, e
 		if err != nil {
 			return nil, err
 		}
+
 		return localTracksFromDB(rows), nil
 	}
 
-	const cols = `path, folder, title, artist, album, album_artist, genre,
-year, track_number, disc_number, duration_ms, has_artwork`
-
-	placeholders := make([]string, len(folders))
 	folderArgs := make([]any, len(folders))
 	for i, f := range folders {
-		placeholders[i] = "?"
 		folderArgs[i] = f
 	}
-	in := strings.Join(placeholders, ",")
-	q := `SELECT ` + cols + ` FROM local_tracks
+
+	in := strings.Join(sqlPlaceholders(len(folders)), ",")
+	q := `SELECT ` + LOCAL_TRACK_COLS + ` FROM local_tracks
 	     WHERE folder IN (` + in + `)
 	       AND (title LIKE ? OR artist LIKE ? OR album LIKE ? OR path LIKE ?)
 	     ORDER BY title COLLATE NOCASE LIMIT 50`
+
 	args := append(folderArgs, like, like, like, like)
 
 	rows, err := a.appDB.Query(q, args...)
@@ -293,17 +354,14 @@ func (a *App) getLocalTracksByPaths(paths []string) ([]LocalTrack, error) {
 		return nil, nil
 	}
 
-	const cols = `path, folder, title, artist, album, album_artist, genre,
-year, track_number, disc_number, duration_ms, has_artwork`
-
-	placeholders := make([]string, len(paths))
 	args := make([]any, len(paths))
 	for i, p := range paths {
-		placeholders[i] = "?"
 		args[i] = p
 	}
 
-	q := `SELECT ` + cols + ` FROM local_tracks WHERE path IN (` + strings.Join(placeholders, ",") + `)`
+	in := strings.Join(sqlPlaceholders(len(paths)), ",")
+	q := `SELECT ` + LOCAL_TRACK_COLS + ` FROM local_tracks WHERE path IN (` + in + `)`
+
 	rows, err := a.appDB.Query(q, args...)
 	if err != nil {
 		return nil, err
@@ -320,28 +378,14 @@ func (a *App) getLocalAlbumGroups(folders []string, filter string, offset, limit
 	if a.dq == nil {
 		return &LocalAlbumGroupsResult{}, nil
 	}
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 200 {
-		limit = 200
-	}
-	if offset < 0 {
-		offset = 0
-	}
+
+	offset, limit = clampPagination(offset, limit)
 
 	// Build optional WHERE clauses.
 	var conditions []string
 	var args []any
 
-	if len(folders) > 0 {
-		placeholders := make([]string, len(folders))
-		for i, f := range folders {
-			placeholders[i] = "?"
-			args = append(args, f)
-		}
-		conditions = append(conditions, "folder IN ("+strings.Join(placeholders, ",")+")")
-	}
+	conditions, args = buildFolderIN(conditions, args, folders)
 
 	if filter != "" {
 		conditions = append(conditions, "(album LIKE ? OR album_artist LIKE ? OR artist LIKE ?)")
@@ -354,24 +398,32 @@ func (a *App) getLocalAlbumGroups(folders []string, filter string, offset, limit
 		where = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	// Count total groups.
+	// grpKeyExpr groups tracks by album + album_artist. Tracks with an empty
+	// album are lumped into a single unorganized bucket.
+	const grpKeyExpr = `CASE WHEN TRIM(album) = '' THEN ` + UNORGANIZED_ALBUM + ` ` +
+		`ELSE album || '|||' || COALESCE(NULLIF(album_artist,''), artist, ` + UNKNOWN_ARTIST + `) END`
+
+	// Count distinct album groups.
 	countQ := `SELECT COUNT(*) FROM (
 		SELECT 1 FROM local_tracks ` + where + `
-		GROUP BY CASE WHEN TRIM(album) = '' THEN '__unorganized__' ELSE album || '|||' || COALESCE(NULLIF(album_artist,''), artist, 'Unknown Artist') END
+		GROUP BY ` + grpKeyExpr + `
 	)`
+
 	var total int
 	_ = a.appDB.QueryRow(countQ, args...).Scan(&total)
 
-	// Fetch the page of groups.
+	// Fetch paginated album groups with track counts and first track paths.
+	// It handles missing album information by aggregating loose tracks into a single 'unorganized' bucket.
+	// The results are ordered alphabetically, meaning the unorganized bucket always appears last.
 	dataQ := `SELECT
-		CASE WHEN TRIM(album) = '' THEN '__unorganized__' ELSE album || '|||' || COALESCE(NULLIF(album_artist,''), artist, 'Unknown Artist') END AS grp_key,
-		CASE WHEN TRIM(album) = '' THEN 'Unorganized' ELSE album END AS grp_name,
-		CASE WHEN TRIM(album) = '' THEN 'Various' ELSE COALESCE(NULLIF(album_artist,''), artist, 'Unknown Artist') END AS grp_artist,
+		` + grpKeyExpr + ` AS grp_key,
+		CASE WHEN TRIM(album) = '' THEN ` + UNORGANIZED_ALBUM + ` ELSE album END AS grp_name,
+		CASE WHEN TRIM(album) = '' THEN 'Various' ELSE COALESCE(NULLIF(album_artist,''), artist, ` + UNKNOWN_ARTIST + `) END AS grp_artist,
 		COUNT(*) AS track_count,
 		MIN(path) AS first_path
 	FROM local_tracks ` + where + `
 	GROUP BY grp_key
-	ORDER BY CASE WHEN grp_key = '__unorganized__' THEN 1 ELSE 0 END, grp_name COLLATE NOCASE
+	ORDER BY CASE WHEN grp_key = ` + UNORGANIZED_ALBUM + ` THEN 1 ELSE 0 END, grp_name COLLATE NOCASE
 	LIMIT ? OFFSET ?`
 
 	dataArgs := append(args, limit, offset)
@@ -401,21 +453,12 @@ func (a *App) getLocalAlbumTracks(folders []string, albumName, albumArtist strin
 		return nil, nil
 	}
 
-	const cols = `path, folder, title, artist, album, album_artist, genre,
-year, track_number, disc_number, duration_ms, has_artwork`
-
 	var conditions []string
 	var args []any
 
-	if len(folders) > 0 {
-		placeholders := make([]string, len(folders))
-		for i, f := range folders {
-			placeholders[i] = "?"
-			args = append(args, f)
-		}
-		conditions = append(conditions, "folder IN ("+strings.Join(placeholders, ",")+")")
-	}
+	conditions, args = buildFolderIN(conditions, args, folders)
 
+	// Handle unorganized albums
 	if albumName == "Unorganized" || albumName == "" {
 		conditions = append(conditions, "TRIM(album) = ''")
 	} else {
@@ -430,7 +473,9 @@ year, track_number, disc_number, duration_ms, has_artwork`
 		where = "WHERE " + strings.Join(conditions, " AND ")
 	}
 
-	q := `SELECT ` + cols + ` FROM local_tracks ` + where + ` ORDER BY disc_number, track_number, title COLLATE NOCASE`
+	// Fetch tracks for a specific album group
+	q := `SELECT ` + LOCAL_TRACK_COLS + ` FROM local_tracks ` + where + ` ORDER BY disc_number, track_number, title COLLATE NOCASE`
+
 	rows, err := a.appDB.Query(q, args...)
 	if err != nil {
 		return nil, err
