@@ -4,7 +4,7 @@ export interface Toast {
   id: number;
   message: string;
   type: "info" | "warning" | "error" | "success";
-  duration?: number; // ms; undefined = sticky (manual dismiss)
+  duration?: number; // ms; if undefined, toast is sticky and requires user to manually dismiss it
 }
 
 let nextId = 1;
@@ -17,10 +17,13 @@ export function addToast(
   duration = 6000
 ) {
   const id = nextId++;
+
   toasts.update((t) => [...t, { id, message, type, duration }]);
+
   if (duration > 0) {
     setTimeout(() => dismissToast(id), duration);
   }
+
   return id;
 }
 

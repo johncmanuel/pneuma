@@ -9,9 +9,6 @@ import {
   RestoreSession
 } from "../../wailsjs/go/desktop/App";
 
-/* ── Reactive state ─────────────────────────────────────────────── */
-
-/** Whether the desktop is connected to a remote pneuma server. */
 export const connected = writable(false);
 
 /** The remote server URL (e.g. "http://192.168.1.10:8989"). Empty when disconnected. */
@@ -20,15 +17,11 @@ export const serverURL = writable("");
 /** JWT token for the remote server. Empty when disconnected. */
 export const authToken = writable("");
 
-/** The local streaming server port (always running). */
 export const localPort = writable(0);
 
-/** Whether the app is currently trying to auto-reconnect. */
 export const isReconnecting = writable(false);
 
-/* ── Session persistence ─────────────────────────────────────────── */
-
-// Only the server URL and JWT token are persisted — never the password.
+// Only the server URL and JWT token are persisted.
 // The token is short-lived (24 h), rotated automatically, and can be
 // revoked server-side, making leakage far less damaging than a password.
 const SESSION_KEY = "pneuma_session";
@@ -103,14 +96,12 @@ export async function refreshConnection() {
   }
 }
 
-/* ── Auto-reconnect ─────────────────────────────────────────────── */
-
 let reconnectInterval: ReturnType<typeof setInterval> | null = null;
 
 export async function autoReconnect(onSuccess?: () => void) {
   const session = loadSession();
   if (!session) return;
-  if (reconnectInterval) return; // already running
+  if (reconnectInterval) return;
 
   isReconnecting.set(true);
 
@@ -126,8 +117,13 @@ export async function autoReconnect(onSuccess?: () => void) {
       return;
     }
   } catch {
-    // Token expired or server unreachable — fall through to polling.
+    // start polling loop below
   }
+
+  // poll every 5 seconds
+  // TODO: might make this configurable or instead have this stop at a certain point
+  // but seems good for now
+  const pollLoopTimeMs = 5000;
 
   reconnectInterval = setInterval(async () => {
     if (get(connected)) {
@@ -135,22 +131,24 @@ export async function autoReconnect(onSuccess?: () => void) {
       onSuccess?.();
       return;
     }
+
     const s = loadSession();
+
     if (!s) {
       stopAutoReconnect();
       return;
     }
+
     try {
       await RestoreSession(s.url, s.token);
       await refreshConnection();
+
       if (get(connected)) {
         saveSession(s.url, get(authToken));
         stopAutoReconnect();
         onSuccess?.();
       }
     } catch (e: any) {
-      // 401/403 means the token is permanently invalid — stop retrying
-      // and clear the stale session so the user sees the login form.
       if (
         typeof e?.message === "string" &&
         e.message.includes("session expired")
@@ -158,9 +156,8 @@ export async function autoReconnect(onSuccess?: () => void) {
         clearSession();
         stopAutoReconnect();
       }
-      // Otherwise (network error) keep retrying.
     }
-  }, 5000);
+  }, pollLoopTimeMs);
 }
 
 export function stopAutoReconnect() {
@@ -170,8 +167,6 @@ export function stopAutoReconnect() {
   }
   isReconnecting.set(false);
 }
-
-/* ── URL helpers ────────────────────────────────────────────────── */
 
 /** Base HTTP URL for the remote server, or empty string. */
 export function apiBase(): string {
@@ -190,8 +185,6 @@ export function wsBase(): string {
   if (!url) return "";
   return url.replace(/^http/, "ws");
 }
-
-/* ── Auth-aware fetch wrapper ───────────────────────────────────── */
 
 /** Fetch from the remote server with Authorization header. */
 export async function serverFetch(
@@ -218,17 +211,17 @@ export async function serverFetch(
 export function streamUrl(trackId: string, localPath?: string): string {
   const p = get(localPort);
 
-  // If the track ID looks like a filesystem path, always use local server
+  // If the track ID looks like a filesystem path, use the local server
   if (isLocalId(trackId) && p) {
     return `http://127.0.0.1:${p}/local/stream?path=${encodeURIComponent(trackId)}`;
   }
 
-  // If an explicit local path is provided and the port is available, prefer local
+  // If an explicit local path is provided and the port is available, use the local server
   if (localPath && p) {
     return `http://127.0.0.1:${p}/local/stream?path=${encodeURIComponent(localPath)}`;
   }
 
-  // Remote server stream
+  // It's a remote track!
   const base = get(serverURL);
   const token = get(authToken);
   if (base && token) {
@@ -241,9 +234,11 @@ export function streamUrl(trackId: string, localPath?: string): string {
 /** Returns the artwork URL for a track. Local tracks route to the local art server. */
 export function artworkUrl(trackId: string): string {
   const p = get(localPort);
+
   if (isLocalId(trackId) && p) {
     return `http://127.0.0.1:${p}/local/art?path=${encodeURIComponent(trackId)}`;
   }
+
   const base = get(serverURL);
   const token = get(authToken);
   if (base && token) {
@@ -255,7 +250,9 @@ export function artworkUrl(trackId: string): string {
 /** URL for a locally stored playlist artwork file. */
 export function playlistArtUrl(artworkPath: string): string {
   if (!artworkPath) return "";
+
   const p = get(localPort);
   if (!p) return "";
+
   return `http://127.0.0.1:${p}/local/playlist-art?file=${encodeURIComponent(artworkPath)}`;
 }

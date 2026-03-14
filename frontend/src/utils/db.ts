@@ -14,16 +14,16 @@ type RecentPlaylist = desktop.RecentPlaylist;
 
 /**
  * Async key-value store backed by the app's local SQLite database.
+ * Helps with interactions with database.
  *
  * All methods are fire-safe: errors are swallowed so a DB hiccup never
  * crashes the UI.  The Go backend returns "" for missing keys, which is
  * translated to `null` here so callers can distinguish "not stored" from
  * an explicitly empty string.
  *
- * When running outside Wails (e.g. `npm run dev` in a browser), the
- * window.go bridge is absent and every call falls through to the `catch`
- * blocks, returning null / doing nothing — the app still works, just
- * without persistence.
+ * When running outside Wails, the window.go bridge is absent and every call
+ * falls through to the `catch` blocks, returning null or doing nothing.
+ * The app will still work, but without persistence.
  */
 export const db = {
   async get(key: string): Promise<string | null> {
@@ -38,17 +38,13 @@ export const db = {
   async set(key: string, value: string): Promise<void> {
     try {
       await AppDBSet(key, value);
-    } catch {
-      /* non-fatal */
-    }
+    } catch {}
   },
 
   async del(key: string): Promise<void> {
     try {
       await AppDBDelete(key);
-    } catch {
-      /* non-fatal */
-    }
+    } catch {}
   },
 
   async getRecentAlbums(): Promise<RecentAlbum[]> {
@@ -62,9 +58,7 @@ export const db = {
   async setRecentAlbum(album: RecentAlbum): Promise<void> {
     try {
       await SetRecentAlbum(album);
-    } catch {
-      /* non-fatal */
-    }
+    } catch {}
   },
 
   async getRecentPlaylists(): Promise<RecentPlaylist[]> {
@@ -78,8 +72,6 @@ export const db = {
   async setRecentPlaylist(playlist: RecentPlaylist): Promise<void> {
     try {
       await SetRecentPlaylist(playlist);
-    } catch {
-      /* non-fatal */
-    }
+    } catch {}
   }
 };
