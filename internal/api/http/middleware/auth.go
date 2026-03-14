@@ -71,12 +71,15 @@ func RequireAdmin(secret string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			claims, err := extractClaims(c, secret)
+
 			if err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid or missing token")
 			}
+
 			if !claims.IsAdmin {
 				return echo.NewHTTPError(http.StatusForbidden, "admin access required")
 			}
+
 			c.Set(ContextKey, claims)
 			return next(c)
 		}
@@ -89,12 +92,15 @@ func RequirePerm(secret string, perm string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			claims, err := extractClaims(c, secret)
+
 			if err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid or missing token")
 			}
+
 			if !claims.IsAdmin && !hasPerm(claims, perm) {
 				return echo.NewHTTPError(http.StatusForbidden, "insufficient permissions")
 			}
+
 			c.Set(ContextKey, claims)
 			return next(c)
 		}
@@ -108,6 +114,7 @@ func GetClaims(c echo.Context) *Claims {
 	if v == nil {
 		return nil
 	}
+
 	claims, ok := v.(*Claims)
 	if !ok {
 		return nil
@@ -119,34 +126,38 @@ func GetClaims(c echo.Context) *Claims {
 // Useful outside of Echo handlers (e.g. WebSocket upgrade).
 func ParseToken(secret, tokenStr string) (*Claims, error) {
 	claims := &Claims{}
+
 	token, err := jwt.ParseWithClaims(tokenStr, claims, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, echo.ErrUnauthorized
 		}
 		return []byte(secret), nil
 	})
+
 	if err != nil || !token.Valid {
 		return nil, echo.ErrUnauthorized
 	}
 	return claims, nil
 }
 
-// ─── internal helpers ────────────────────────────────────────────────────────
-
 func extractClaims(c echo.Context, secret string) (*Claims, error) {
-	// First check Authorization header.
+	// check if token is in the Authorization header
 	auth := c.Request().Header.Get("Authorization")
 	tokenStr := ""
+
 	if strings.HasPrefix(auth, "Bearer ") {
 		tokenStr = auth[7:]
 	}
-	// Fall back to query param (used for <audio> stream tokens).
+
+	// if not in authorization header, check query param (mainly used for <audio> stream tokens)
 	if tokenStr == "" {
 		tokenStr = c.QueryParam("token")
 	}
+
 	if tokenStr == "" {
 		return nil, echo.ErrUnauthorized
 	}
+
 	return ParseToken(secret, tokenStr)
 }
 

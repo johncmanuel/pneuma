@@ -42,7 +42,7 @@ type AuthConfig struct {
 
 // TranscodingConfig holds paths for external audio tools.
 type TranscodingConfig struct {
-	// FFmpegPath is the path to the ffmpeg binary (used for loudness analysis).
+	// FFmpegPath is the path to the ffmpeg binary
 	FFmpegPath string `toml:"ffmpeg_path"`
 	// FpcalcPath is the path to the Chromaprint fpcalc binary.
 	FpcalcPath string `toml:"fpcalc_path"`

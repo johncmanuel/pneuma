@@ -25,12 +25,15 @@ func (h *UserHandler) Register(c echo.Context) error {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
+
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
+
 	if body.Username == "" || body.Password == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "username and password required")
 	}
+
 	u, err := h.users.Register(c.Request().Context(), body.Username, body.Password)
 	if err != nil {
 		if err == user.ErrUserExists {
@@ -60,9 +63,11 @@ func (h *UserHandler) Login(c echo.Context) error {
 		Username string `json:"username"`
 		Password string `json:"password"`
 	}
+
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
+
 	u, err := h.users.Login(c.Request().Context(), body.Username, body.Password)
 	if err != nil {
 		if err == user.ErrWrongPassword {
@@ -76,6 +81,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 		u.CanUpload, u.CanEdit, u.CanDelete,
 		middleware.AccessTokenTTL,
 	)
+
 	if err != nil {
 		return internalErr(err)
 	}
@@ -86,7 +92,8 @@ func (h *UserHandler) Login(c echo.Context) error {
 	})
 }
 
-// Refresh POST /api/auth/refresh — issues a new token from a valid existing one.
+// Refresh POST /api/auth/refresh.
+// Issues a new token from a valid existing one.
 func (h *UserHandler) Refresh(c echo.Context) error {
 	claims := middleware.GetClaims(c)
 	if claims == nil {
@@ -98,6 +105,7 @@ func (h *UserHandler) Refresh(c echo.Context) error {
 	if err != nil {
 		return internalErr(err)
 	}
+
 	if u == nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, "user not found")
 	}
@@ -116,7 +124,7 @@ func (h *UserHandler) Refresh(c echo.Context) error {
 	})
 }
 
-// ChangePassword POST /api/auth/password  body: {user_id, new_password}
+// ChangePassword POST /api/auth/password  body: {user_id, new_password}.
 // Only the authenticated user (changing their own) or an admin may call this.
 func (h *UserHandler) ChangePassword(c echo.Context) error {
 	claims := middleware.GetClaims(c)

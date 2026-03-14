@@ -55,7 +55,6 @@ func (h *AdminHandler) UpdatePermissions(c echo.Context) error {
 		return internalErr(err)
 	}
 
-	// Log the action.
 	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
 		ID:         uuid.NewString(),
 		UserID:     claims.UserID,
@@ -84,7 +83,6 @@ func (h *AdminHandler) DeleteUser(c echo.Context) error {
 		return internalErr(err)
 	}
 
-	// Log the action.
 	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
 		ID:         uuid.NewString(),
 		UserID:     claims.UserID,

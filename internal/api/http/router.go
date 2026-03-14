@@ -66,7 +66,7 @@ func NewRouter(svc Services) *echo.Echo {
 	// Wire inbound WebSocket messages to the playback engine.
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
 
-	// WebSocket — validate JWT from ?token= query param for user identity.
+	// WebSocket: validate JWT from ?token= query param for user identity.
 	e.GET("/ws", func(c echo.Context) error {
 		var userID string
 		if tok := c.QueryParam("token"); tok != "" {
@@ -78,7 +78,7 @@ func NewRouter(svc Services) *echo.Echo {
 		return nil
 	})
 
-	// ── Auth (public) ─────────────────────────────────────────────────────────
+	// Auth (public)
 	auth := e.Group("/api/auth")
 	auth.POST("/register", uh.Register)
 	auth.POST("/login", uh.Login)
@@ -86,14 +86,14 @@ func NewRouter(svc Services) *echo.Echo {
 	auth.POST("/refresh", uh.Refresh, authMW)
 	auth.GET("/stream-token", uh.StreamToken, authMW)
 
-	// ── Admin (admin-only) ────────────────────────────────────────────────────
+	// Admin (admin-only)
 	admin := e.Group("/api/admin", adminMW)
 	admin.GET("/users", ah.ListUsers)
 	admin.PUT("/users/:id/permissions", ah.UpdatePermissions)
 	admin.DELETE("/users/:id", ah.DeleteUser)
 	admin.GET("/audit", ah.ListAudit)
 
-	// ── Library (authenticated, some with permission guards) ──────────────────
+	// Library (authenticated, some with permission guards)
 	lib := e.Group("/api/library", authMW)
 	lib.GET("/tracks", lh.ListTracks)
 	lib.GET("/tracks/:id", lh.GetTrack)
@@ -114,7 +114,7 @@ func NewRouter(svc Services) *echo.Echo {
 	lib.GET("/search", lh.Search)
 	lib.POST("/scan", lh.TriggerScan, adminMW)
 
-	// ── Playlists (authenticated) ─────────────────────────────────────────────
+	// Playlists (authenticated)
 	pl := e.Group("/api/playlists", authMW)
 	pl.GET("", plh.ListPlaylists)
 	pl.POST("", plh.CreatePlaylist)
@@ -125,12 +125,12 @@ func NewRouter(svc Services) *echo.Echo {
 	pl.PUT("/:id/items", plh.SetPlaylistItems)
 	pl.POST("/:id/items", plh.AddPlaylistItem)
 
-	// ── Stream (supports query-param token for <audio> elements) ──────────────
+	// Stream (supports query-param token for <audio> elements)
 	// This is an alternative stream endpoint that accepts ?token= for clients
 	// that cannot set Authorization headers (e.g., <audio src="">).
 	e.GET("/api/stream/tracks/:id", lh.StreamTrack, middleware.RequireAuth(secret))
 
-	// ── Playback (authenticated) ──────────────────────────────────────────────
+	// Playback (authenticated)
 	play := e.Group("/api/playback", authMW)
 	play.GET("/:device_id", ph.GetState)
 	play.POST("/:device_id/play", ph.Play)
@@ -145,7 +145,7 @@ func NewRouter(svc Services) *echo.Echo {
 	e.POST("/api/handoff", ph.Transfer, authMW)
 	e.GET("/api/sessions/:user_id", ph.Sessions, authMW)
 
-	// ── Web UI (SPA fallback) ────────────────────────────────────────────────
+	// Web UI (SPA fallback)
 	if svc.WebUI != nil {
 		// Serve static assets directly; anything that doesn't match a file
 		// falls back to index.html (SPA routing).
@@ -158,14 +158,18 @@ func NewRouter(svc Services) *echo.Echo {
 			} else if len(path) > 0 && path[0] == '/' {
 				path = path[1:]
 			}
+
 			if f, err := svc.WebUI.Open(path); err == nil {
 				f.Close()
 				fileServer.ServeHTTP(w, r)
 				return
 			}
-			// Fallback to index.html for SPA client-side routing.
-			r.URL.Path = "/"
-			fileServer.ServeHTTP(w, r)
+
+			// trigger error if route other than / is not found
+			if r.URL.Path != "/" {
+				http.Error(w, "Not Found", http.StatusNotFound)
+				return
+			}
 		}))
 		e.GET("/", spaHandler)
 		e.GET("/*", spaHandler)
@@ -175,8 +179,8 @@ func NewRouter(svc Services) *echo.Echo {
 }
 
 // playbackWSDispatch returns a ws.InboundHandler that routes inbound WS
-// messages to the playback engine.  The REST endpoints remain available as
-// a fallback (e.g. for the desktop Wails app).
+// messages to the playback engine. The REST endpoints remain available as
+// a fallback.
 func playbackWSDispatch(engine *playback.Engine) apws.InboundHandler {
 	log := slog.Default().With("component", "ws-dispatch")
 	return func(userID string, msg apws.InboundMessage) {

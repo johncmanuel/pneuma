@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// upgrader upgrades the HTTP connection to WebSocket.
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
@@ -38,7 +39,6 @@ type Hub struct {
 	onMessage InboundHandler
 }
 
-// New creates a Hub. Exported name used by app.go / cmd/server.
 func New() *Hub {
 	return &Hub{
 		clients: make(map[*client]struct{}),
@@ -77,27 +77,32 @@ func (h *Hub) ConnectedCount() int {
 // userID should be the authenticated user's ID (empty string if unauthenticated).
 func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, userID string) {
 	conn, err := upgrader.Upgrade(w, r, nil)
+
 	if err != nil {
 		h.log.Error("ws upgrade", "err", err)
 		return
 	}
+
 	c := &client{
 		hub:    h,
 		conn:   conn,
 		send:   make(chan []byte, 64),
 		userID: userID,
 	}
+
 	h.register(c)
 	go c.writePump()
 	go c.readPump()
 }
 
+// register adds a client to the hub.
 func (h *Hub) register(c *client) {
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
 	h.mu.Unlock()
 }
 
+// unregister removes a client from the hub.
 func (h *Hub) unregister(c *client) {
 	h.mu.Lock()
 	delete(h.clients, c)
@@ -106,6 +111,7 @@ func (h *Hub) unregister(c *client) {
 	c.conn.Close()
 }
 
+// client is a WebSocket client.
 type client struct {
 	hub    *Hub
 	conn   *websocket.Conn
@@ -113,14 +119,17 @@ type client struct {
 	userID string
 }
 
+// readPump pumps messages from the WebSocket connection to the hub.
 func (c *client) readPump() {
 	defer c.hub.unregister(c)
+
 	c.conn.SetReadLimit(4096)
 	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
 	})
+
 	for {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
@@ -135,9 +144,11 @@ func (c *client) readPump() {
 	}
 }
 
+// writePump pumps messages from the hub to the WebSocket connection.
 func (c *client) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case msg, ok := <-c.send:
@@ -158,6 +169,7 @@ func (c *client) writePump() {
 	}
 }
 
+// mustMarshal is a wrapper function around json.Marshal(...) that panics if an error occurs.
 func mustMarshal(v any) []byte {
 	data, err := json.Marshal(v)
 	if err != nil {
