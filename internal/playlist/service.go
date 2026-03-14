@@ -18,7 +18,6 @@ type Service struct {
 	q *serverdb.Queries
 }
 
-// New creates a playlist Service.
 func New(q *serverdb.Queries) *Service {
 	return &Service{q: q}
 }
@@ -38,6 +37,7 @@ func (s *Service) Create(ctx context.Context, userID, name, description string) 
 	}); err != nil {
 		return nil, fmt.Errorf("create playlist: %w", err)
 	}
+
 	return &models.Playlist{
 		ID:          id,
 		UserID:      userID,

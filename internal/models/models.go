@@ -2,8 +2,6 @@ package models
 
 import "time"
 
-// ─── Users & Devices ─────────────────────────────────────────────────────────
-
 type User struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`
@@ -23,8 +21,6 @@ type Device struct {
 	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 }
-
-// ─── Library ─────────────────────────────────────────────────────────────────
 
 // TrackAlbumGroup is an album group derived directly from the tracks table
 // using GROUP BY. It does not require a separate albums table
@@ -62,8 +58,6 @@ type Track struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
-
-// ─── Playlists ───────────────────────────────────────────────────────────────
 
 // ItemSource distinguishes how a playlist item was added.
 type ItemSource string
@@ -115,16 +109,12 @@ type PlaylistItem struct {
 	LocalPath string `json:"local_path,omitempty"` // resolved local file path (client-only, never uploaded)
 }
 
-// ─── Watch Folders ───────────────────────────────────────────────────────────
-
 type WatchFolder struct {
 	ID        string    `json:"id"`
 	Path      string    `json:"path"`
 	UserID    string    `json:"user_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
-
-// ─── Playback ────────────────────────────────────────────────────────────────
 
 type PlaybackSession struct {
 	ID         string    `json:"id"`
@@ -136,10 +126,6 @@ type PlaybackSession struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
-// ─── Events ──────────────────────────────────────────────────────────────────
-
-// ─── Audit ───────────────────────────────────────────────────────────────────
-
 type AuditEntry struct {
 	ID         string    `json:"id"`
 	UserID     string    `json:"user_id"`
@@ -149,8 +135,6 @@ type AuditEntry struct {
 	Detail     string    `json:"detail,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 }
-
-// ─── Event Types ─────────────────────────────────────────────────────────────
 
 type EventType string
 

@@ -43,6 +43,7 @@ func NewWatcher(lib *library.Service, p *parser.Parser, bus EventBus) (*Watcher,
 	if err != nil {
 		return nil, err
 	}
+
 	return &Watcher{
 		lib:     lib,
 		parser:  p,
