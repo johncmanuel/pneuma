@@ -24,8 +24,6 @@ import (
 	"pneuma/internal/store/sqlite/desktopdb"
 )
 
-// ── Playlist types returned to the frontend via Wails ────────────────────────
-
 // LocalPlaylistSummary is the list-view representation of a local playlist.
 type LocalPlaylistSummary struct {
 	ID               string `json:"id"`
@@ -57,15 +55,15 @@ type LocalPlaylistItem struct {
 	Missing  bool `json:"missing"`
 }
 
-// ── Wails-bound CRUD methods ─────────────────────────────────────────────────
-
 // CreateLocalPlaylist creates a new local playlist and returns its summary.
 func (a *App) CreateLocalPlaylist(name, description string) (*LocalPlaylistSummary, error) {
 	if a.dq == nil {
 		return nil, fmt.Errorf("db not initialised")
 	}
+
 	now := dbconv.FormatTime(time.Now())
 	id := uuid.NewString()
+
 	if err := a.dq.CreateLocalPlaylist(context.Background(), desktopdb.CreateLocalPlaylistParams{
 		ID:               id,
 		Name:             name,
@@ -77,6 +75,7 @@ func (a *App) CreateLocalPlaylist(name, description string) (*LocalPlaylistSumma
 	}); err != nil {
 		return nil, fmt.Errorf("create local playlist: %w", err)
 	}
+
 	return &LocalPlaylistSummary{
 		ID:          id,
 		Name:        name,
@@ -91,10 +90,12 @@ func (a *App) GetLocalPlaylists() ([]LocalPlaylistSummary, error) {
 	if a.dq == nil {
 		return nil, fmt.Errorf("db not initialised")
 	}
+
 	rows, err := a.dq.ListLocalPlaylists(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("list playlists: %w", err)
 	}
+
 	out := make([]LocalPlaylistSummary, len(rows))
 	for i, r := range rows {
 		var dur int64
@@ -116,6 +117,7 @@ func (a *App) GetLocalPlaylists() ([]LocalPlaylistSummary, error) {
 			UpdatedAt:        r.UpdatedAt,
 		}
 	}
+
 	return out, nil
 }
 
@@ -124,10 +126,12 @@ func (a *App) GetLocalPlaylistItems(playlistID string) ([]LocalPlaylistItem, err
 	if a.dq == nil {
 		return nil, fmt.Errorf("db not initialised")
 	}
+
 	rows, err := a.dq.ListLocalPlaylistItems(context.Background(), playlistID)
 	if err != nil {
 		return nil, fmt.Errorf("list items: %w", err)
 	}
+
 	out := make([]LocalPlaylistItem, len(rows))
 	for i, r := range rows {
 		out[i] = LocalPlaylistItem{
@@ -150,7 +154,9 @@ func (a *App) UpdateLocalPlaylist(id, name, description, artworkPath string) err
 	if a.dq == nil {
 		return fmt.Errorf("db not initialised")
 	}
+
 	now := dbconv.FormatTime(time.Now())
+
 	return a.dq.UpdateLocalPlaylist(context.Background(), desktopdb.UpdateLocalPlaylistParams{
 		Name:             name,
 		Description:      description,
@@ -174,10 +180,12 @@ func (a *App) SetLocalPlaylistItems(playlistID string, items []LocalPlaylistItem
 	if a.dq == nil {
 		return fmt.Errorf("db not initialised")
 	}
+
 	ctx := context.Background()
 	if err := a.dq.DeleteLocalPlaylistItems(ctx, playlistID); err != nil {
 		return fmt.Errorf("delete old items: %w", err)
 	}
+
 	for i, item := range items {
 		addedAt := item.AddedAt
 		if addedAt == "" {
@@ -198,6 +206,7 @@ func (a *App) SetLocalPlaylistItems(playlistID string, items []LocalPlaylistItem
 			return fmt.Errorf("insert item %d: %w", i, err)
 		}
 	}
+
 	now := dbconv.FormatTime(time.Now())
 	return a.dq.TouchLocalPlaylist(ctx, desktopdb.TouchLocalPlaylistParams{
 		UpdatedAt: now,
@@ -210,11 +219,13 @@ func (a *App) AddLocalPlaylistItem(playlistID string, item LocalPlaylistItem) er
 	if a.dq == nil {
 		return fmt.Errorf("db not initialised")
 	}
+
 	ctx := context.Background()
 	count, err := a.dq.CountLocalPlaylistItems(ctx, playlistID)
 	if err != nil {
 		return fmt.Errorf("count items: %w", err)
 	}
+
 	addedAt := dbconv.FormatTime(time.Now())
 	if err := a.dq.InsertLocalPlaylistItem(ctx, desktopdb.InsertLocalPlaylistItemParams{
 		PlaylistID:     playlistID,
@@ -230,6 +241,7 @@ func (a *App) AddLocalPlaylistItem(playlistID string, item LocalPlaylistItem) er
 	}); err != nil {
 		return fmt.Errorf("insert item: %w", err)
 	}
+
 	now := dbconv.FormatTime(time.Now())
 	return a.dq.TouchLocalPlaylist(ctx, desktopdb.TouchLocalPlaylistParams{
 		UpdatedAt: now,
@@ -237,10 +249,8 @@ func (a *App) AddLocalPlaylistItem(playlistID string, item LocalPlaylistItem) er
 	})
 }
 
-// ── Server upload / sync ─────────────────────────────────────────────────────
-
 // UploadPlaylistToServer uploads a local playlist to the connected server.
-// Local file paths are NOT sent — only metadata references for local_ref items.
+// Only metadata references for local_ref items. Local file paths are not sent.
 // Returns the remote playlist ID.
 func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
 	a.mu.RLock()
@@ -257,18 +267,16 @@ func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
 	}
 	ctx := context.Background()
 
-	// Load local playlist + items.
 	lp, err := a.dq.GetLocalPlaylistByID(ctx, playlistID)
 	if err != nil {
 		return "", fmt.Errorf("get local playlist: %w", err)
 	}
+
 	items, err := a.dq.ListLocalPlaylistItems(ctx, playlistID)
 	if err != nil {
 		return "", fmt.Errorf("list local items: %w", err)
 	}
 
-	// Build server-side items: remote tracks keep their ID, local_ref items
-	// are uploaded as metadata references (no paths).
 	serverItems := make([]models.PlaylistItem, 0, len(items))
 	for _, it := range items {
 		pi := models.PlaylistItem{
@@ -285,13 +293,16 @@ func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
 	}
 
 	remoteID := lp.RemotePlaylistID
+
+	// Create a new remote playlist if remoteID is empty, otherwise
+	// update the existing remote playlist.
 	if remoteID == "" {
-		// Create new playlist on server.
 		remoteID, err = a.createServerPlaylist(serverURL, token, lp.Name, lp.Description, serverItems)
 		if err != nil {
 			return "", err
 		}
-		// Link locally.
+
+		// Link the remote playlist ID locally so it can be retrieved later.
 		now := dbconv.FormatTime(time.Now())
 		_ = a.dq.UpdateLocalPlaylist(ctx, desktopdb.UpdateLocalPlaylistParams{
 			Name:             lp.Name,
@@ -302,7 +313,6 @@ func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
 			ID:               playlistID,
 		})
 	} else {
-		// Update existing server playlist.
 		err = a.updateServerPlaylistItems(serverURL, token, remoteID, serverItems)
 		if err != nil {
 			return "", err
@@ -313,42 +323,53 @@ func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
 }
 
 // ResolvePlaylistItems attempts to match local_ref items to actual local files
-// by metadata (title + album + album_artist + duration tolerance).
+// by metadata (title + album + album_artist + duration tolerance). That way,
+// the desktop app can display the correct file paths for local_ref items.
 func (a *App) ResolvePlaylistItems(playlistID string) ([]LocalPlaylistItem, error) {
 	items, err := a.GetLocalPlaylistItems(playlistID)
 	if err != nil {
 		return nil, err
 	}
+
 	if a.dq == nil {
 		return items, nil
 	}
 
-	// Load all local tracks for matching.
 	allTracks, err := a.dq.ListAllLocalTracks(context.Background())
 	if err != nil {
-		return items, nil // non-fatal: just return unresolved items
+		return items, nil // should be non-fatal, so just return unresolved items
 	}
 
-	// Build lookup map keyed by normalised "title|album|album_artist".
+	// Build lookup map keyed by normalized "title|album|album_artist".
+	// Values represent the local file path and duration of the track.
 	type trackRef struct {
 		path       string
 		durationMS int64
 	}
+
 	lookup := make(map[string][]trackRef, len(allTracks))
 	for _, t := range allTracks {
 		key := strings.ToLower(t.Title) + "|" + strings.ToLower(t.Album) + "|" + strings.ToLower(t.AlbumArtist)
 		lookup[key] = append(lookup[key], trackRef{path: t.Path, durationMS: t.DurationMs})
 	}
 
-	const durationToleranceMS = 3000 // 3 second tolerance
+	// duration tolerance is needed since some tracks may have slightly different durations
+	// and it's not always possible to match them exactly, so don't want to mark them as missing
+	const durationToleranceMS = 3000
 
+	// Attempt to match local_ref items to actual local files.
+	// Any local_ref items that already have a path or remote items
+	// (tracks streamed from the server) are automatically considered resolved
 	for i := range items {
+		// attempt to match local_ref items to actual local files
 		if items[i].Source == string(models.SourceLocalRef) && items[i].LocalPath == "" {
 			key := strings.ToLower(items[i].RefTitle) + "|" + strings.ToLower(items[i].RefAlbum) + "|" + strings.ToLower(items[i].RefAlbumArtist)
 			candidates := lookup[key]
 			matched := false
+
 			for _, c := range candidates {
-				if items[i].RefDurationMS == 0 || int64(math.Abs(float64(c.durationMS-items[i].RefDurationMS))) <= durationToleranceMS {
+				durationDiff := int64(math.Abs(float64(c.durationMS - items[i].RefDurationMS)))
+				if items[i].RefDurationMS == 0 || durationDiff <= durationToleranceMS {
 					items[i].LocalPath = c.path
 					items[i].Resolved = true
 					items[i].Missing = false
@@ -356,6 +377,7 @@ func (a *App) ResolvePlaylistItems(playlistID string) ([]LocalPlaylistItem, erro
 					break
 				}
 			}
+
 			if !matched {
 				items[i].Missing = true
 			}
@@ -385,8 +407,10 @@ func (a *App) PickPlaylistArtwork(playlistID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("file dialog: %w", err)
 	}
+
+	// user cancelled
 	if path == "" {
-		return "", nil // user cancelled
+		return "", nil
 	}
 
 	raw, err := os.ReadFile(path)
@@ -394,64 +418,20 @@ func (a *App) PickPlaylistArtwork(playlistID string) (string, error) {
 		return "", fmt.Errorf("read image: %w", err)
 	}
 
-	// Decode to image for resizing.
-	src, _, err := image.Decode(bytes.NewReader(raw))
+	thumbData, err := resizeToThumbnail(raw)
 	if err != nil {
-		return "", fmt.Errorf("decode image: %w", err)
+		return "", err
 	}
 
-	b := src.Bounds()
-	srcW, srcH := b.Dx(), b.Dy()
-	dstW, dstH := srcW, srcH
-	if srcW > thumbMaxDim || srcH > thumbMaxDim {
-		if srcW >= srcH {
-			dstW = thumbMaxDim
-			dstH = srcH * thumbMaxDim / srcW
-		} else {
-			dstH = thumbMaxDim
-			dstW = srcW * thumbMaxDim / srcH
-		}
-	}
-	if dstW < 1 {
-		dstW = 1
-	}
-	if dstH < 1 {
-		dstH = 1
-	}
-
-	dst := image.NewNRGBA(image.Rect(0, 0, dstW, dstH))
-	draw.BiLinear.Scale(dst, dst.Bounds(), src, b, draw.Over, nil)
-
-	// Encode to JPEG.
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 85}); err != nil {
-		return "", fmt.Errorf("encode thumbnail: %w", err)
-	}
-
-	// Content-addressed filename.
-	sum := sha256.Sum256(buf.Bytes())
+	// Content-addressed filename derived from thumbnail bytes.
+	sum := sha256.Sum256(thumbData)
 	artHash := "pl-" + hex.EncodeToString(sum[:])[:24]
 	fileName := artHash + ".jpg"
-	thumbPath := filepath.Join(a.thumbDir, fileName)
 
-	// Write atomically.
-	tmp, err := os.CreateTemp(a.thumbDir, "tmp-pl-*.jpg")
-	if err != nil {
-		return "", fmt.Errorf("temp file: %w", err)
-	}
-	tmpName := tmp.Name()
-	if _, err := tmp.Write(buf.Bytes()); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return "", fmt.Errorf("write thumbnail: %w", err)
-	}
-	tmp.Close()
-	if err := os.Rename(tmpName, thumbPath); err != nil {
-		os.Remove(tmpName)
-		return "", fmt.Errorf("rename thumbnail: %w", err)
+	if err := writeThumbnail(a.thumbDir, fileName, thumbData); err != nil {
+		return "", err
 	}
 
-	// Update DB.
 	now := dbconv.FormatTime(time.Now())
 	if err := a.dq.UpdateLocalPlaylistArtwork(context.Background(), desktopdb.UpdateLocalPlaylistArtworkParams{
 		ArtworkPath: fileName,
@@ -462,4 +442,72 @@ func (a *App) PickPlaylistArtwork(playlistID string) (string, error) {
 	}
 
 	return fileName, nil
+}
+
+// resizeToThumbnail decodes raw image bytes, scales the image down to
+// thumbMaxDim (preserving aspect ratio), and returns the result encoded as
+// a JPEG. If the image is already within thumbMaxDim it is only re-encoded.
+func resizeToThumbnail(raw []byte) ([]byte, error) {
+	src, _, err := image.Decode(bytes.NewReader(raw))
+	if err != nil {
+		return nil, fmt.Errorf("decode image: %w", err)
+	}
+
+	b := src.Bounds()
+	srcW, srcH := b.Dx(), b.Dy()
+	dstW, dstH := srcW, srcH
+
+	if srcW > thumbMaxDim || srcH > thumbMaxDim {
+		if srcW >= srcH {
+			dstW = thumbMaxDim
+			dstH = srcH * thumbMaxDim / srcW
+		} else {
+			dstH = thumbMaxDim
+			dstW = srcW * thumbMaxDim / srcH
+		}
+	}
+
+	// Clamp to at least 1x1 to avoid zero-dimension images.
+	if dstW < 1 {
+		dstW = 1
+	}
+	if dstH < 1 {
+		dstH = 1
+	}
+
+	dst := image.NewNRGBA(image.Rect(0, 0, dstW, dstH))
+	draw.BiLinear.Scale(dst, dst.Bounds(), src, b, draw.Over, nil)
+
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 85}); err != nil {
+		return nil, fmt.Errorf("encode thumbnail: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// writeThumbnail atomically writes data to dir/fileName using a temp file and later
+// renames it so that a crash mid-write never leaves a corrupt file behind.
+func writeThumbnail(dir, fileName string, data []byte) error {
+	thumbPath := filepath.Join(dir, fileName)
+
+	tmp, err := os.CreateTemp(dir, "tmp-pl-*.jpg")
+	if err != nil {
+		return fmt.Errorf("temp file: %w", err)
+	}
+	tmpName := tmp.Name()
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return fmt.Errorf("write thumbnail: %w", err)
+	}
+	tmp.Close()
+
+	if err := os.Rename(tmpName, thumbPath); err != nil {
+		os.Remove(tmpName)
+		return fmt.Errorf("rename thumbnail: %w", err)
+	}
+
+	return nil
 }

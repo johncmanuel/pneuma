@@ -37,6 +37,7 @@ type App struct {
 	// fsnotify watcher for local music folders.
 	localWatcher *fsnotify.Watcher
 	watchedRoots []string // root folders registered with the watcher; guarded by mu
+
 	// pendingCreates debounces rapid Create events for the same path (Linux
 	// inotify routinely fires Create+Write+Chmod in quick succession for a
 	// single file move). Guarded by mu.

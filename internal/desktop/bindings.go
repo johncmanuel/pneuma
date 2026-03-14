@@ -29,13 +29,16 @@ func (a *App) ClearArtworkCache() error {
 		}
 		return err
 	}
+
 	for _, e := range entries {
 		_ = os.Remove(filepath.Join(a.thumbDir, e.Name()))
 	}
+
 	// Purge the in-memory hash map so subsequent requests regenerate thumbnails.
 	artworkHashCache.Range(func(k, _ any) bool {
 		artworkHashCache.Delete(k)
 		return true
 	})
+
 	return nil
 }

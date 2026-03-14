@@ -24,13 +24,17 @@ func NewPlaylistHandler(svc *playlist.Service, hub eventPublisher) *PlaylistHand
 // ListPlaylists GET /api/playlists
 func (h *PlaylistHandler) ListPlaylists(c echo.Context) error {
 	claims := middleware.GetClaims(c)
+
 	if claims == nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, "missing token")
 	}
+
 	playlists, err := h.svc.ListByUser(c.Request().Context(), claims.UserID)
+
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+
 	return c.JSON(http.StatusOK, playlists)
 }
 
@@ -38,25 +42,31 @@ func (h *PlaylistHandler) ListPlaylists(c echo.Context) error {
 func (h *PlaylistHandler) GetPlaylist(c echo.Context) error {
 	id := c.Param("id")
 	pl, err := h.svc.GetByID(c.Request().Context(), id)
+
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
+
 	return c.JSON(http.StatusOK, pl)
 }
 
 // CreatePlaylist POST /api/playlists
 func (h *PlaylistHandler) CreatePlaylist(c echo.Context) error {
 	claims := middleware.GetClaims(c)
+
 	if claims == nil {
 		return echo.NewHTTPError(http.StatusUnauthorized, "missing token")
 	}
+
 	var body struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 	}
+
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
 	}
+
 	if body.Name == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
 	}
@@ -73,11 +83,13 @@ func (h *PlaylistHandler) CreatePlaylist(c echo.Context) error {
 // UpdatePlaylist PUT /api/playlists/:id
 func (h *PlaylistHandler) UpdatePlaylist(c echo.Context) error {
 	id := c.Param("id")
+
 	var body struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		ArtworkPath string `json:"artwork_path"`
 	}
+
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
 	}
@@ -93,6 +105,7 @@ func (h *PlaylistHandler) UpdatePlaylist(c echo.Context) error {
 // DeletePlaylist DELETE /api/playlists/:id
 func (h *PlaylistHandler) DeletePlaylist(c echo.Context) error {
 	id := c.Param("id")
+
 	if err := h.svc.Delete(c.Request().Context(), id); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
@@ -104,10 +117,12 @@ func (h *PlaylistHandler) DeletePlaylist(c echo.Context) error {
 // GetPlaylistItems GET /api/playlists/:id/items
 func (h *PlaylistHandler) GetPlaylistItems(c echo.Context) error {
 	id := c.Param("id")
+
 	items, err := h.svc.GetItems(c.Request().Context(), id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+
 	return c.JSON(http.StatusOK, items)
 }
 
@@ -115,6 +130,7 @@ func (h *PlaylistHandler) GetPlaylistItems(c echo.Context) error {
 func (h *PlaylistHandler) SetPlaylistItems(c echo.Context) error {
 	id := c.Param("id")
 	var items []models.PlaylistItem
+
 	if err := c.Bind(&items); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
 	}
@@ -131,6 +147,7 @@ func (h *PlaylistHandler) SetPlaylistItems(c echo.Context) error {
 func (h *PlaylistHandler) AddPlaylistItem(c echo.Context) error {
 	id := c.Param("id")
 	var item models.PlaylistItem
+
 	if err := c.Bind(&item); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
 	}

@@ -33,7 +33,11 @@ type InboundHandler func(userID string, msg InboundMessage)
 
 // Hub manages connected WebSocket clients and broadcasts messages.
 type Hub struct {
-	mu        sync.RWMutex
+	// mu controls concurrent access to the clients map.
+	// Multiple goroutines interact with the map in http handlers, so ensure
+	// proper locking during read/writes.
+	mu sync.RWMutex
+
 	clients   map[*client]struct{}
 	log       *slog.Logger
 	onMessage InboundHandler
@@ -172,8 +176,10 @@ func (c *client) writePump() {
 // mustMarshal is a wrapper function around json.Marshal(...) that panics if an error occurs.
 func mustMarshal(v any) []byte {
 	data, err := json.Marshal(v)
+
 	if err != nil {
 		panic("ws marshal: " + err.Error())
 	}
+
 	return data
 }

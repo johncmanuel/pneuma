@@ -83,6 +83,7 @@ func DefaultConfig(dataDir string) *Config {
 	if dataDir == "" {
 		dataDir = DefaultDataDir()
 	}
+
 	return &Config{
 		Server: ServerConfig{
 			Host: "127.0.0.1",
@@ -166,6 +167,7 @@ func Load(path string, dataDir string) (*Config, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
+
 	if err == nil {
 		// File exists — overlay its values onto the defaults.
 		if err := toml.Unmarshal(data, cfg); err != nil {
@@ -189,10 +191,12 @@ func Save(path string, cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+
 	data, err := toml.Marshal(cfg)
 	if err != nil {
 		return err
 	}
+
 	return os.WriteFile(path, data, 0o600)
 }
 
