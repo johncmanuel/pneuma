@@ -2,10 +2,9 @@ package parser
 
 import (
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/dhowden/tag"
 	"github.com/google/uuid"
+	"github.com/mewkiz/flac"
 
 	"pneuma/internal/models"
 )
@@ -28,7 +28,7 @@ type Parser struct {
 // if it looks like ffmpeg, we derive the ffprobe path automatically.
 func New(ffmpegOrProbePath string) *Parser {
 	p := ffmpegOrProbePath
-	// Derive ffprobe from ffmpeg path (ffmpeg → ffprobe, /usr/bin/ffmpeg → /usr/bin/ffprobe)
+
 	if strings.HasSuffix(p, "ffmpeg") {
 		p = p[:len(p)-len("ffmpeg")] + "ffprobe"
 	}
@@ -154,11 +154,11 @@ func (p *Parser) ParseFileWithMeta(ctx context.Context, path string) (*models.Tr
 		t.DiscNumber = dn
 	}
 
-	// Optionally enrich with ffprobe.
+	// use ffprobe to fill in duration, bitrate, sample rate, and channels if available.
 	if p.ffprobePath != "" {
-		_ = p.probe(ctx, path, t) // best-effort
+		_ = p.probe(ctx, path, t)
 	}
-	// Pure-Go fallback when ffprobe is unavailable or returned no duration.
+
 	if t.DurationMS == 0 {
 		_ = parseDurationFallback(path, t)
 	}
@@ -233,8 +233,8 @@ func codecFromPath(path string) string {
 	}
 }
 
-// parseDurationFallback tries to read duration from the audio file using pure
-// Go (no external binaries) for formats where this is practical.
+// parseDurationFallback reads duration from the audio file if ffprobe
+// is unavailable.
 func parseDurationFallback(path string, t *models.Track) error {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".flac":
@@ -244,62 +244,20 @@ func parseDurationFallback(path string, t *models.Track) error {
 }
 
 // parseFLACDuration reads the FLAC STREAMINFO block and computes duration.
-// FLAC STREAMINFO is always the first metadata block, making this very fast.
 func parseFLACDuration(path string, t *models.Track) error {
-	f, err := os.Open(path)
+	stream, err := flac.Open(path)
 	if err != nil {
+		slog.Error("Unable to obtain FLAC stream info", "path", path, "err", err)
 		return err
 	}
-	defer f.Close()
+	defer stream.Close()
 
-	magic := make([]byte, 4)
-	if _, err := io.ReadFull(f, magic); err != nil {
-		return err
+	if stream.Info != nil && stream.Info.SampleRate > 0 && stream.Info.NSamples > 0 {
+		// convert to MS
+		t.DurationMS = int64(stream.Info.NSamples) * 1000 / int64(stream.Info.SampleRate)
+		return nil
 	}
-	if string(magic) != "fLaC" {
-		return fmt.Errorf("not a FLAC file")
-	}
-
-	// Walk metadata blocks; STREAMINFO (type 0) is almost always first.
-	for {
-		hdr := make([]byte, 4)
-		if _, err := io.ReadFull(f, hdr); err != nil {
-			return err
-		}
-		isLast := hdr[0]&0x80 != 0
-		blockType := hdr[0] & 0x7F
-		blockLen := int(binary.BigEndian.Uint32([]byte{0, hdr[1], hdr[2], hdr[3]}))
-
-		if blockType == 0 && blockLen >= 18 { // STREAMINFO
-			data := make([]byte, blockLen)
-			if _, err := io.ReadFull(f, data); err != nil {
-				return err
-			}
-			// Bytes 10–17 pack in big-endian bit order:
-			//   20 bits: sample_rate
-			//    3 bits: (channels - 1)
-			//    5 bits: (bits_per_sample - 1)
-			//   36 bits: total_samples
-			v := uint64(data[10])<<56 | uint64(data[11])<<48 |
-				uint64(data[12])<<40 | uint64(data[13])<<32 |
-				uint64(data[14])<<24 | uint64(data[15])<<16 |
-				uint64(data[16])<<8 | uint64(data[17])
-			sampleRate := int64(v >> 44)
-			totalSamples := int64(v & 0x0000000FFFFFFFFF)
-			if sampleRate > 0 && totalSamples > 0 {
-				t.DurationMS = totalSamples * 1000 / sampleRate
-			}
-			return nil
-		}
-
-		if _, err := f.Seek(int64(blockLen), io.SeekCurrent); err != nil {
-			return err
-		}
-		if isLast {
-			break
-		}
-	}
-	return fmt.Errorf("FLAC STREAMINFO not found")
+	return fmt.Errorf("FLAC STREAMINFO not found or incomplete")
 }
 
 func titleFromPath(path string) string {

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -62,14 +63,13 @@ func probeLocalDuration(path string, fi os.FileInfo, lt *LocalTrack) {
 		return
 	}
 
-	// Convert duration to milliseconds and store in cache
 	if dur, err := strconv.ParseFloat(result.Format.Duration, 64); err == nil {
 		lt.DurationMs = int64(dur * 1000)
 		durationCache.Store(key, lt.DurationMs)
 	}
 }
 
-// parseDurationFallbackLocal reads duration using pure Go for supported formats.
+// parseDurationFallbackLocal reads duration if ffprobe is unavailable.
 func parseDurationFallbackLocal(path string, fi os.FileInfo, lt *LocalTrack) {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".flac":
@@ -85,14 +85,15 @@ func parseFLACDurationLocal(path string, fi os.FileInfo, lt *LocalTrack) {
 		return
 	}
 
-	// Open automatically parses the signature and STREAMINFO, then stops.
 	stream, err := flac.Open(path)
 	if err != nil {
+		slog.Error("Unable to obtain FLAC stream info", "path", path, "err", err)
 		return
 	}
 	defer stream.Close()
 
 	if stream.Info != nil && stream.Info.SampleRate > 0 && stream.Info.NSamples > 0 {
+		// convert to MS
 		lt.DurationMs = int64(stream.Info.NSamples) * 1000 / int64(stream.Info.SampleRate)
 		durationCache.Store(key, lt.DurationMs)
 	}
