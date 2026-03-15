@@ -9,15 +9,19 @@
 
   async function handleSubmit() {
     error = "";
+
     if (!username.trim() || !password) {
       error = "Username and password required";
       return;
     }
+
     loading = true;
+
     const err =
       mode === "login"
         ? await login(username.trim(), password)
         : await register(username.trim(), password);
+
     loading = false;
     if (err) error = err;
   }

@@ -3,7 +3,6 @@
   import { apiFetch, currentUser } from "../api";
   import { libraryVersion, scanRunning, scanResult } from "../ws";
 
-  // ── Types ──────────────────────────────────────────────────────────
   interface Track {
     id: string;
     title: string;
@@ -29,7 +28,6 @@
     error?: string;
   }
 
-  // ── Allowed extensions (matching backend) ──────────────────────────
   const AUDIO_EXTS = new Set([
     ".mp3",
     ".flac",
@@ -51,35 +49,32 @@
     return AUDIO_EXTS.has(name.slice(dot).toLowerCase());
   }
 
-  // ── State ──────────────────────────────────────────────────────────
   let tracks: Track[] = [];
   let loading = false;
   let searchQuery = "";
   let sortKey: SortKey = "title";
   let sortDir: SortDir = "asc";
 
-  // Bulk selection
   let selectedIds = new Set<string>();
   let bulkDeleting = false;
 
-  // Permissions
   $: canUpload = $currentUser?.is_admin || $currentUser?.can_upload;
   $: canEdit = $currentUser?.is_admin || $currentUser?.can_edit;
   $: canDelete = $currentUser?.is_admin || $currentUser?.can_delete;
 
-  // ── Persist sort/search in localStorage ────────────────────────────
   const STORAGE_KEY = "pneuma_admin_tracks";
 
   function loadPersistedState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
+
       const s = JSON.parse(raw);
       if (s.sortKey) sortKey = s.sortKey;
       if (s.sortDir) sortDir = s.sortDir;
       if (typeof s.searchQuery === "string") searchQuery = s.searchQuery;
-    } catch {
-      /* ignore */
+    } catch (e) {
+      console.error("Failed to load persisted tracks panel state", e);
     }
   }
 
@@ -89,14 +84,14 @@
         STORAGE_KEY,
         JSON.stringify({ sortKey, sortDir, searchQuery })
       );
-    } catch {
-      /* ignore */
+    } catch (e) {
+      console.error("Failed to persist tracks panel state", e);
     }
   }
 
   $: (sortKey, sortDir, searchQuery, persistState());
 
-  // ── Derived: filter → sort ─────────────────────────────────────────
+  // Filter tracks based on searchQuery, sortKey, and sortDir.
   $: filteredTracks = searchQuery.trim()
     ? tracks.filter(
         (t) =>
@@ -106,8 +101,7 @@
       )
     : tracks;
 
-  // Inline the comparator directly so Svelte sees sortKey/sortDir as
-  // reactive dependencies and re-runs whenever they change.
+  // Sort the filtered tracks based on sortKey and sortDir.
   $: sortedTracks = [...filteredTracks].sort((a, b) => {
     let cmp = 0;
     switch (sortKey) {
@@ -137,7 +131,6 @@
     return sortDir === "desc" ? -cmp : cmp;
   });
 
-  // ── Column sort toggle ─────────────────────────────────────────────
   function toggleSort(key: SortKey) {
     if (sortKey === key) {
       sortDir = sortDir === "asc" ? "desc" : "asc";
@@ -149,10 +142,9 @@
 
   function sortIndicator(key: SortKey): string {
     if (sortKey !== key) return "";
-    return sortDir === "asc" ? " ▲" : " ▼";
+    return sortDir === "asc" ? " ↑" : " ↓";
   }
 
-  // ── Load tracks ────────────────────────────────────────────────────
   onMount(() => {
     loadPersistedState();
     loadTracks();
@@ -175,7 +167,6 @@
     }
   }
 
-  // ── Inline editing ─────────────────────────────────────────────────
   let editingTrack: Track | null = null;
   let editTitle = "";
   let editArtist = "";
@@ -208,14 +199,12 @@
     editingTrack = null;
   }
 
-  // ── Single delete ──────────────────────────────────────────────────
   async function deleteTrack(id: string) {
     if (!confirm("Delete this track?")) return;
     const r = await apiFetch(`/api/library/tracks/${id}`, { method: "DELETE" });
     if (r.ok) await loadTracks();
   }
 
-  // ── Bulk select / delete ───────────────────────────────────────────
   $: allSelected =
     sortedTracks.length > 0 && sortedTracks.every((t) => selectedIds.has(t.id));
 
@@ -255,17 +244,16 @@
     if (fail > 0) alert(`Deleted ${ok}, failed ${fail}`);
   }
 
-  // ── Upload: file + folder inputs ──────────────────────────────────
   let fileInput: HTMLInputElement;
   let folderInput: HTMLInputElement;
   let dragOver = false;
 
-  // Upload queue state
   let uploadQueue: UploadItem[] = [];
   let uploadActive = false;
   let uploadCancelled = false;
   let uploadDone = false;
 
+  // show upload stats
   $: uploadStats = {
     total: uploadQueue.length,
     done: uploadQueue.filter((i) => i.status === "done").length,
@@ -277,7 +265,6 @@
     ).length
   };
 
-  // ── Collect files from browser folder input ────────────────────────
   function handleFileInput() {
     if (fileInput?.files?.length) {
       enqueueFiles(Array.from(fileInput.files));
@@ -292,7 +279,6 @@
     }
   }
 
-  // ── Drag-and-drop ──────────────────────────────────────────────────
   function handleDragOver(e: DragEvent) {
     e.preventDefault();
     if (canUpload) dragOver = true;
@@ -305,9 +291,9 @@
   async function handleDrop(e: DragEvent) {
     e.preventDefault();
     dragOver = false;
+
     if (!canUpload || !e.dataTransfer) return;
 
-    // Try File System API for full directory recursion
     const items = e.dataTransfer.items;
     if (
       items &&
@@ -315,29 +301,33 @@
       typeof items[0].webkitGetAsEntry === "function"
     ) {
       const entries: FileSystemEntry[] = [];
+
       for (let i = 0; i < items.length; i++) {
         const entry = items[i].webkitGetAsEntry();
         if (entry) entries.push(entry);
       }
+
       const files = await collectFilesFromEntries(entries);
       if (files.length) enqueueFiles(files);
       return;
     }
 
-    // Fallback: plain file list
+    // if we can't get entries, fall back to just accepting files
     const files = Array.from(e.dataTransfer.files).filter(
       (f) => f.type.startsWith("audio/") || isAudioFile(f.name)
     );
     if (files.length) enqueueFiles(files);
   }
 
-  /** Recursively collect Files from FileSystemEntry[] */
+  /** Recursively collect Files from FileSystemEntry[]. TODO: code can be cleaned up more */
   async function collectFilesFromEntries(
     entries: FileSystemEntry[]
   ): Promise<File[]> {
     const files: File[] = [];
     const promises: Promise<void>[] = [];
 
+    // Recursively collect files from entries.
+    // Though for directories, read their entries and process them in batches
     for (const entry of entries) {
       if (entry.isFile) {
         promises.push(
@@ -356,6 +346,10 @@
           new Promise<void>((resolve) => {
             const reader = (entry as FileSystemDirectoryEntry).createReader();
             const readBatch = () => {
+              // Read a batch of entries from the directory
+              // NOTE: readEntries() returns first 100 entries, so need to
+              // call it multiple times until all instances are read
+              // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemDirectoryReader/readEntries#browser_compatibility
               reader.readEntries(
                 async (batch) => {
                   if (batch.length === 0) {
@@ -364,7 +358,7 @@
                   }
                   const subFiles = await collectFilesFromEntries(batch);
                   files.push(...subFiles);
-                  readBatch(); // continue reading (readEntries returns max ~100 entries at a time)
+                  readBatch();
                 },
                 () => resolve()
               );
@@ -378,13 +372,13 @@
     return files;
   }
 
-  // ── Enqueue + start adaptive upload ────────────────────────────────
+  // Add new files to the upload queue, avoiding duplicates. Start upload if not active.
   function enqueueFiles(files: File[]) {
-    // Dedupe by name+size (prevents double-drops)
     const existing = new Set(
       uploadQueue.map((i) => `${i.file.name}::${i.file.size}`)
     );
     const newItems: UploadItem[] = [];
+
     for (const f of files) {
       const key = `${f.name}::${f.size}`;
       if (existing.has(key)) continue;
@@ -399,6 +393,7 @@
         newItems.push({ file: f, status: "pending" });
       }
     }
+
     uploadQueue = [...uploadQueue, ...newItems];
     uploadDone = false;
     if (!uploadActive) startUpload();
@@ -460,9 +455,11 @@
     }
   }
 
+  // Cancel ongoing uploads and mark pending items as cancelled.
+  // Note that we can't actually abort in-flight fetch requests, so some uploads
+  // may still complete after cancellation, but we'll ignore their results.
   function cancelUpload() {
     uploadCancelled = true;
-    // Mark remaining pending items so they stay visible
     uploadQueue = uploadQueue.map((i) =>
       i.status === "pending"
         ? { ...i, status: "error" as const, error: "Cancelled" }
@@ -475,37 +472,36 @@
     uploadDone = false;
   }
 
-  // ── Scan ───────────────────────────────────────────────────────────
   async function triggerScan() {
     await apiFetch("/api/library/scan", { method: "POST" });
   }
 
   // Auto-clear scan result after 8 seconds
+  const timeoutMs = 8000;
   let scanResultTimer: ReturnType<typeof setTimeout> | undefined;
   $: if ($scanResult) {
     if (scanResultTimer) clearTimeout(scanResultTimer);
-    scanResultTimer = setTimeout(() => scanResult.set(null), 8000);
+    scanResultTimer = setTimeout(() => scanResult.set(null), timeoutMs);
   }
 
   onDestroy(() => {
     if (scanResultTimer) clearTimeout(scanResultTimer);
   });
 
-  // ── Keyboard shortcuts ─────────────────────────────────────────────
   function handleKeydown(e: KeyboardEvent) {
-    // Enter → save edit
+    // Enter -> save edit
     if (e.key === "Enter" && editingTrack) {
       e.preventDefault();
       saveEdit();
       return;
     }
-    // Escape → cancel edit
+    // Escape -> cancel edit
     if (e.key === "Escape" && editingTrack) {
       e.preventDefault();
       cancelEdit();
       return;
     }
-    // "/" → focus search (only when not in an input/textarea)
+    // "/" -> focus search (only when not in an input/textarea)
     if (e.key === "/" && !editingTrack) {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag !== "INPUT" && tag !== "TEXTAREA" && tag !== "SELECT") {
@@ -516,13 +512,6 @@
         el?.focus();
       }
     }
-  }
-
-  // ── Helpers ────────────────────────────────────────────────────────
-  function formatDuration(ms: number): string {
-    const s = Math.floor(ms / 1000);
-    const m = Math.floor(s / 60);
-    return `${m}:${String(s % 60).padStart(2, "0")}`;
   }
 </script>
 
@@ -535,7 +524,6 @@
   on:dragleave={handleDragLeave}
   on:drop={handleDrop}
 >
-  <!-- ── Actions bar ──────────────────────────────────────────────── -->
   <div class="actions-bar">
     <input
       type="text"
@@ -545,7 +533,6 @@
     />
 
     {#if canUpload}
-      <!-- Single/multi-file upload -->
       <input
         type="file"
         accept="audio/*"
@@ -559,10 +546,9 @@
         on:click={() => fileInput?.click()}
         disabled={uploadActive}
       >
-        ↑ Upload Files
+        Upload Files
       </button>
 
-      <!-- Folder upload -->
       <input
         type="file"
         webkitdirectory
@@ -576,13 +562,13 @@
         on:click={() => folderInput?.click()}
         disabled={uploadActive}
       >
-        📁 Upload Folder
+        Upload Folder
       </button>
     {/if}
 
     {#if $currentUser?.is_admin}
       <button class="action-btn" on:click={triggerScan} disabled={$scanRunning}>
-        {$scanRunning ? "⟳ Scanning…" : "↺ Scan"}
+        {$scanRunning ? "Scanning..." : "Scan"}
       </button>
     {/if}
 
@@ -592,12 +578,11 @@
         on:click={bulkDelete}
         disabled={bulkDeleting}
       >
-        {bulkDeleting ? "Deleting…" : `🗑 Delete ${selectedIds.size}`}
+        {bulkDeleting ? "Deleting…" : `Delete ${selectedIds.size}`}
       </button>
     {/if}
   </div>
 
-  <!-- ── Scan feedback ────────────────────────────────────────────── -->
   {#if $scanResult}
     <p class="scan-result">
       Scan complete: {$scanResult.added} added, {$scanResult.updated} updated, {$scanResult.removed}
@@ -605,7 +590,6 @@
     </p>
   {/if}
 
-  <!-- ── Upload progress ──────────────────────────────────────────── -->
   {#if uploadQueue.length > 0}
     <div class="upload-panel">
       <div class="upload-header">
@@ -632,7 +616,6 @@
         </div>
       </div>
 
-      <!-- Progress bar -->
       {#if uploadStats.total > 0}
         <div class="progress-bar-track">
           <div
@@ -649,7 +632,6 @@
         </div>
       {/if}
 
-      <!-- Summary badges -->
       <div class="upload-badges">
         {#if uploadStats.done > 0}
           <span class="badge success">{uploadStats.done} uploaded</span>
@@ -669,7 +651,6 @@
         {/if}
       </div>
 
-      <!-- Failed/skipped items (expandable) -->
       {#if uploadQueue.some((i) => i.status === "error" || i.status === "unsupported" || i.status === "duplicate")}
         <details class="upload-details">
           <summary class="text-3"
@@ -700,7 +681,6 @@
     </div>
   {/if}
 
-  <!-- ── Drag overlay ─────────────────────────────────────────────── -->
   {#if dragOver && canUpload}
     <div class="drop-overlay">
       <div class="drop-message">
@@ -710,7 +690,6 @@
     </div>
   {/if}
 
-  <!-- ── Track table ──────────────────────────────────────────────── -->
   {#if loading}
     <p class="text-3">Loading…</p>
   {:else}
@@ -849,7 +828,6 @@
     border-radius: 8px;
   }
 
-  /* ── Actions bar ───────────────────────────────────────────────── */
   .actions-bar {
     display: flex;
     gap: 8px;
@@ -881,14 +859,12 @@
     border-color: var(--danger);
   }
 
-  /* ── Scan result ───────────────────────────────────────────────── */
   .scan-result {
     font-size: 13px;
     color: var(--accent);
     margin: -4px 0 0;
   }
 
-  /* ── Upload panel ──────────────────────────────────────────────── */
   .upload-panel {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -987,7 +963,6 @@
     color: #facc15;
   }
 
-  /* ── Drop overlay ──────────────────────────────────────────────── */
   .drop-overlay {
     position: absolute;
     inset: 0;
@@ -1011,7 +986,6 @@
     margin-bottom: 8px;
   }
 
-  /* ── Table ─────────────────────────────────────────────────────── */
   .table-wrap {
     overflow-x: auto;
   }

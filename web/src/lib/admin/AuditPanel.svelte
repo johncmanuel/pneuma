@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { apiFetch } from "../api";
+  import { formatDate } from "../utils";
 
   interface AuditEntry {
     id: string;
@@ -24,15 +25,6 @@
       if (r.ok) entries = await r.json();
     } finally {
       loading = false;
-    }
-  }
-
-  function formatDate(iso: string): string {
-    try {
-      const d = new Date(iso);
-      return d.toLocaleString();
-    } catch {
-      return iso;
     }
   }
 

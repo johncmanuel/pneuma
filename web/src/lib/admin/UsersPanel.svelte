@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { apiFetch } from "../api";
+  import { formatDate } from "../utils";
 
   interface User {
     id: string;
@@ -42,14 +43,6 @@
     if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
     const r = await apiFetch(`/api/admin/users/${id}`, { method: "DELETE" });
     if (r.ok) await loadUsers();
-  }
-
-  function formatDate(iso: string): string {
-    try {
-      return new Date(iso).toLocaleDateString();
-    } catch {
-      return iso;
-    }
   }
 </script>
 
