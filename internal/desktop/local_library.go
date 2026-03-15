@@ -61,9 +61,9 @@ func (a *App) scanAndUpsertSingleFile(path, folder string) (LocalTrack, error) {
 //
 // The method itself returns nil on success or an error.
 func (a *App) ScanLocalFolderStream(dir string) error {
-	// ── Pass 1: count audio files so we know the total ──
+	// count audio files so we know the total
 	var total int
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error { //nolint:errcheck
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
@@ -78,7 +78,7 @@ func (a *App) ScanLocalFolderStream(dir string) error {
 		"total":  total,
 	})
 
-	// ── Pass 2: read metadata, upsert to DB, emit per-file progress ──
+	// read metadata, upsert to DB, emit per-file progress
 	done := 0
 	livePaths := make(map[string]struct{}, total)
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -137,7 +137,7 @@ func (a *App) ScanLocalFolderStream(dir string) error {
 		return nil
 	})
 
-	// ── Pass 3: prune DB entries for files that no longer exist on disk ──
+	// prune DB entries for files that no longer exist on disk
 	if stalePaths, pruneErr := a.pruneStaleLocalTracks(dir, livePaths); pruneErr != nil {
 		slog.Warn("scan: failed to prune stale tracks", "folder", dir, "err", pruneErr)
 	} else if len(stalePaths) > 0 {
@@ -193,7 +193,8 @@ func (a *App) ClearLocalFolder(folder string) error {
 }
 
 // ChooseLocalFolder opens a directory picker and returns only the chosen path.
-// Does NOT scan; the frontend stores the path and calls ScanLocalFolderStream separately.
+// NOTE: Does not perform any scans!
+// The frontend stores the path and calls ScanLocalFolderStream separately.
 func (a *App) ChooseLocalFolder() (string, error) {
 	dir, err := wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title: "Add Local Music Folder",
@@ -210,6 +211,7 @@ func (a *App) OpenLocalFiles() ([]string, error) {
 	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Open Audio Files",
 		Filters: []runtime.FileFilter{
+			// TODO: define single source of truth for audio file extensions
 			{DisplayName: "Audio Files", Pattern: "*.mp3;*.flac;*.ogg;*.opus;*.m4a;*.aac;*.wav;*.aiff"},
 		},
 	})
@@ -237,7 +239,7 @@ func (a *App) OpenLocalFolder() ([]string, error) {
 	}
 
 	var files []string
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error { //nolint:errcheck
+	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
