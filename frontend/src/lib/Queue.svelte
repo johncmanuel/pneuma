@@ -12,8 +12,7 @@
   $: currentIndex = $playerState.queueIndex ?? 0;
   $: nowPlayingTrack = $playerState.track;
 
-  // Cached map of track ID → Track for queue resolution.
-  // Populated lazily — only fetches IDs not already in the cache.
+  // track ID -> Track, used for queue resolution
   const trackCache = new Map<string, Track>();
   let upNext: Track[] = [];
   let resolving = false;
