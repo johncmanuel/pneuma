@@ -8,10 +8,8 @@ import { authToken, wsBase } from "./api";
  */
 export const libraryVersion = writable(0);
 
-/** True while the server is running a library scan. */
 export const scanRunning = writable(false);
 
-/** Result payload from the last completed scan, or null. */
 export const scanResult = writable<{
   added: number;
   updated: number;
@@ -25,7 +23,7 @@ export function connectWS() {
   const token = get(authToken);
   if (!token) return;
 
-  // Prevent double-connect: if a socket is already open or connecting, bail out.
+  // Prevent double-connect: if a socket is already open or connecting, stop
   if (
     socket &&
     (socket.readyState === WebSocket.OPEN ||
@@ -39,7 +37,7 @@ export function connectWS() {
     try {
       socket.close();
     } catch {
-      /* ignore */
+      console.warn("Failed to close existing WebSocket");
     }
     socket = null;
   }
@@ -55,7 +53,7 @@ export function connectWS() {
       const msg = JSON.parse(e.data);
       handleMessage(msg);
     } catch {
-      /* ignore malformed */
+      console.warn("Failed to parse WebSocket message");
     }
   };
 
@@ -77,16 +75,11 @@ export function disconnectWS() {
   socket = null;
 }
 
-/** Fire-and-forget a message to the server over the open WebSocket. */
 export function wsSend(type: string, payload: object) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type, payload }));
   }
 }
-
-/** No-op stub retained for future player integration. */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export function setTrackList(_tracks: unknown[]) {}
 
 function handleMessage(msg: { type: string; payload: any }) {
   switch (msg.type) {

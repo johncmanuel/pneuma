@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { apiFetch, currentUser } from "../api";
   import { libraryVersion, scanRunning, scanResult } from "../ws";
+  import { formatDuration } from "../utils";
 
   interface Track {
     id: string;
