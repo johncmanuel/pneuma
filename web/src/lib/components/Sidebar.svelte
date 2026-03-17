@@ -4,8 +4,7 @@
 
 <nav class="sidebar">
   <div class="brand">
-    <span class="brand-icon">♫</span>
-    <span class="brand-text">Pneuma</span>
+    <span class="brand-text">pneuma</span>
   </div>
 
   <div class="sidebar-footer">
@@ -18,7 +17,6 @@
       </div>
     {/if}
     <button class="nav-btn logout-btn" on:click={logout}>
-      <span class="nav-icon">🚪</span>
       <span class="nav-label">Sign Out</span>
     </button>
   </div>
@@ -44,10 +42,6 @@
     font-weight: 700;
     font-size: 18px;
   }
-  .brand-icon {
-    color: var(--accent);
-    font-size: 22px;
-  }
 
   .nav-btn {
     display: flex;
@@ -68,10 +62,6 @@
     color: var(--text-1);
   }
 
-  .nav-icon {
-    font-size: 16px;
-    flex-shrink: 0;
-  }
   .nav-label {
     flex: 1;
   }
