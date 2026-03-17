@@ -15,6 +15,7 @@
     stopAutoReconnect
   } from "../utils/api";
   import { RotateCcw } from "@lucide/svelte";
+  import { BrowserOpenURL } from "../../wailsjs/runtime";
 
   let connectURL = "http://127.0.0.1:8989";
   let connectUser = "";
@@ -48,6 +49,16 @@
     clearSession();
     await DisconnectFromServer();
     await refreshConnection();
+  }
+
+  function handleOpenUrl(url: string) {
+    BrowserOpenURL(url);
+  }
+
+  function handleArtworkCacheClear() {
+    ClearArtworkCache();
+    cacheCleared = true;
+    setTimeout(() => (cacheCleared = false), 3000);
   }
 </script>
 
@@ -109,13 +120,7 @@
       Thumbnail images are cached on disk. Clear the cache whenever issues with
       album artwork arise.
     </p>
-    <button
-      on:click={async () => {
-        await ClearArtworkCache();
-        cacheCleared = true;
-        setTimeout(() => (cacheCleared = false), 3000);
-      }}>Clear Artwork Cache</button
-    >
+    <button on:click={handleArtworkCacheClear}>Clear Artwork Cache</button>
     {#if cacheCleared}<p class="msg">Cache cleared.</p>{/if}
   </div>
 
@@ -126,6 +131,16 @@
       server.
     </p>
     <p class="text-3">v0.1.0</p>
+    <p class="text-3">
+      Source code available on <button
+        on:click|preventDefault={() =>
+          handleOpenUrl("https://github.com/johncmanuel/pneuma")}
+        aria-label="GitHub repository"
+        style="text-decoration: underline;"
+      >
+        GitHub
+      </button>.
+    </p>
   </div>
 </section>
 
