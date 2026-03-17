@@ -458,6 +458,11 @@
 
   // Sync HTML audio element when track changes
   $: if (audio && $playerState.trackId) {
+    if (seekSyncTimer) {
+      clearTimeout(seekSyncTimer);
+      seekSyncTimer = null;
+    }
+
     const url = streamUrl($playerState.trackId, $playerState.track?.path);
 
     if (currentAudioSrc !== url && url) {
@@ -466,11 +471,15 @@
       audio.currentTime = $playerState.positionMs / 1000;
     }
 
-    if (!$playerState.paused && !audio.seeking)
+    if (!$playerState.paused && !audio.seeking && audio.paused) {
       audio.play().catch((e) => {
-        console.warn("Audio play failed", e);
+        if (e.name !== "AbortError") {
+          console.warn("Audio play failed", e);
+        }
       });
-    else if ($playerState.paused) audio.pause();
+    } else if ($playerState.paused && !audio.paused) {
+      audio.pause();
+    }
   }
 
   // When the track is forcefully cleared (e.g. file removed from disk),
@@ -500,9 +509,11 @@
     if (!isLocal && !seekSyncTimer) {
       seekSyncTimer = setTimeout(() => {
         seekSyncTimer = null;
-        wsSend("playback.seek", {
-          position_ms: audio.currentTime * 1000
-        });
+        if (!isLocalId($playerState.trackId ?? "")) {
+          wsSend("playback.seek", {
+            position_ms: audio.currentTime * 1000
+          });
+        }
       }, debounceMs);
     }
   }
