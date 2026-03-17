@@ -29,7 +29,7 @@
 
 <div class="login-page">
   <div class="card">
-    <h1 class="logo">♫ Pneuma</h1>
+    <h1 class="logo">Pneuma</h1>
     <p class="subtitle text-2">
       {mode === "login" ? "Sign in to your server" : "Create an account"}
     </p>

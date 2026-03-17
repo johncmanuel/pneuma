@@ -3,7 +3,7 @@
   import { loggedIn, tryAutoAuth } from "./lib/api";
   import { connectWS, disconnectWS } from "./lib/ws";
   import Login from "./lib/components/Login.svelte";
-  import Sidebar from "./lib/Sidebar.svelte";
+  import Sidebar from "./lib/components/Sidebar.svelte";
   import Admin from "./pages/Admin.svelte";
 
   let ready = false;
