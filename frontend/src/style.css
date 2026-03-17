@@ -12,12 +12,15 @@
   --surface-2: #222222;
   --surface-hover: #2a2a2a;
   --border: #333333;
-  --accent: #4ade80;
-  --accent-dim: #22c55e;
+
+  /* https://imagecolorpicker.com/color-code/4ff4bf */
+  --accent: #4ff4bf;
+  --accent-dim: #3fc399;
+
   --text-1: #f0f0f0;
   --text-2: #a0a0a0;
   --text-3: #606060;
-  --danger: #f87171;
+  --danger: #f44f84;
   --r-sm: 4px;
   --r-md: 8px;
   --r-lg: 12px;

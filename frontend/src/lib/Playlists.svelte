@@ -630,23 +630,29 @@
     border: 1px solid var(--border);
     transition: background 0.1s;
   }
+
   .action-btn:hover {
     background: var(--surface-hover);
   }
+
   .action-btn.primary {
-    background: var(--accent);
+    background: var(--accent-dim);
     color: #fff;
     border: none;
   }
+
   .action-btn.primary:hover {
     filter: brightness(1.1);
   }
+
   .action-btn.danger {
-    color: #e74c3c;
+    color: var(--danger);
   }
+
   .action-btn.danger:hover {
     background: rgba(231, 76, 60, 0.1);
   }
+
   .action-btn:disabled {
     opacity: 0.4;
     cursor: default;
