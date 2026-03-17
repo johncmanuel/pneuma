@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { loggedIn, tryAutoAuth } from "./lib/api";
   import { connectWS, disconnectWS } from "./lib/ws";
-  import Login from "./lib/Login.svelte";
+  import Login from "./lib/components/Login.svelte";
   import Sidebar from "./lib/Sidebar.svelte";
   import Admin from "./pages/Admin.svelte";
 
