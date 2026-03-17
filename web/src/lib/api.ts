@@ -1,27 +1,22 @@
 import { writable, derived, get } from "svelte/store";
 
-/* ── Auth state (persisted in localStorage) ─────────────────────── */
+const TOKEN_KEY = "pneuma_token";
 
 const stored =
-  typeof localStorage !== "undefined"
-    ? localStorage.getItem("pneuma_token")
-    : null;
+  typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
 
-/** JWT token for the server. */
+/** JWT token */
 export const authToken = writable(stored ?? "");
 
-/** Reactive flag: true when a token is present. */
 export const loggedIn = derived(authToken, ($t) => $t.length > 0);
 
 // Persist token changes to localStorage
 authToken.subscribe((v) => {
   if (typeof localStorage !== "undefined") {
-    if (v) localStorage.setItem("pneuma_token", v);
-    else localStorage.removeItem("pneuma_token");
+    if (v) localStorage.setItem(TOKEN_KEY, v);
+    else localStorage.removeItem(TOKEN_KEY);
   }
 });
-
-/* ── Current user derived from JWT claims ───────────────────────── */
 
 export interface UserClaims {
   user_id: string;
@@ -33,7 +28,7 @@ export interface UserClaims {
   exp: number;
 }
 
-/** Decode JWT payload (no verification — the server does that). */
+/** Decode and read JWT payload. Offload verification to the server. */
 function decodeJWT(token: string): UserClaims | null {
   try {
     const parts = token.split(".");
@@ -60,16 +55,13 @@ export const currentUser = derived(authToken, ($t) =>
   $t ? decodeJWT($t) : null
 );
 
-/* ── URL helpers ────────────────────────────────────────────────── */
-
 /**
  * API base URL.
- * In production the web UI is served from the same origin as the API,
- * so we use a relative path.  During `vite dev` you can set
+ * In production, the web UI is served from the same origin as the API,
+ * so use a relative path. During `vite dev` you can set
  * VITE_API_BASE to point at a running server (e.g. http://localhost:8989).
  */
 function apiBase(): string {
-  // @ts-ignore import.meta.env
   return (import.meta.env?.VITE_API_BASE as string) ?? "";
 }
 
@@ -81,16 +73,16 @@ export function wsBase(): string {
   return `${proto}//${location.host}`;
 }
 
-/* ── Auth-aware fetch wrapper ───────────────────────────────────── */
-
 export async function apiFetch(
   path: string,
   init: RequestInit = {}
 ): Promise<Response> {
   const token = get(authToken);
   const headers = new Headers(init.headers);
+
   if (token) headers.set("Authorization", `Bearer ${token}`);
-  // Don't set Content-Type for FormData — the browser adds the multipart boundary.
+
+  // Don't set Content-Type for FormData, the browser adds the multipart boundary
   if (
     !headers.has("Content-Type") &&
     init.body &&
@@ -98,15 +90,17 @@ export async function apiFetch(
   ) {
     headers.set("Content-Type", "application/json");
   }
+
   const res = await fetch(`${apiBase()}${path}`, { ...init, headers });
-  // Auto-logout on 401
+
   if (res.status === 401) {
-    authToken.set("");
+    // log out if 401 returned, implying token is invalid/expired.
+    // This'll show the login form for the user afterwards
+    // authToken.set("");
+    logout();
   }
   return res;
 }
-
-/* ── Auth actions ───────────────────────────────────────────────── */
 
 export async function login(
   username: string,
@@ -117,13 +111,15 @@ export async function login(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password })
   });
+
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     return data.message ?? "Login failed";
   }
+
   const data = await res.json();
   authToken.set(data.token);
-  return null; // success
+  return null;
 }
 
 export async function register(
@@ -135,10 +131,12 @@ export async function register(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password })
   });
+
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     return data.message ?? "Registration failed";
   }
+
   const data = await res.json();
   authToken.set(data.token);
   return null;
@@ -150,38 +148,35 @@ export function logout() {
 
 /**
  * On startup, validate any stored token against the server by calling the
- * refresh endpoint. If valid the server returns a new token (extending the
- * session); if invalid (401) the token is cleared so the login screen shows.
+ * refresh endpoint. If valid, the server returns a new token, extending the
+ * session (if, not obviously show the login form)
  * This means users stay logged in across browser sessions and server restarts
  * (provided the server's JWT secret is stable, which it is after first run).
  */
-export async function tryAutoAuth(): Promise<void> {
+export async function tryAutoAuth() {
   const existing = get(authToken);
-  if (!existing) return; // no stored token — show login form
+  if (!existing) return;
 
-  // Quick local sanity-check: drop obviously wrong tokens.
+  // log out if token is malformed or missing expected claims. token can be this way via
+  // user tampering, token format changed, or a variety of other reasons.
   const claims = decodeJWT(existing);
   if (!claims || !claims.username) {
-    authToken.set("");
+    // authToken.set("");
+    logout();
     return;
   }
 
-  // Probe the server. apiFetch auto-clears the token on 401, so on failure
-  // the user will see the login form. On success store the refreshed token.
+  // attempt to refresh
   try {
     const res = await apiFetch("/api/auth/refresh", { method: "POST" });
     if (res.ok) {
       const data = await res.json();
       if (data.token) authToken.set(data.token);
     }
-    // 401 case: apiFetch already called authToken.set("") above.
   } catch {
-    // Network error — keep the existing token; the app will surface 401s
-    // naturally when it starts making library/WS calls.
+    console.warn("Auto-auth refresh failed");
   }
 }
-
-/* ── Stream / artwork URL helpers ───────────────────────────────── */
 
 export function streamUrl(trackId: string): string {
   const token = get(authToken);

@@ -23,7 +23,8 @@ export function connectWS() {
   const token = get(authToken);
   if (!token) return;
 
-  // Prevent double-connect: if a socket is already open or connecting, stop
+  // Prevent double-connect: if a socket is already open or connecting, stop the
+  // connection
   if (
     socket &&
     (socket.readyState === WebSocket.OPEN ||
@@ -32,7 +33,7 @@ export function connectWS() {
     return;
   }
 
-  // Close any lingering previous socket before creating a new one.
+  // Close any old previous sockets before creating a new one.
   if (socket) {
     try {
       socket.close();
