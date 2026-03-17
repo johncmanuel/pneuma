@@ -67,7 +67,6 @@ func main() {
 		cPath = filepath.Join(dir, "config.toml")
 	}
 
-	// Resolve the database path: -db wins, otherwise fall back to config.
 	path := *dbPath
 	if path == "" {
 		cfg, err := config.Load(cPath, dir)
@@ -77,18 +76,13 @@ func main() {
 		path = cfg.Database.Path
 	}
 
-	db, err := sqlite.OpenRaw(path)
+	// FK enforcement must be off for migration 003, involving a recreation of the table, tracks.
+	// The pragma must be set on the connection before a transaction begins; it cannot be changed from inside a transaction.
+	db, err := sqlite.OpenRaw(path, false)
 	if err != nil {
 		fatalf("open db: %v", err)
 	}
 	defer db.Close()
-
-	// FK enforcement must be off for migration 003 (table-recreation of tracks).
-	// The pragma must be set on the connection *before* a transaction begins —
-	// it cannot be changed from inside a transaction.
-	if _, err := db.Exec("PRAGMA foreign_keys=OFF"); err != nil {
-		fatalf("disable fk: %v", err)
-	}
 
 	m, err := sqlite.NewMigrator(db)
 	if err != nil {
@@ -148,7 +142,6 @@ func main() {
 		} else {
 			fmt.Printf("version: %d  dirty: %v\n", ver, dirty)
 		}
-		// version does not re-enable FK or print "done"
 		return
 
 	default:
@@ -159,14 +152,11 @@ func main() {
 		fatalf("%s: %v", cmd, err)
 	}
 
-	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		fatalf("re-enable fk: %v", err)
-	}
-
 	ver, dirty, _ := m.Version()
 	fmt.Printf("done  version: %d  dirty: %v\n", ver, dirty)
 }
 
+// fatalf is a wrapper over fmt.Fprintf but triggers os.Exit(1) after printing.
 func fatalf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "error: "+format+"\n", args...)
 	os.Exit(1)

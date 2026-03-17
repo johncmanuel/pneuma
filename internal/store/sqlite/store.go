@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
@@ -19,15 +20,33 @@ type Store struct {
 }
 
 // OpenRaw opens the SQLite database at path, creates the directory if needed,
-// and applies the standard connection pragmas. It does NOT run migrations.
-// Use Open for normal server startup; use OpenRaw when you need full control
-// over migrations (e.g., the dbmigrate CLI).
-func OpenRaw(path string) (*sql.DB, error) {
+// and applies the standard connection pragmas. NOTE: this does not include migrations logic.
+// See Open (under package sqlite) for the normal server entrypoint.
+func OpenRaw(path string, enableFKs bool) (*sql.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("create db dir: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", path)
+	fkState := "ON"
+	if !enableFKs {
+		fkState = "OFF"
+	}
+
+	pragmas := []string{
+		"_pragma=journal_mode(WAL)",                      // ensure concurrent read and writes
+		"_pragma=synchronous(NORMAL)",                    // use fewer fsyncs for better performance (obvs tradeoff is less data durability)
+		"_pragma=busy_timeout(10000)",                    // 10s retry window
+		"_pragma=cache_size(-32000)",                     // ~32 MB page cache in memory
+		"_pragma=temp_store(MEMORY)",                     // store temp tables in memory instead of on disk to speed up queries
+		fmt.Sprintf("_pragma=foreign_keys(%s)", fkState), // enable/disable foreign key constraints
+	}
+
+	dsn := fmt.Sprintf(
+		"file:%s?%s",
+		path, strings.Join(pragmas, "&"),
+	)
+
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite open %s: %w", path, err)
 	}
@@ -37,26 +56,10 @@ func OpenRaw(path string) (*sql.DB, error) {
 	// is locked" errors that occur when database/sql opens multiple concurrent
 	// connections and the per-connection pragmas (especially busy_timeout) are
 	// not applied to every new connection from the pool.
-	// With WAL mode, reads and writes can overlap efficiently even through one
-	// connection because Go's database/sql queues callers in-process.
+	// NOTE: could change this later in the future to allow for more connections, but
+	// not sure how to avoid SQLITE_BUSY errors while increasing the number of connections.
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-
-	// Pragmas must be set on the single connection before any other use.
-	// Order matters: WAL must be enabled before synchronous/timeout settings.
-	for _, pragma := range []string{
-		"PRAGMA journal_mode=WAL",   // WAL: readers never block writers
-		"PRAGMA synchronous=NORMAL", // safe with WAL, faster than FULL
-		"PRAGMA foreign_keys=ON",
-		"PRAGMA busy_timeout=10000", // 10 s retry window (belt-and-suspenders)
-		"PRAGMA cache_size=-32000",  // ~32 MB page cache
-		"PRAGMA temp_store=MEMORY",  // temp tables in memory
-	} {
-		if _, err := db.Exec(pragma); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("pragma: %w", err)
-		}
-	}
 
 	return db, nil
 }
@@ -64,31 +67,30 @@ func OpenRaw(path string) (*sql.DB, error) {
 // Open creates or opens the SQLite database at path and applies all pending
 // migrations. This is the normal server entrypoint.
 func Open(path string) (*Store, error) {
-	db, err := OpenRaw(path)
+	// Disable FK enforcement while migrations run.
+	//
+	// golang-migrate wraps each migration in a transaction, and SQLite does not
+	// allow the foreign_keys pragma to be changed inside a transaction. However, a
+	// value set on the connection before a transaction begins is honoured for
+	// the duration of that transaction.
+	//
+	// Migration 003 drops and recreates the tracks table; disabling FKs prevents
+	// the cascade-constraint error from tables (e.g. playlist_items) that reference
+	// tracks.
+	db, err := OpenRaw(path, false)
 	if err != nil {
 		return nil, err
-	}
-
-	// Disable FK enforcement while migrations run.
-	// golang-migrate wraps each migration in a transaction, and SQLite does not
-	// allow the foreign_keys pragma to be changed *inside* a transaction — but a
-	// value set on the connection *before* a transaction begins is honoured for
-	// the duration of that transaction. Migration 003 drops and recreates the
-	// tracks table; disabling FKs prevents the cascade-constraint error from
-	// tables (e.g. playlist_items) that reference tracks.
-	if _, err := db.Exec("PRAGMA foreign_keys=OFF"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("disable fk for migrations: %w", err)
 	}
 
 	if err := runMigrations(db); err != nil {
 		db.Close()
 		return nil, err
 	}
+	db.Close()
 
-	if _, err := db.Exec("PRAGMA foreign_keys=ON"); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("re-enable fk after migrations: %w", err)
+	db, err = OpenRaw(path, true)
+	if err != nil {
+		return nil, err
 	}
 
 	return &Store{db: db}, nil
