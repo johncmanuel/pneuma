@@ -85,8 +85,9 @@ func (sc *Scheduler) ScanPath(path string) {
 		track.ID = existing.ID
 		track.CreatedAt = existing.CreatedAt
 		track.UploadedByUserID = existing.UploadedByUserID
-		// ParseFile doesn't compute content hashes — preserve the existing
-		// fingerprint so we don't clobber upload-time SHA-256 values.
+
+		// preserve the existing
+		// fingerprint to avoid clobbering upload-time SHA-256 values.
 		if track.Fingerprint == "" && existing.Fingerprint != "" {
 			track.Fingerprint = existing.Fingerprint
 		}
@@ -134,8 +135,6 @@ func (sc *Scheduler) scan(ctx context.Context) {
 			if err != nil {
 				return nil
 			}
-
-			// Skip if file hasn't changed since last ingest.
 			if existing != nil && !info.ModTime().After(existing.LastModified) {
 				return nil
 			}
@@ -147,13 +146,13 @@ func (sc *Scheduler) scan(ctx context.Context) {
 			}
 
 			isNew := existing == nil
+
+			// Preserve stable identity fields so the upsert matches on ID.
 			if existing != nil {
-				// Preserve stable identity fields so the upsert matches on ID.
 				track.ID = existing.ID
 				track.CreatedAt = existing.CreatedAt
 			}
 
-			// ── Dedup: metadata match (title + artist + album + duration ±2 s) ────
 			if dup, _ := sc.lib.DuplicateByMeta(ctx, track.Title, track.AlbumArtist, track.AlbumName, track.DurationMS, path); dup != nil {
 				sc.log.Info("skipping duplicate (metadata match)", "path", path, "existing", dup.Path)
 				return nil

@@ -74,15 +74,18 @@ func (e *Engine) GetState(userID string) (State, error) {
 	return State{}, fmt.Errorf("no active session for user %q", userID)
 }
 
-// Play starts or resumes playback.
+// Play starts or resumes playback for a track.
 func (e *Engine) Play(ctx context.Context, userID, trackID string, positionMS int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	s := e.getOrCreate(userID)
 	s.Playing = true
+
 	if trackID != "" && trackID != s.TrackID {
 		s.TrackID = trackID
 		s.PositionMS = 0
+
 		// Keep the server's queue_index in sync with the new track so that
 		// playback.changed echoes the correct index back to all clients.
 		for i, id := range s.Queue {
@@ -105,8 +108,10 @@ func (e *Engine) Play(ctx context.Context, userID, trackID string, positionMS in
 func (e *Engine) Pause(ctx context.Context, userID string, paused bool, positionMS int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	s := e.getOrCreate(userID)
 	s.Playing = !paused
+
 	if positionMS > 0 {
 		s.PositionMS = positionMS
 	}
@@ -117,18 +122,21 @@ func (e *Engine) Pause(ctx context.Context, userID string, paused bool, position
 func (e *Engine) Seek(ctx context.Context, userID string, positionMS int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	s := e.getOrCreate(userID)
 	s.PositionMS = positionMS
 	return e.persist(ctx, userID, s)
 }
 
-// SetQueue replaces the playback queue.
+// SetQueue replaces the current playback queue.
 func (e *Engine) SetQueue(ctx context.Context, userID string, trackIDs []string, startIndex int) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	s := e.getOrCreate(userID)
 	s.Queue = trackIDs
 	s.QueueIndex = startIndex
+
 	if startIndex >= 0 && startIndex < len(trackIDs) {
 		s.TrackID = trackIDs[startIndex]
 		s.PositionMS = 0
@@ -140,10 +148,13 @@ func (e *Engine) SetQueue(ctx context.Context, userID string, trackIDs []string,
 func (e *Engine) Next(ctx context.Context, userID string) (string, int, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	s := e.getOrCreate(userID)
+
 	if len(s.Queue) == 0 {
 		return s.TrackID, s.QueueIndex, nil
 	}
+
 	switch s.Repeat {
 	case RepeatOne:
 		s.PositionMS = 0
@@ -168,15 +179,19 @@ func (e *Engine) Next(ctx context.Context, userID string) (string, int, error) {
 func (e *Engine) Prev(ctx context.Context, userID string) (string, int, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	s := e.getOrCreate(userID)
+
 	if len(s.Queue) == 0 {
 		return s.TrackID, s.QueueIndex, nil
 	}
+
 	if s.QueueIndex > 0 {
 		s.QueueIndex--
 	} else if s.Repeat == RepeatQueue {
 		s.QueueIndex = len(s.Queue) - 1
 	}
+
 	s.TrackID = s.Queue[s.QueueIndex]
 	s.PositionMS = 0
 	err := e.persist(ctx, userID, s)
@@ -187,6 +202,7 @@ func (e *Engine) Prev(ctx context.Context, userID string) (string, int, error) {
 func (e *Engine) SetRepeat(ctx context.Context, userID string, mode RepeatMode) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	s := e.getOrCreate(userID)
 	s.Repeat = mode
 	return e.persist(ctx, userID, s)
@@ -194,32 +210,41 @@ func (e *Engine) SetRepeat(ctx context.Context, userID string, mode RepeatMode) 
 
 // SetShuffle toggles shuffle for a user. When enabled, the queue is
 // randomised with the current track pinned to index 0. When disabled, the
-// queue is re-sorted by album name → disc number → track number.
+// queue is re-sorted in this order:
+// 1. album name
+// 2. disc number
+// 3. track number.
 func (e *Engine) SetShuffle(ctx context.Context, userID string, enabled bool) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	s := e.getOrCreate(userID)
 	s.Shuffle = enabled
+
+	// Build a new queue with the current track first, then the rest shuffled.
 	if enabled && len(s.Queue) > 1 {
-		// Build a new queue: current track first, then the rest shuffled.
 		current := s.TrackID
 		rest := make([]string, 0, len(s.Queue)-1)
+
 		for _, id := range s.Queue {
 			if id != current {
 				rest = append(rest, id)
 			}
 		}
+
 		rand.Shuffle(len(rest), func(i, j int) { rest[i], rest[j] = rest[j], rest[i] })
 		s.Queue = append([]string{current}, rest...)
 		s.QueueIndex = 0
 	} else if !enabled && len(s.Queue) > 1 && e.lib != nil {
-		// Restore album order: sort by album_name → disc_number → track_number
+		// if disabled, re-sort the queue by album/disc/track
 		tracks, err := e.lib.TracksByIDs(ctx, s.Queue)
+
 		if err == nil && len(tracks) > 0 {
 			trackMap := make(map[string]*models.Track, len(tracks))
 			for _, t := range tracks {
 				trackMap[t.ID] = t
 			}
+
 			sort.SliceStable(s.Queue, func(i, j int) bool {
 				ti, tj := trackMap[s.Queue[i]], trackMap[s.Queue[j]]
 				if ti == nil || tj == nil {
@@ -233,6 +258,7 @@ func (e *Engine) SetShuffle(ctx context.Context, userID string, enabled bool) er
 				}
 				return ti.TrackNumber < tj.TrackNumber
 			})
+
 			// Update queue index to point to current track in sorted order
 			for i, id := range s.Queue {
 				if id == s.TrackID {
@@ -266,6 +292,7 @@ func (e *Engine) LoadSession(ctx context.Context, userID string) (State, error) 
 	return *s, nil
 }
 
+// getOrCreate returns the session for a user, creating a new one if needed.
 func (e *Engine) getOrCreate(userID string) *State {
 	if s, ok := e.sessions[userID]; ok {
 		if userID != "" {
@@ -280,7 +307,6 @@ func (e *Engine) getOrCreate(userID string) *State {
 
 // persist saves the session to the database and publishes state to WS clients.
 func (e *Engine) persist(ctx context.Context, userID string, s *State) error {
-	// Always notify connected clients, regardless of DB persistence result.
 	defer e.bus.Publish("playback.changed", map[string]any{
 		"track_id":    s.TrackID,
 		"playing":     s.Playing,
@@ -291,7 +317,7 @@ func (e *Engine) persist(ctx context.Context, userID string, s *State) error {
 		"shuffle":     s.Shuffle,
 	})
 
-	// Cannot persist without a valid user — the FK on users(id) requires it.
+	// require valid users to persist sessions;
 	if userID == "" {
 		return nil
 	}
@@ -300,6 +326,7 @@ func (e *Engine) persist(ctx context.Context, userID string, s *State) error {
 	if err != nil {
 		return fmt.Errorf("persist session: marshal queue: %w", err)
 	}
+
 	if err := e.q.UpsertPlaybackSession(ctx, serverdb.UpsertPlaybackSessionParams{
 		ID:         userID,
 		UserID:     userID,

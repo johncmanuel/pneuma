@@ -143,7 +143,6 @@ func (w *Watcher) ingestFile(ctx context.Context, path string) {
 		track.CreatedAt = existing.CreatedAt
 	}
 
-	// ── Dedup: metadata match (title + artist + album + duration ±2 s) ─────────
 	if dup, _ := w.lib.DuplicateByMeta(ctx, track.Title, track.AlbumArtist, track.AlbumName, track.DurationMS, path); dup != nil {
 		w.log.Info("skipping duplicate (metadata match)", "path", path, "existing", dup.Path)
 		return

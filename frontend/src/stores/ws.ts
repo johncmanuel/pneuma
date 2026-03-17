@@ -31,9 +31,13 @@ export function connectWS() {
     ? `${base}/ws?token=${encodeURIComponent(token)}`
     : `${base}/ws`;
 
+  const maskedUrl = token ? `${base}/ws?token=***` : url;
+  console.info(`[WS] Connecting to ${maskedUrl}`);
+
   socket = new WebSocket(url);
 
   socket.onopen = () => {
+    console.info("[WS] Connection established");
     if (get(serverDisconnected)) {
       serverDisconnected.set(false);
       addToast("Reconnected to server.", "success");
@@ -41,99 +45,107 @@ export function connectWS() {
   };
 
   socket.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    switch (msg.type) {
-      case "track.added":
-      case "track.updated":
-      case "track.removed":
-        loadRemoteAlbumGroupsPage(0);
-        break;
-      case "library.deduped": {
-        const n: number = msg.payload?.removed ?? 0;
-        addToast(
-          `Removed ${n} duplicate song${n !== 1 ? "s" : ""} from your library.`,
-          "warning"
-        );
-        loadRemoteAlbumGroupsPage(0);
-        break;
-      }
-      case "playback.changed": {
-        let currentTracks: Track[] = [];
-
-        tracks.subscribe((v) => {
-          currentTracks = v;
-        })();
-
-        let trackObj =
-          currentTracks.find((t) => t.id === msg.payload.track_id) ?? null;
-
-        // If track not in local store, fetch metadata from server
-        if (!trackObj && msg.payload.track_id) {
-          fetchRemoteTrack(msg.payload.track_id).then((remote) => {
-            if (remote) {
-              playerState.update((s) =>
-                s.trackId === remote.id ? { ...s, track: remote } : s
-              );
-            }
-          });
+    try {
+      const msg = JSON.parse(e.data);
+      console.debug("[WS] Received:", msg.type, msg.payload);
+      switch (msg.type) {
+        case "track.added":
+        case "track.updated":
+        case "track.removed":
+          loadRemoteAlbumGroupsPage(0);
+          break;
+        case "library.deduped": {
+          const n: number = msg.payload?.removed ?? 0;
+          addToast(
+            `Removed ${n} duplicate song${n !== 1 ? "s" : ""} from your library.`,
+            "warning"
+          );
+          loadRemoteAlbumGroupsPage(0);
+          break;
         }
+        case "playback.changed": {
+          let currentTracks: Track[] = [];
 
-        // sync state accordingly since queue deals with mixed tracks, or tracks from both local and remote
-        // sources
-        playerState.update((s) => {
-          // If the client queue contains local file paths the server can't know
-          // about, don't let the server overwrite it. The client is the authority
-          // for mixed local+remote queues!
-          const queueHasLocalTracks = s.queue.some(isLocalId);
+          tracks.subscribe((v) => {
+            currentTracks = v;
+          })();
 
-          // If the server sent a new queue state and the desktop client currently doesn't
-          // have any local tracks in its queue, let the client accept the server's queue.
-          const effectiveQueue =
-            msg.payload.queue != null && !queueHasLocalTracks
-              ? (msg.payload.queue as string[])
-              : s.queue;
+          let trackObj =
+            currentTracks.find((t) => t.id === msg.payload.track_id) ?? null;
 
-          // Validate the server's queue_index against the track_id it claims is
-          // playing. Seek/pause broadcasts can carry a stale index (e.g. 0) even
-          // after the client has already advanced via skipNext. Recompute from
-          // the queue when the index doesn't match.
-          let resolvedIndex = s.queueIndex;
-          if (!queueHasLocalTracks && msg.payload.queue_index != null) {
-            const serverIdx: number = msg.payload.queue_index;
-            const serverTrackId: string = msg.payload.track_id ?? s.trackId;
-
-            // If the server's index is consistent with the track_id it claims
-            // is playing, trust it and update the queue index.
-            // Otherwise, the server's index is stale and requires recalculation
-            // from the track_id.
-            if (effectiveQueue[serverIdx] === serverTrackId) {
-              resolvedIndex = serverIdx;
-            } else {
-              const computed = effectiveQueue.indexOf(serverTrackId);
-              resolvedIndex = computed >= 0 ? computed : s.queueIndex;
-            }
+          // If track not in local store, fetch metadata from server
+          if (!trackObj && msg.payload.track_id) {
+            fetchRemoteTrack(msg.payload.track_id).then((remote) => {
+              if (remote) {
+                playerState.update((s) =>
+                  s.trackId === remote.id ? { ...s, track: remote } : s
+                );
+              }
+            });
           }
 
-          // update state accordingly which will update the UI with its new state
-          return {
-            ...s,
-            trackId: msg.payload.track_id ?? s.trackId,
-            track: trackObj ?? s.track,
-            queue: effectiveQueue,
-            queueIndex: resolvedIndex,
-            positionMs: msg.payload.position_ms ?? s.positionMs,
-            paused:
-              msg.payload.playing != null ? !msg.payload.playing : s.paused,
-            shuffle: msg.payload.shuffle ?? s.shuffle,
-            repeat: msg.payload.repeat ?? s.repeat
-          };
-        });
-        break;
+          // sync state accordingly since queue deals with mixed tracks, or tracks from both local and remote
+          // sources
+          playerState.update((s) => {
+            // If the client queue contains local file paths the server can't know
+            // about, don't let the server overwrite it. The client is the authority
+            // for mixed local+remote queues!
+            const queueHasLocalTracks = s.queue.some(isLocalId);
+
+            // If the server sent a new queue state and the desktop client currently doesn't
+            // have any local tracks in its queue, let the client accept the server's queue.
+            const effectiveQueue =
+              msg.payload.queue != null && !queueHasLocalTracks
+                ? (msg.payload.queue as string[])
+                : s.queue;
+
+            // Validate the server's queue_index against the track_id it claims is
+            // playing. Seek/pause broadcasts can carry a stale index (e.g. 0) even
+            // after the client has already advanced via skipNext. Recompute from
+            // the queue when the index doesn't match.
+            let resolvedIndex = s.queueIndex;
+            if (!queueHasLocalTracks && msg.payload.queue_index != null) {
+              const serverIdx: number = msg.payload.queue_index;
+              const serverTrackId: string = msg.payload.track_id ?? s.trackId;
+
+              // If the server's index is consistent with the track_id it claims
+              // is playing, trust it and update the queue index.
+              // Otherwise, the server's index is stale and requires recalculation
+              // from the track_id.
+              if (effectiveQueue[serverIdx] === serverTrackId) {
+                resolvedIndex = serverIdx;
+              } else {
+                const computed = effectiveQueue.indexOf(serverTrackId);
+                resolvedIndex = computed >= 0 ? computed : s.queueIndex;
+              }
+            }
+
+            // update state accordingly which will update the UI with its new state
+            return {
+              ...s,
+              trackId: msg.payload.track_id ?? s.trackId,
+              track: trackObj ?? s.track,
+              queue: effectiveQueue,
+              queueIndex: resolvedIndex,
+              positionMs: msg.payload.position_ms ?? s.positionMs,
+              paused:
+                msg.payload.playing != null ? !msg.payload.playing : s.paused,
+              shuffle: msg.payload.shuffle ?? s.shuffle,
+              repeat: msg.payload.repeat ?? s.repeat
+            };
+          });
+          break;
+        }
       }
+    } catch (err) {
+      console.error("[WS] Failed to parse message:", err, e.data);
     }
   };
 
-  socket.onclose = () => {
+  socket.onclose = (e) => {
+    console.info(
+      `[WS] Connection closed (code=${e.code}, reason=${e.reason || "none"}, intentional=${intentionalClose})`
+    );
     if (intentionalClose) return;
 
     connected.set(false);
@@ -143,10 +155,14 @@ export function connectWS() {
     autoReconnect(() => connectWS());
   };
 
-  socket.onerror = () => socket?.close();
+  socket.onerror = (err) => {
+    console.error("[WS] Connection error:", err);
+    socket?.close();
+  };
 }
 
 export function disconnectWS() {
+  console.info("[WS] Intentional disconnect");
   intentionalClose = true;
   if (reconnectTimer) clearTimeout(reconnectTimer);
   serverDisconnected.set(false);
@@ -156,7 +172,10 @@ export function disconnectWS() {
 /** Send a message to the server over the open WebSocket. */
 export function wsSend(type: string, payload: object) {
   if (socket && socket.readyState === WebSocket.OPEN) {
+    console.debug("[WS] Sending:", type, payload);
     socket.send(JSON.stringify({ type, payload }));
+  } else {
+    console.warn("[WS] Cannot send, socket not open:", type);
   }
 }
 
