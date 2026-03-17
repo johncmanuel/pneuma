@@ -67,14 +67,42 @@ type Config struct {
 	Transcoding TranscodingConfig `toml:"transcoding"`
 }
 
+const (
+	// Server defaults
+	ServerHostDefault = "127.0.0.1"
+	ServerPortDefault = 8989
+
+	// Config file names
+	ConfigFileName           = "config.toml"
+	ConfigDatabaseName       = "pneuma.db"
+	ConfigMusicDirName       = "music"
+	ConfigArtworkDirName     = "artwork"
+	ConfigUploadDirName      = "uploads"
+	ConfigDefaultDataDirName = ".pneuma"
+
+	// Environment variable names
+	EnvDataDir               = "PNEUMA_DATA_DIR"
+	EnvServerHost            = "PNEUMA_SERVER_HOST"
+	EnvServerPort            = "PNEUMA_SERVER_PORT"
+	EnvDatabasePath          = "PNEUMA_DATABASE_PATH"
+	EnvAuthSecretKey         = "PNEUMA_AUTH_SECRET_KEY"
+	EnvLibraryWatchFolders   = "PNEUMA_LIBRARY_WATCH_FOLDERS"
+	EnvArtworkCacheDir       = "PNEUMA_ARTWORK_CACHE_DIR"
+	EnvArtworkMaxSizeMB      = "PNEUMA_ARTWORK_MAX_SIZE_MB"
+	EnvUploadDir             = "PNEUMA_UPLOAD_DIR"
+	EnvUploadMaxSizeMB       = "PNEUMA_UPLOAD_MAX_SIZE_MB"
+	EnvTranscodingFFmpegPath = "PNEUMA_TRANSCODING_FFMPEG_PATH"
+	EnvTranscodingFpcalcPath = "PNEUMA_TRANSCODING_FPCALC_PATH"
+)
+
 // DefaultDataDir returns the canonical base directory for app data.
 // It checks PNEUMA_DATA_DIR, then falls back to ~/.pneuma
 func DefaultDataDir() string {
-	if dir := os.Getenv("PNEUMA_DATA_DIR"); dir != "" {
+	if dir := os.Getenv(EnvDataDir); dir != "" {
 		return dir
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".pneuma")
+	return filepath.Join(home, ConfigDefaultDataDirName)
 }
 
 // DefaultConfig returns a Config with safe defaults derived from dataDir.
@@ -86,24 +114,24 @@ func DefaultConfig(dataDir string) *Config {
 
 	return &Config{
 		Server: ServerConfig{
-			Host: "127.0.0.1",
-			Port: 8989,
+			Host: ServerHostDefault,
+			Port: ServerPortDefault,
 		},
 		Database: DatabaseConfig{
-			Path: filepath.Join(dataDir, "pneuma.db"),
+			Path: filepath.Join(dataDir, ConfigDatabaseName),
 		},
 		Library: LibraryConfig{
-			WatchFolders: []string{filepath.Join(dataDir, "music")},
+			WatchFolders: []string{filepath.Join(dataDir, ConfigMusicDirName)},
 		},
 		Artwork: ArtworkConfig{
-			CacheDir:  filepath.Join(dataDir, "artwork"),
+			CacheDir:  filepath.Join(dataDir, ConfigArtworkDirName),
 			MaxSizeMB: 500,
 		},
 		Auth: AuthConfig{
 			SecretKey: generateKey(),
 		},
 		Upload: UploadConfig{
-			Dir:       filepath.Join(dataDir, "uploads"),
+			Dir:       filepath.Join(dataDir, ConfigUploadDirName),
 			MaxSizeMB: 500,
 		},
 		// fpcalc will be used for fingerprinting in the future (a stretch goal atm)
@@ -116,43 +144,43 @@ func DefaultConfig(dataDir string) *Config {
 
 // applyEnvOverrides parses PNEUMA_* environment variables and overwrites config fields.
 func applyEnvOverrides(cfg *Config) {
-	if v := os.Getenv("PNEUMA_SERVER_PORT"); v != "" {
+	if v := os.Getenv(EnvServerPort); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
 			cfg.Server.Port = p
 		}
 	}
-	if v := os.Getenv("PNEUMA_SERVER_HOST"); v != "" {
+	if v := os.Getenv(EnvServerHost); v != "" {
 		cfg.Server.Host = v
 	}
-	if v := os.Getenv("PNEUMA_DATABASE_PATH"); v != "" {
+	if v := os.Getenv(EnvDatabasePath); v != "" {
 		cfg.Database.Path = v
 	}
-	if v := os.Getenv("PNEUMA_AUTH_SECRET_KEY"); v != "" {
+	if v := os.Getenv(EnvAuthSecretKey); v != "" {
 		cfg.Auth.SecretKey = v
 	}
-	if v := os.Getenv("PNEUMA_LIBRARY_WATCH_FOLDERS"); v != "" {
+	if v := os.Getenv(EnvLibraryWatchFolders); v != "" {
 		cfg.Library.WatchFolders = strings.Split(v, ",")
 	}
-	if v := os.Getenv("PNEUMA_ARTWORK_CACHE_DIR"); v != "" {
+	if v := os.Getenv(EnvArtworkCacheDir); v != "" {
 		cfg.Artwork.CacheDir = v
 	}
-	if v := os.Getenv("PNEUMA_ARTWORK_MAX_SIZE_MB"); v != "" {
+	if v := os.Getenv(EnvArtworkMaxSizeMB); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
 			cfg.Artwork.MaxSizeMB = p
 		}
 	}
-	if v := os.Getenv("PNEUMA_UPLOAD_DIR"); v != "" {
+	if v := os.Getenv(EnvUploadDir); v != "" {
 		cfg.Upload.Dir = v
 	}
-	if v := os.Getenv("PNEUMA_UPLOAD_MAX_SIZE_MB"); v != "" {
+	if v := os.Getenv(EnvUploadMaxSizeMB); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
 			cfg.Upload.MaxSizeMB = p
 		}
 	}
-	if v := os.Getenv("PNEUMA_TRANSCODING_FFMPEG_PATH"); v != "" {
+	if v := os.Getenv(EnvTranscodingFFmpegPath); v != "" {
 		cfg.Transcoding.FFmpegPath = v
 	}
-	if v := os.Getenv("PNEUMA_TRANSCODING_FPCALC_PATH"); v != "" {
+	if v := os.Getenv(EnvTranscodingFpcalcPath); v != "" {
 		cfg.Transcoding.FpcalcPath = v
 	}
 }
@@ -203,6 +231,7 @@ func Save(path string, cfg *Config) error {
 func generateKey() string {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
+		slog.Error("failed to create secret key")
 		return "change-me-please"
 	}
 	return hex.EncodeToString(b)
