@@ -23,7 +23,7 @@ export const isReconnecting = writable(false);
 
 // Only the server URL and JWT token are persisted.
 // The token is short-lived (24 h), rotated automatically, and can be
-// revoked server-side, making leakage far less damaging than a password.
+// revoked server-side
 const SESSION_KEY = "pneuma_session";
 
 interface SavedSession {
@@ -42,11 +42,11 @@ export function clearSession() {
 }
 
 export function loadSession(): SavedSession | null {
-  // sessionStorage takes priority (same window); fall back to localStorage
-  // so it survives an app restart.
   const raw =
     sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY);
+
   if (!raw) return null;
+
   try {
     return JSON.parse(raw);
   } catch {
@@ -54,19 +54,18 @@ export function loadSession(): SavedSession | null {
   }
 }
 
-/* ── Initialisation (call once at startup) ──────────────────────── */
-
 export async function initApi() {
   try {
     const port = await GetLocalPort();
     localPort.set(port);
   } catch {
-    // Running outside Wails (e.g. browser dev) — keep 0
+    console.error("Failed to get local port from backend");
   }
+
   // Load persisted local state from SQLite before any reactive subscribers write.
   await Promise.all([initLocalLibrary(), initRecentAlbums()]);
   await refreshConnection();
-  // If not connected, try auto-reconnect with saved credentials
+
   if (!get(connected)) {
     autoReconnect();
   }
@@ -81,6 +80,7 @@ export async function refreshConnection() {
       // statements (connectWS, loadRemoteAlbumGroupsPage) see valid values immediately.
       const url = await GetServerURL();
       const token = await GetToken();
+
       serverURL.set(url);
       authToken.set(token);
       connected.set(true);
@@ -109,8 +109,9 @@ export async function autoReconnect(onSuccess?: () => void) {
   try {
     await RestoreSession(session.url, session.token);
     await refreshConnection();
+
     if (get(connected)) {
-      // Token was refreshed by RestoreSession — persist the new one.
+      // Token was refreshed via RestoreSession, so persist the new one.
       saveSession(session.url, get(authToken));
       isReconnecting.set(false);
       onSuccess?.();
@@ -118,6 +119,7 @@ export async function autoReconnect(onSuccess?: () => void) {
     }
   } catch {
     // start polling loop below
+    console.warn("Auto-restore failed, starting reconnect loop");
   }
 
   // poll every 5 seconds
@@ -192,10 +194,14 @@ export async function serverFetch(
   init: RequestInit = {}
 ): Promise<Response> {
   const base = get(serverURL);
+
   if (!base) throw new Error("Not connected to server");
+
   const token = get(authToken);
   const headers = new Headers(init.headers);
+
   if (token) headers.set("Authorization", `Bearer ${token}`);
+
   if (!headers.has("Content-Type") && init.body) {
     headers.set("Content-Type", "application/json");
   }
@@ -221,7 +227,7 @@ export function streamUrl(trackId: string, localPath?: string): string {
     return `http://127.0.0.1:${p}/local/stream?path=${encodeURIComponent(localPath)}`;
   }
 
-  // It's a remote track!
+  // remote track
   const base = get(serverURL);
   const token = get(authToken);
   if (base && token) {
@@ -241,6 +247,7 @@ export function artworkUrl(trackId: string): string {
 
   const base = get(serverURL);
   const token = get(authToken);
+
   if (base && token) {
     return `${base}/api/library/tracks/${trackId}/art?token=${encodeURIComponent(token)}`;
   }
