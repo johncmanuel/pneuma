@@ -19,7 +19,7 @@
 
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
-  import { formatDuration } from "./utils";
+  import { formatDuration } from "../utils";
 
   export let track: Track | null = null;
   export let active: boolean = false;

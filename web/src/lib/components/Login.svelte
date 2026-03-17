@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { login, register } from "./api";
+  import { login, register } from "../api";
 
   let username = "";
   let password = "";

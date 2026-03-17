@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { currentUser, logout } from "./api";
+  import { currentUser, logout } from "../api";
 </script>
 
 <nav class="sidebar">
