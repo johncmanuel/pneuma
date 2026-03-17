@@ -1,3 +1,5 @@
+-- All of the main tables
+
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
@@ -10,6 +12,9 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TEXT NOT NULL
 );
 
+-- TODO: there are a lot of other fields that aren't used while looking at the
+-- current database (at version 004):
+-- replay_gain_track, replay_gain_album
 CREATE TABLE IF NOT EXISTS tracks (
     id TEXT PRIMARY KEY,
     path TEXT NOT NULL UNIQUE,
@@ -49,9 +54,12 @@ CREATE TABLE IF NOT EXISTS playlists (
 CREATE TABLE IF NOT EXISTS playlist_items (
     playlist_id TEXT NOT NULL,
     position INTEGER NOT NULL DEFAULT 0,
-    source TEXT NOT NULL DEFAULT 'remote',  -- 'remote' or 'local_ref'
-    track_id TEXT,                           -- server track UUID (for remote)
-    ref_title TEXT NOT NULL DEFAULT '',       -- display/matching metadata (for local_ref)
+    -- 'remote' or 'local_ref', which is a remote track and local track respectively
+    source TEXT NOT NULL DEFAULT 'remote',  
+    -- server track UUID (for remote tracks only)
+    track_id TEXT,                          
+    -- display/matching metadata (for local tracks only)
+    ref_title TEXT NOT NULL DEFAULT '',       
     ref_album TEXT NOT NULL DEFAULT '',
     ref_album_artist TEXT NOT NULL DEFAULT '',
     ref_duration_ms INTEGER NOT NULL DEFAULT 0,
