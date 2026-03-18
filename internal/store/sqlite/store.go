@@ -70,11 +70,6 @@ func OpenRaw(path string, enableFKs bool) (*sql.DB, error) {
 func Open(path string) (*Store, error) {
 	// Disable FK enforcement while migrations run.
 	//
-	// golang-migrate wraps each migration in a transaction, and SQLite does not
-	// allow the foreign_keys pragma to be changed inside a transaction. However, a
-	// value set on the connection before a transaction begins is honoured for
-	// the duration of that transaction.
-	//
 	// Migration 003 drops and recreates the tracks table; disabling FKs prevents
 	// the cascade-constraint error from tables (e.g. playlist_items) that reference
 	// tracks.
@@ -129,6 +124,7 @@ func NewMigrator(db *sql.DB) (*migrate.Migrate, error) {
 	return m, nil
 }
 
+// runMigrations applies all pending migrations to the database.
 func runMigrations(db *sql.DB) error {
 	m, err := NewMigrator(db)
 	if err != nil {
