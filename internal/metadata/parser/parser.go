@@ -72,7 +72,6 @@ func (p *Parser) ParseFile(_ context.Context, path string) (*models.Track, error
 
 	m, err := tag.ReadFrom(f)
 	if err != nil {
-		// No tags — return with filename-derived title.
 		return t, nil
 	}
 
@@ -95,9 +94,9 @@ func (p *Parser) ParseFile(_ context.Context, path string) (*models.Track, error
 
 	// Enrich with ffprobe (duration, bitrate, sample rate).
 	if p.ffprobePath != "" {
-		_ = p.probe(context.Background(), path, t) // best-effort
+		_ = p.probe(context.Background(), path, t)
 	}
-	// Pure-Go fallback when ffprobe is unavailable or returned no duration.
+
 	if t.DurationMS == 0 {
 		_ = parseDurationFallback(path, t)
 	}

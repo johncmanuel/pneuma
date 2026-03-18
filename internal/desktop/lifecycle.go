@@ -14,28 +14,35 @@ import (
 	"pneuma/internal/store/sqlite/desktopdb"
 )
 
+const (
+	ThumbnailsCacheDir = "thumbs"
+	ThumbnailsTempDir  = "pneuma-thumbs"
+	// Use a local-only HTTP server on a random port for streaming local files.
+	LocalHTTPServerAddr = "127.0.0.1:0"
+)
+
+// Startup is called when the app is starting up.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 
 	if db, err := openAppDB(); err != nil {
-		slog.Warn("app db open failed — local state will not be persisted", "err", err)
+		slog.Warn("failed to open database, state will not be persisted", "err", err)
 	} else {
 		a.appDB = db
 		a.dq = desktopdb.New(db)
 	}
 
 	if cacheDir, err := os.UserCacheDir(); err == nil {
-		a.thumbDir = filepath.Join(cacheDir, "pneuma", "thumbs")
+		a.thumbDir = filepath.Join(cacheDir, DesktopAppDirName, ThumbnailsCacheDir)
 	} else {
-		a.thumbDir = filepath.Join(os.TempDir(), "pneuma-thumbs")
+		a.thumbDir = filepath.Join(os.TempDir(), ThumbnailsTempDir)
 		slog.Warn("UserCacheDir unavailable, using temp dir for thumbnails", "dir", a.thumbDir)
 	}
 	if err := os.MkdirAll(a.thumbDir, 0o755); err != nil {
 		slog.Error("failed to create thumbnail cache dir", "dir", a.thumbDir, "err", err)
 	}
 
-	// Start a local-only HTTP server on a random port for streaming local files.
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := net.Listen("tcp", LocalHTTPServerAddr)
 	if err != nil {
 		slog.Error("local stream listener failed", "err", err)
 		return
@@ -54,12 +61,12 @@ func (a *App) Startup(ctx context.Context) {
 		}
 	}()
 
-	// Start the fsnotify watcher for local music folders.
 	a.initLocalWatcher()
 
 	slog.Info("pneuma desktop started", "local_stream_port", a.localPort)
 }
 
+// Shutdown is called when the app is closing.
 func (a *App) Shutdown(_ context.Context) {
 	a.mu.Lock()
 	if a.stopRefresh != nil {

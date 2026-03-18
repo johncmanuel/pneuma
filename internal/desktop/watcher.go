@@ -11,8 +11,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// initLocalWatcher creates the fsnotify watcher and starts the event loop
-// goroutine. It is called from Startup.
+// initLocalWatcher creates the fsnotify watcher and starts the event loop.
 func (a *App) initLocalWatcher() {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -24,10 +23,10 @@ func (a *App) initLocalWatcher() {
 	go a.runLocalWatcher()
 }
 
-// stopLocalWatcher closes the fsnotify watcher. Called from Shutdown.
+// stopLocalWatcher closes the fsnotify watcher.
 func (a *App) stopLocalWatcher() {
 	if a.localWatcher != nil {
-		a.localWatcher.Close() //nolint:errcheck
+		a.localWatcher.Close()
 	}
 }
 
@@ -130,19 +129,19 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 	path := event.Name
 
 	switch {
+	// handle events where a file or directory is created
 	case event.Has(fsnotify.Create):
 		info, err := os.Stat(path)
 		if err != nil {
 			return
 		}
 		if info.IsDir() {
-			// New subdirectory — add it so files placed inside are tracked.
 			if addErr := a.localWatcher.Add(path); addErr != nil {
 				slog.Warn("watcher: failed to add new dir", "path", path, "err", addErr)
 			}
 		} else {
-			// Audio file appeared (new copy or moved in) — debounce per-path so
-			// that Linux inotify's Create+Write+Chmod burst only fires once.
+			// Audio file appeared (new copy or moved in), so debounce per-path
+			// so that Linux inotify's Create+Write+Chmod burst only fires once.
 			ext := strings.ToLower(filepath.Ext(path))
 			if !audioExts[ext] {
 				return
@@ -176,10 +175,10 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 			a.mu.Unlock()
 		}
 
+	// handle events where a file or directory is removed or renamed
 	case event.Has(fsnotify.Remove), event.Has(fsnotify.Rename):
 		ext := strings.ToLower(filepath.Ext(path))
 		if audioExts[ext] {
-			// Single audio file removed — delete by exact path.
 			if err := a.deleteLocalTrackByPath(path); err != nil {
 				slog.Warn("watcher: failed to delete track from DB", "path", path, "err", err)
 			}
@@ -187,7 +186,7 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 				runtime.EventsEmit(a.ctx, "local:track:removed", map[string]any{"path": path})
 			}
 		} else if ext == "" || !strings.Contains(filepath.Base(path), ".") {
-			// Likely a directory was moved/deleted — purge all tracks under it.
+			// directory was moved/deleted, delete all tracks under it.
 			n, err := a.deleteLocalTracksByPathPrefix(path)
 			if err != nil {
 				slog.Warn("watcher: failed to delete tracks by prefix", "path", path, "err", err)
