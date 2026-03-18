@@ -1,16 +1,21 @@
 # pneuma
 
-pneuma is an open-source, self-hostable, and local-first music player and server, designed to give a Spotify-like experience.
+pneuma is an open-source, self-hostable, and local-first music project, designed to give a Spotify-like experience. It is composed of a desktop application for music playback and a server for music storage and streaming.
 
-## Demo
+<!-- TODO: add demo as mp4, add screenshots -->
 
-TBA
+## Highlights
 
-## Features
+- **Self-organizing music library**: A music library is organized using metadata from the music files themselves. Playlists can be created by users to create custom collections of music. Fingerprinting via metadata and hashing allows for the detection of duplicate or modified files.
+- **Real-time playback sync**: WebSocket-driven playback engines keep playback state, queues, and progress tightly in sync between the server and the local client. This is useful for playing music in a playlist with a mix of local and remote audio tracks.
+- **Automatic library monitoring**: Background directory watchers automatically detect newly added or removed music files and update your library in real-time.
+- **Cross-platform**: pneuma natively supports Windows, macOS, and Linux.
 
-- Self-hostable remote server for streaming music to desktop app
+## Why make this?
 
-## Why?
+pneuma was built to address some problems I've had with Spotify.
+
+As a user since 2019, I've noticed that Spotify's UX gradually worsened. Features such as short-form video content embedded within the players, social integration (combining a music streaming and social media service into one), and the sudden increase in AI-generated content have made it difficult to find and listen to music I enjoy.
 
 ## Technology
 
@@ -31,6 +36,7 @@ Install the following:
 2. Node.js 20+
 3. Wails https://wails.io/docs/gettingstarted/installation
 4. sqlc https://docs.sqlc.dev/en/stable/overview/install.html
+5. (OPTIONAL): golang-migrate CLI tool https://github.com/golang-migrate/migrate/tree/master/cmd/migrate
 
 ### Running the desktop application
 
@@ -46,7 +52,7 @@ Run `go run ./cmd/server` to start the server. The default port is 8989.
 
 Run `go build -o build/bin/server ./cmd/server` to create the server executable at `./build/bin/` with the name, `server` (on Unix) or `server.exe` (on Windows).
 
-Upon first start, the server will create a directory `${HOME}/.pneuma/` for storing its SQLite database and other types of data. Visit `localhost:8989` to register an admin user.
+Upon first start, the server will create a directory `${HOME}/.pneuma/` for storing its SQLite database and other types of data. Visit `localhost:8989` to register an admin user and perform admin operations like managing music files for others to stream.
 
 To make changes to the admin dashboard UI, `cd ./web` and run `npm run build`. Restart the server. The server will load the new changes from `./web/dist/`.
 
