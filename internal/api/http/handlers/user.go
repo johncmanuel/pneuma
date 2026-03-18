@@ -15,11 +15,12 @@ type UserHandler struct {
 	secret string
 }
 
+// NewUserHandler creates a new UserHandler.
 func NewUserHandler(users *user.Service, jwtSecret string) *UserHandler {
 	return &UserHandler{users: users, secret: jwtSecret}
 }
 
-// Register POST /api/auth/register  body: {username, password}
+// Register registers a new user with body {username, password}
 func (h *UserHandler) Register(c echo.Context) error {
 	var body struct {
 		Username string `json:"username"`
@@ -39,7 +40,7 @@ func (h *UserHandler) Register(c echo.Context) error {
 		if err == user.ErrUserExists {
 			return echo.NewHTTPError(http.StatusConflict, err.Error())
 		}
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	token, err := middleware.GenerateToken(
@@ -48,7 +49,7 @@ func (h *UserHandler) Register(c echo.Context) error {
 		middleware.AccessTokenTTL,
 	)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusCreated, map[string]any{
@@ -57,7 +58,7 @@ func (h *UserHandler) Register(c echo.Context) error {
 	})
 }
 
-// Login POST /api/auth/login  body: {username, password}
+// Login logs in a user with body {username, password}
 func (h *UserHandler) Login(c echo.Context) error {
 	var body struct {
 		Username string `json:"username"`
@@ -73,7 +74,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 		if err == user.ErrWrongPassword {
 			return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 		}
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	token, err := middleware.GenerateToken(
@@ -83,7 +84,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 	)
 
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
@@ -92,8 +93,7 @@ func (h *UserHandler) Login(c echo.Context) error {
 	})
 }
 
-// Refresh POST /api/auth/refresh.
-// Issues a new token from a valid existing one.
+// Refresh issues a new token from a valid existing one.
 func (h *UserHandler) Refresh(c echo.Context) error {
 	claims := middleware.GetClaims(c)
 	if claims == nil {
@@ -103,7 +103,7 @@ func (h *UserHandler) Refresh(c echo.Context) error {
 	// Re-read user from DB to pick up any permission changes.
 	u, err := h.users.GetByID(c.Request().Context(), claims.UserID)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	if u == nil {
@@ -116,7 +116,7 @@ func (h *UserHandler) Refresh(c echo.Context) error {
 		middleware.AccessTokenTTL,
 	)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
@@ -124,8 +124,7 @@ func (h *UserHandler) Refresh(c echo.Context) error {
 	})
 }
 
-// ChangePassword POST /api/auth/password  body: {user_id, new_password}.
-// Only the authenticated user (changing their own) or an admin may call this.
+// ChangePassword changes a user's password. Only the authenticated user (changing their own) or an admin may call this.
 func (h *UserHandler) ChangePassword(c echo.Context) error {
 	claims := middleware.GetClaims(c)
 	if claims == nil {
@@ -140,13 +139,12 @@ func (h *UserHandler) ChangePassword(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	// Only the owner of the account or an admin may change a password.
 	if claims.UserID != body.UserID && !claims.IsAdmin {
 		return echo.NewHTTPError(http.StatusForbidden, "cannot change another user's password")
 	}
 
 	if err := h.users.ChangePassword(c.Request().Context(), body.UserID, body.NewPassword); err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -165,7 +163,7 @@ func (h *UserHandler) StreamToken(c echo.Context) error {
 		middleware.StreamTokenTTL,
 	)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{

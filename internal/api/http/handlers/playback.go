@@ -84,7 +84,7 @@ func (h *PlaybackHandler) Next(c echo.Context) error {
 	nextID, queueIdx, err := h.engine.Next(c.Request().Context(), claimsUserID(c))
 
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{"track_id": nextID, "queue_index": queueIdx})
@@ -95,7 +95,7 @@ func (h *PlaybackHandler) Prev(c echo.Context) error {
 	prevID, queueIdx, err := h.engine.Prev(c.Request().Context(), claimsUserID(c))
 
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{"track_id": prevID, "queue_index": queueIdx})

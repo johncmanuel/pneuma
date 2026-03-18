@@ -90,7 +90,7 @@ func (s *Service) Update(ctx context.Context, id, name, description, artworkPath
 	})
 }
 
-// Delete removes a playlist and all its items (CASCADE).
+// Delete removes a playlist and all its items.
 func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.q.DeletePlaylist(ctx, id)
 }

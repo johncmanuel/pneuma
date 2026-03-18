@@ -21,7 +21,26 @@ func NewPlaylistHandler(svc *playlist.Service, hub eventPublisher) *PlaylistHand
 	return &PlaylistHandler{svc: svc, hub: hub}
 }
 
-// ListPlaylists GET /api/playlists
+// getPlaylistIfOwner retrieves a playlist by ID and verifies the authenticated user owns it.
+func (h *PlaylistHandler) getPlaylistIfOwner(c echo.Context, id string) (*models.Playlist, error) {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		return nil, echo.NewHTTPError(http.StatusUnauthorized, "missing token")
+	}
+
+	pl, err := h.svc.GetByID(c.Request().Context(), id)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusNotFound, err.Error())
+	}
+
+	if pl.UserID != claims.UserID {
+		return nil, echo.NewHTTPError(http.StatusForbidden, "access denied")
+	}
+
+	return pl, nil
+}
+
+// ListPlaylists lists all playlists for the authenticated user.
 func (h *PlaylistHandler) ListPlaylists(c echo.Context) error {
 	claims := middleware.GetClaims(c)
 
@@ -38,19 +57,19 @@ func (h *PlaylistHandler) ListPlaylists(c echo.Context) error {
 	return c.JSON(http.StatusOK, playlists)
 }
 
-// GetPlaylist GET /api/playlists/:id
+// GetPlaylist gets a playlist by ID
 func (h *PlaylistHandler) GetPlaylist(c echo.Context) error {
 	id := c.Param("id")
-	pl, err := h.svc.GetByID(c.Request().Context(), id)
 
+	pl, err := h.getPlaylistIfOwner(c, id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		return err
 	}
 
 	return c.JSON(http.StatusOK, pl)
 }
 
-// CreatePlaylist POST /api/playlists
+// CreatePlaylist creates a new playlist.
 func (h *PlaylistHandler) CreatePlaylist(c echo.Context) error {
 	claims := middleware.GetClaims(c)
 
@@ -80,9 +99,12 @@ func (h *PlaylistHandler) CreatePlaylist(c echo.Context) error {
 	return c.JSON(http.StatusCreated, pl)
 }
 
-// UpdatePlaylist PUT /api/playlists/:id
+// UpdatePlaylist updates a playlist by ID.
 func (h *PlaylistHandler) UpdatePlaylist(c echo.Context) error {
 	id := c.Param("id")
+	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+		return err
+	}
 
 	var body struct {
 		Name        string `json:"name"`
@@ -102,9 +124,12 @@ func (h *PlaylistHandler) UpdatePlaylist(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// DeletePlaylist DELETE /api/playlists/:id
+// DeletePlaylist deletes a playlist by ID.
 func (h *PlaylistHandler) DeletePlaylist(c echo.Context) error {
 	id := c.Param("id")
+	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+		return err
+	}
 
 	if err := h.svc.Delete(c.Request().Context(), id); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -114,9 +139,12 @@ func (h *PlaylistHandler) DeletePlaylist(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// GetPlaylistItems GET /api/playlists/:id/items
+// GetPlaylistItems gets all items in a playlist by ID.
 func (h *PlaylistHandler) GetPlaylistItems(c echo.Context) error {
 	id := c.Param("id")
+	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+		return err
+	}
 
 	items, err := h.svc.GetItems(c.Request().Context(), id)
 	if err != nil {
@@ -126,9 +154,13 @@ func (h *PlaylistHandler) GetPlaylistItems(c echo.Context) error {
 	return c.JSON(http.StatusOK, items)
 }
 
-// SetPlaylistItems PUT /api/playlists/:id/items
+// SetPlaylistItems replaces all items in a playlist with the given items.
 func (h *PlaylistHandler) SetPlaylistItems(c echo.Context) error {
 	id := c.Param("id")
+	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+		return err
+	}
+
 	var items []models.PlaylistItem
 
 	if err := c.Bind(&items); err != nil {
@@ -143,9 +175,13 @@ func (h *PlaylistHandler) SetPlaylistItems(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// AddPlaylistItem POST /api/playlists/:id/items
+// AddPlaylistItem adds an item to a playlist by ID.
 func (h *PlaylistHandler) AddPlaylistItem(c echo.Context) error {
 	id := c.Param("id")
+	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+		return err
+	}
+
 	var item models.PlaylistItem
 
 	if err := c.Bind(&item); err != nil {

@@ -20,20 +20,21 @@ type AdminHandler struct {
 	q     *serverdb.Queries
 }
 
+// NewAdminHandler creates a new AdminHandler.
 func NewAdminHandler(users *user.Service, q *serverdb.Queries) *AdminHandler {
 	return &AdminHandler{users: users, q: q}
 }
 
-// ListUsers GET /api/admin/users
+// ListUsers lists all users.
 func (h *AdminHandler) ListUsers(c echo.Context) error {
 	users, err := h.users.ListUsers(c.Request().Context())
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusOK, users)
 }
 
-// UpdatePermissions PUT /api/admin/users/:id/permissions
+// UpdatePermissions updates a user's permissions.
 func (h *AdminHandler) UpdatePermissions(c echo.Context) error {
 	claims := middleware.GetClaims(c)
 	ctx := c.Request().Context()
@@ -52,7 +53,7 @@ func (h *AdminHandler) UpdatePermissions(c echo.Context) error {
 		if err == user.ErrNotFound {
 			return echo.NewHTTPError(http.StatusNotFound, "user not found")
 		}
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
@@ -67,7 +68,7 @@ func (h *AdminHandler) UpdatePermissions(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// DeleteUser DELETE /api/admin/users/:id
+// DeleteUser deletes a user.
 func (h *AdminHandler) DeleteUser(c echo.Context) error {
 	claims := middleware.GetClaims(c)
 	ctx := c.Request().Context()
@@ -80,7 +81,7 @@ func (h *AdminHandler) DeleteUser(c echo.Context) error {
 		if err == user.ErrSelfDelete {
 			return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
@@ -95,12 +96,12 @@ func (h *AdminHandler) DeleteUser(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
-// ListAudit GET /api/admin/audit
+// ListAudit shows the last 500 audit entries.
 func (h *AdminHandler) ListAudit(c echo.Context) error {
 	ctx := c.Request().Context()
 	rows, err := h.q.ListAuditEntries(ctx, 500)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	entries := dbconv.AuditsToModels(rows)
 	if entries == nil {

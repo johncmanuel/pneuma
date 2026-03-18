@@ -58,7 +58,7 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		ids := strings.Split(idsParam, ",")
 		tracks, err := h.lib.TracksByIDs(ctx, ids)
 		if err != nil {
-			return internalErr(err)
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, tracks)
 	}
@@ -68,7 +68,7 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		albumArtist := c.QueryParam("album_artist")
 		tracks, err := h.lib.TracksByAlbum(ctx, albumName, albumArtist)
 		if err != nil {
-			return internalErr(err)
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, tracks)
 	}
@@ -89,11 +89,11 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		}
 		tracks, err := h.lib.AllTracksPage(ctx, offset, limit)
 		if err != nil {
-			return internalErr(err)
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 		total, err := h.lib.CountTracks(ctx)
 		if err != nil {
-			return internalErr(err)
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 		return c.JSON(http.StatusOK, map[string]any{
 			"tracks": tracks,
@@ -105,7 +105,7 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 
 	tracks, err := h.lib.AllTracks(ctx)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusOK, tracks)
 }
@@ -114,7 +114,7 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 func (h *LibraryHandler) GetTrack(c echo.Context) error {
 	track, err := h.lib.TrackByID(c.Request().Context(), c.Param("id"))
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if track == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
@@ -122,11 +122,11 @@ func (h *LibraryHandler) GetTrack(c echo.Context) error {
 	return c.JSON(http.StatusOK, track)
 }
 
-// StreamTrack serves the audio file with HTTP Range (206) support.
+// StreamTrack serves the audio file.
 func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 	track, err := h.lib.TrackByID(c.Request().Context(), c.Param("id"))
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if track == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
@@ -134,19 +134,15 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 
 	f, err := os.Open(track.Path)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer f.Close()
 
 	info, err := f.Stat()
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	// Only set Content-Type ourselves; http.ServeContent handles
-	// Accept-Ranges, Content-Length, Content-Range, and 206 status
-	// automatically — pre-setting Content-Length to the full file size
-	// would corrupt partial-content (206) responses.
 	c.Response().Header().Set("Content-Type", mimeFromExt(track.Path))
 	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
 	return nil
@@ -156,7 +152,7 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 func (h *LibraryHandler) ServeTrackArt(c echo.Context) error {
 	track, err := h.lib.TrackByID(c.Request().Context(), c.Param("id"))
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if track == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
@@ -164,7 +160,7 @@ func (h *LibraryHandler) ServeTrackArt(c echo.Context) error {
 
 	f, err := os.Open(track.Path)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer f.Close()
 
@@ -183,7 +179,6 @@ func (h *LibraryHandler) ServeTrackArt(c echo.Context) error {
 		ct = "image/jpeg"
 	}
 
-	// Stable ETag based on content hash — allows immutable caching.
 	sum := sha256.Sum256(pic.Data)
 	etag := `"` + hex.EncodeToString(sum[:8]) + `"`
 	if c.Request().Header.Get("If-None-Match") == etag {
@@ -200,7 +195,7 @@ func (h *LibraryHandler) UpdateTrackMeta(c echo.Context) error {
 	ctx := c.Request().Context()
 	track, err := h.lib.TrackByID(ctx, c.Param("id"))
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if track == nil {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
@@ -243,15 +238,14 @@ func (h *LibraryHandler) UpdateTrackMeta(c echo.Context) error {
 	track.UpdatedAt = time.Now()
 
 	if err := h.lib.UpsertTrack(ctx, track); err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusOK, track)
 }
 
 // ListAlbumGroups returns album groups derived from the tracks table using
 // GROUP BY album_name, album_artist. This is more reliable than /albums because
-// it does not require the albums table to be populated — it reflects the actual
-// music files present in the library. Supports ?offset=&limit=&filter= params.
+// it does not require the albums table to be populated. Supports "?offset=&limit=&filter=" params.
 func (h *LibraryHandler) ListAlbumGroups(c echo.Context) error {
 	ctx := c.Request().Context()
 	offset, _ := strconv.Atoi(c.QueryParam("offset"))
@@ -268,11 +262,11 @@ func (h *LibraryHandler) ListAlbumGroups(c echo.Context) error {
 	}
 	groups, err := h.lib.AllTrackAlbumGroupsPage(ctx, filter, offset, limit)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	total, err := h.lib.CountTrackAlbumGroups(ctx, filter)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if groups == nil {
 		groups = []*models.TrackAlbumGroup{}
@@ -293,7 +287,7 @@ func (h *LibraryHandler) Search(c echo.Context) error {
 	}
 	tracks, err := h.lib.Search(c.Request().Context(), q)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return c.JSON(http.StatusOK, tracks)
 }
@@ -304,7 +298,8 @@ func (h *LibraryHandler) TriggerScan(c echo.Context) error {
 	return c.JSON(http.StatusAccepted, map[string]string{"status": "scan started"})
 }
 
-// UploadTrack POST /api/library/tracks/upload — accepts a multipart audio file.
+// UploadTrack uploads a track to the specified uploads directory.
+// NOTE: this accepts a multipart audio file.
 func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	claims := middleware.GetClaims(c)
 	if claims == nil {
@@ -317,7 +312,6 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "file field required")
 	}
 
-	// Validate extension.
 	ext := strings.ToLower(filepath.Ext(file.Filename))
 	if !isAudioExt(ext) {
 		return echo.NewHTTPError(http.StatusBadRequest, "unsupported audio format: "+ext)
@@ -325,23 +319,21 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 
 	src, err := file.Open()
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer src.Close()
 
-	// Hash the file contents for dedup.
 	hasher := sha256.New()
 	buf, err := io.ReadAll(src)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	hasher.Write(buf)
 	hash := hex.EncodeToString(hasher.Sum(nil))
 
-	// Check if a track with this fingerprint already exists.
 	existing, err := h.lib.TrackByFingerprint(ctx, hash)
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if existing != nil && existing.DeletedAt == nil {
 		return c.JSON(http.StatusConflict, map[string]any{
@@ -350,19 +342,18 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		})
 	}
 
-	// Write file to uploads dir.
 	if err := os.MkdirAll(h.uploadsDir, 0o755); err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	destPath := filepath.Join(h.uploadsDir, hash+ext)
 	if err := os.WriteFile(destPath, buf, 0o644); err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	// If previously soft-deleted, restore and re-enrich it.
 	if existing != nil && existing.DeletedAt != nil {
 		if err := h.lib.RestoreTrack(ctx, existing.ID); err != nil {
-			return internalErr(err)
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 		// Re-read tags in case the file has changed since the original upload.
 		if m, tagErr := tag.ReadFrom(bytes.NewReader(buf)); tagErr == nil {
@@ -385,8 +376,8 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		return c.JSON(http.StatusOK, existing)
 	}
 
-	// Read embedded metadata (tags) from the uploaded file so the initial
-	// record is fully populated — no need to wait for async enrichment.
+	// Read embedded metadata from the uploaded file so the initial
+	// record is fully populated
 	now := time.Now()
 	info, _ := os.Stat(destPath)
 
@@ -427,10 +418,9 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	}
 
 	if err := h.lib.UpsertTrack(ctx, t); err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	// Audit log.
 	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
 		ID:         uuid.NewString(),
 		UserID:     claims.UserID,
@@ -442,13 +432,16 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	})
 
 	h.hub.Publish(string(models.EventTrackAdded), t)
+
 	// Enrich metadata asynchronously (duration, bitrate, tags) using the scanner.
 	// The scanner will publish track.updated when done so all clients refresh.
 	go h.scanner.ScanPath(destPath)
+
 	return c.JSON(http.StatusCreated, t)
 }
 
-// DeleteTrack DELETE /api/library/tracks/:id — soft-deletes a track.
+// DeleteTrack DELETE /api/library/tracks/:id.
+// NOTE: this is a soft delete.
 func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 	claims := middleware.GetClaims(c)
 	if claims == nil {
@@ -458,14 +451,14 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 
 	track, err := h.lib.TrackByID(ctx, c.Param("id"))
 	if err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if track == nil || track.DeletedAt != nil {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 
 	if err := h.lib.SoftDeleteTrack(ctx, track.ID); err != nil {
-		return internalErr(err)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	// If it was a user-uploaded file, remove from disk.
@@ -473,7 +466,6 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 		_ = os.Remove(track.Path)
 	}
 
-	// Audit log.
 	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
 		ID:         uuid.NewString(),
 		UserID:     claims.UserID,
@@ -486,12 +478,6 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 
 	h.hub.Publish(string(models.EventTrackRemoved), track)
 	return c.NoContent(http.StatusNoContent)
-}
-
-// ─── shared helpers (also used by handlers/playback.go) ──────────────────────
-
-func internalErr(err error) *echo.HTTPError {
-	return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 }
 
 func mimeFromExt(path string) string {
@@ -516,6 +502,8 @@ func mimeFromExt(path string) string {
 	}
 }
 
+// TODO: move this to the config file or something similar; would want a
+// shared, single source of truth that other parts of the application can use.
 var allowedAudioExts = map[string]bool{
 	".mp3": true, ".flac": true, ".ogg": true, ".opus": true,
 	".m4a": true, ".aac": true, ".wav": true, ".aiff": true,
