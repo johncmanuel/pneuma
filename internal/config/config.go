@@ -69,7 +69,7 @@ type Config struct {
 
 const (
 	// Server defaults
-	ServerHostDefault = "127.0.0.1"
+	ServerHostDefault = "127.0.0.1" // NOTE: will need to use 0.0.0.0 if using this in docker
 	ServerPortDefault = 8989
 
 	// Config file names

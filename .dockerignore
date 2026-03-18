@@ -1,0 +1,44 @@
+# Version control
+.git
+.github
+.gitignore
+
+# IDEs and Editors
+.vscode
+.idea
+*.swp
+*.swo
+
+# Desktop app's frontend
+frontend/
+node_modules/
+package.json
+package-lock.json
+.prettierrc
+.prettierignore
+
+# Build outputs
+build/
+dist/
+bin/
+tmp/
+out/
+
+# Wails specific 
+wails.json
+main.go
+
+# Env files
+.env
+.env.*
+*.local
+
+# Tests and configs
+sqlc.yaml
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# Docs
+README.md
+LICENSE
