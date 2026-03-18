@@ -19,6 +19,8 @@ type Store struct {
 	db *sql.DB
 }
 
+const SqlServerMigrationsDir = "sql/server/migrations"
+
 // OpenRaw opens the SQLite database at path, creates the directory if needed,
 // and applies the standard connection pragmas. NOTE: this does not include migrations logic.
 // See Open (under package sqlite) for the normal server entrypoint.
@@ -53,9 +55,8 @@ func OpenRaw(path string, enableFKs bool) (*sql.DB, error) {
 
 	// Limit to a single connection so that all goroutines serialise through
 	// the same underlying SQLite handle. This prevents SQLITE_BUSY / "database
-	// is locked" errors that occur when database/sql opens multiple concurrent
-	// connections and the per-connection pragmas (especially busy_timeout) are
-	// not applied to every new connection from the pool.
+	// is locked" errors that occur during heavy workloads like uploading large numbers
+	// of tracks and albums
 	// NOTE: could change this later in the future to allow for more connections, but
 	// not sure how to avoid SQLITE_BUSY errors while increasing the number of connections.
 	db.SetMaxOpenConns(1)
@@ -110,7 +111,7 @@ func (s *Store) DB() *sql.DB {
 // migration files and the provided DB connection. The caller is responsible
 // for calling m.Close() when done.
 func NewMigrator(db *sql.DB) (*migrate.Migrate, error) {
-	sourceDriver, err := iofs.New(ServerMigrations, "sql/server/migrations")
+	sourceDriver, err := iofs.New(ServerMigrations, SqlServerMigrationsDir)
 	if err != nil {
 		return nil, fmt.Errorf("migration source: %w", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"pneuma/internal/store/sqlite"
 	"pneuma/internal/store/sqlite/dbconv"
@@ -20,24 +21,37 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// openAppDB opens (or creates) the app-local SQLite database used to persist
-// desktop client state: local folder list, track cache, recent albums, etc.
-// The database is stored in the OS user-cache directory so it survives app
-// updates but is clearly separate from user documents.
-func openAppDB() (*sql.DB, error) {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
-		return nil, fmt.Errorf("user cache dir: %w", err)
-	}
+// pretty similar logic to store.go, but probably won't take time to dedupe the
+// logic atm
 
-	dir := filepath.Join(cacheDir, "pneuma")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+const (
+	DesktopAppDirName    = "pneuma"
+	DesktopDBName        = "app.db"
+	DesktopMigrationsDir = "sql/desktop/migrations"
+)
+
+// openAppDBRaw opens the SQLite database at path, creates the directory if needed,
+// and applies the standard connection pragmas via DSN.
+func openAppDBRaw(path string) (*sql.DB, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("mkdir appdb: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", filepath.Join(dir, "app.db"))
+	pragmas := []string{
+		"_pragma=journal_mode(WAL)",   // ensure concurrent reads/writes
+		"_pragma=cache_size(-2000)",   // cap the page cache to ~2 MB in memory
+		"_pragma=synchronous(NORMAL)", // use fewer fsyncs for better performance
+		// no need for storing temp tables in memory since desktop app is local
+	}
+
+	dsn := fmt.Sprintf(
+		"file:%s?%s",
+		path, strings.Join(pragmas, "&"),
+	)
+
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("sqlite open %s: %w", path, err)
 	}
 
 	// want to keep connections low to optimize for memory usage, but if general performance bottlenecks,
@@ -45,48 +59,59 @@ func openAppDB() (*sql.DB, error) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	// Memory-conscious SQLite settings:
-	//   WAL mode   – readers don't block the writer; safer than DELETE journal.
-	//   cache_size – cap the page cache to ~2 MB (default is -2000 KiB pages).
-	//   synchronous NORMAL – safe for WAL; skips the extra fsync on each commit.
-	for _, pragma := range []string{
-		`PRAGMA journal_mode=WAL`,
-		`PRAGMA cache_size=-2000`,
-		`PRAGMA synchronous=NORMAL`,
-	} {
-		if _, err = db.Exec(pragma); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("appdb pragma (%s): %w", pragma, err)
-		}
+	return db, nil
+}
+
+// newAppDBMigrator builds a *migrate.Migrate instance backed by the embedded
+// migration files and the provided DB connection. The caller is responsible
+// for calling m.Close() when done.
+func newAppDBMigrator(db *sql.DB) (*migrate.Migrate, error) {
+	sourceDriver, migrErr := iofs.New(sqlite.DesktopMigrations, DesktopMigrationsDir)
+	if migrErr != nil {
+		return nil, fmt.Errorf("desktop migration source: %w", migrErr)
 	}
 
-	// Run versioned schema migrations via golang-migrate.
-	{
-		sourceDriver, migrErr := iofs.New(sqlite.DesktopMigrations, "sql/desktop/migrations")
-		if migrErr != nil {
-			db.Close()
-			return nil, fmt.Errorf("desktop migration source: %w", migrErr)
-		}
-
-		dbDriver, migrErr := migratesqlite.WithInstance(db, &migratesqlite.Config{})
-		if migrErr != nil {
-			db.Close()
-			return nil, fmt.Errorf("desktop migration db driver: %w", migrErr)
-		}
-
-		m, migrErr := migrate.NewWithInstance("iofs", sourceDriver, "sqlite", dbDriver)
-		if migrErr != nil {
-			db.Close()
-			return nil, fmt.Errorf("desktop migrate new: %w", migrErr)
-		}
-
-		if migrErr = m.Up(); migrErr != nil && !errors.Is(migrErr, migrate.ErrNoChange) {
-			db.Close()
-			return nil, fmt.Errorf("apply desktop migrations: %w", migrErr)
-		}
-
-		slog.Info("desktop database opened and migrated", "path", db.Stats())
+	dbDriver, migrErr := migratesqlite.WithInstance(db, &migratesqlite.Config{})
+	if migrErr != nil {
+		return nil, fmt.Errorf("desktop migration db driver: %w", migrErr)
 	}
+
+	m, migrErr := migrate.NewWithInstance("iofs", sourceDriver, "sqlite", dbDriver)
+	if migrErr != nil {
+		return nil, fmt.Errorf("desktop migrate new: %w", migrErr)
+	}
+
+	return m, nil
+}
+
+// openAppDB opens (or creates) the app-local SQLite database used to persist
+// desktop client state: local folder list, track cache, recent albums, etc.
+// The database is stored in the OS user-cache directory so it survives app
+// updates.
+func openAppDB() (*sql.DB, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return nil, fmt.Errorf("user cache dir: %w", err)
+	}
+
+	dbPath := filepath.Join(cacheDir, DesktopAppDirName, DesktopDBName)
+	db, err := openAppDBRaw(dbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	m, migrErr := newAppDBMigrator(db)
+	if migrErr != nil {
+		db.Close()
+		return nil, migrErr
+	}
+
+	if migrErr = m.Up(); migrErr != nil && !errors.Is(migrErr, migrate.ErrNoChange) {
+		db.Close()
+		return nil, fmt.Errorf("apply desktop migrations: %w", migrErr)
+	}
+
+	slog.Info("desktop database opened and migrated", "path", dbPath)
 
 	return db, nil
 }
