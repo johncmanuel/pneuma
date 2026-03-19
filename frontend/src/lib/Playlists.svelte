@@ -691,10 +691,11 @@
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
-    background: var(--accent);
+    background: var(--accent-dim);
     color: #fff;
     border: none;
   }
+
   .small-btn.secondary {
     background: var(--surface);
     color: var(--text-1);
