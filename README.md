@@ -9,7 +9,7 @@ pneuma is an open-source, self-hostable, and local-first music project, designed
 ## Highlights
 
 - **Self-organizing music library**: A music library is organized using metadata from the music files themselves. Playlists can be created by users to create custom collections of music. When using the server to store and stream your music, it makes use of fingerprinting via metadata and hashing to detect duplicate songs.
-- **Real-time playback sync**: WebSocket-driven playback engines keep playback state, queues, and progress tightly in sync between the server and the local client. This is useful for playing music in a playlist with a mix of local and remote audio tracks.
+- **Real-time playback sync**: WebSocket-driven playback engines keep playback state, queues, and progress tightly in sync between the server and the local client. This is useful when playing music in a playlist with a mix of local and remote audio tracks.
 - **Automatic library monitoring**: Background directory watchers automatically detect newly added or removed music files and update your library in real-time.
 - **Cross-platform**: pneuma natively supports Windows, macOS, and Linux.
 - **Offline-first**: pneuma is designed to work entirely offline. The desktop application can be used without the server, focusing on local playback for music on your own machine.
@@ -74,7 +74,8 @@ By default, it embeds the admin dashboard UI from `./web/dist/` (if it exists). 
 
 ```bash
 docker build -t pneuma:latest .
-docker run -p 8989:8989 pneuma
+docker run -d -p 8989:8989 pneuma
+# use docker stop <container id> if you want to stop it
 ```
 
 To build the server without the UI:
