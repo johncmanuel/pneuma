@@ -556,6 +556,9 @@
           on:error={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
+          on:load={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = "";
+          }}
         />
         <div class="art-placeholder" style="position:absolute">
           <Music size={16} />
