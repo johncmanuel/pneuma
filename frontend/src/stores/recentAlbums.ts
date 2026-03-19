@@ -3,9 +3,6 @@ import { artworkUrl, localBase } from "../utils/api";
 import { db } from "../utils/db";
 import type { desktop } from "../../wailsjs/go/models";
 
-type RecentAlbumModel = desktop.RecentAlbum;
-type RecentPlaylistModel = desktop.RecentPlaylist;
-
 export interface RecentAlbum {
   key: string;
   name: string;
@@ -43,7 +40,7 @@ recentPlaylists.subscribe((v) => {
   }
 });
 
-function toModelAlbum(album: RecentAlbum): RecentAlbumModel {
+function toModelAlbum(album: RecentAlbum): desktop.RecentAlbum {
   return {
     Key: album.key,
     Name: album.name,
@@ -55,7 +52,7 @@ function toModelAlbum(album: RecentAlbum): RecentAlbumModel {
   };
 }
 
-function toModelPlaylist(playlist: RecentPlaylist): RecentPlaylistModel {
+function toModelPlaylist(playlist: RecentPlaylist): desktop.RecentPlaylist {
   return {
     ID: playlist.id,
     Name: playlist.name,
@@ -64,7 +61,7 @@ function toModelPlaylist(playlist: RecentPlaylist): RecentPlaylistModel {
   };
 }
 
-function fromModelAlbum(model: RecentAlbumModel): RecentAlbum {
+function fromModelAlbum(model: desktop.RecentAlbum): RecentAlbum {
   return {
     key: model.Key,
     name: model.Name,
@@ -76,7 +73,7 @@ function fromModelAlbum(model: RecentAlbumModel): RecentAlbum {
   };
 }
 
-function fromModelPlaylist(model: RecentPlaylistModel): RecentPlaylist {
+function fromModelPlaylist(model: desktop.RecentPlaylist): RecentPlaylist {
   return {
     id: model.ID,
     name: model.Name,
@@ -110,8 +107,12 @@ export function recordRecentPlaylist(pl: {
 }) {
   recentPlaylists.update((list) => {
     const filtered = list.filter((r) => r.id !== pl.id);
-    return [{ ...pl, playedAt: Date.now() }, ...filtered].slice(0, 20);
+    return [{ ...pl, playedAt: Date.now() }, ...filtered];
   });
+}
+
+export function removeRecentPlaylist(id: string) {
+  recentPlaylists.update((list) => list.filter((r) => r.id !== id));
 }
 
 export function getRecentAlbumArtUrl(album: RecentAlbum): string {

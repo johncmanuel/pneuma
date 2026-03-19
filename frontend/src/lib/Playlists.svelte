@@ -447,12 +447,13 @@
   .new-btn {
     padding: 6px 14px;
     border-radius: var(--r-md);
-    background: var(--accent);
+    background: var(--accent-dim);
     color: #fff;
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
   }
+
   .new-btn:hover {
     filter: brightness(1.1);
   }

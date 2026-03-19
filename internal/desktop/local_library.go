@@ -55,9 +55,9 @@ func (a *App) scanAndUpsertSingleFile(path, folder string) (LocalTrack, error) {
 // Instead of returning the full list, progress is streamed to the frontend
 // via Wails events so the UI can show "42 / 200 songs scanned":
 //
-//	"local:scan:start"    → { folder string, total int }
-//	"local:track:scanned" → { folder string, done int, total int, track LocalTrack }
-//	"local:scan:done"     → { folder string, count int }
+//	"local:scan:start"    -> { folder string, total int }
+//	"local:track:scanned" -> { folder string, done int, total int, track LocalTrack }
+//	"local:scan:done"     -> { folder string, count int }
 //
 // The method itself returns nil on success or an error.
 func (a *App) ScanLocalFolderStream(dir string) error {

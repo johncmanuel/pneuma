@@ -130,7 +130,6 @@
       pneuma, an open-source, self-hostable, and local-first music player and
       server.
     </p>
-    <p class="text-3">v0.1.0</p>
     <p class="text-3">
       Source code available on <button
         on:click|preventDefault={() =>

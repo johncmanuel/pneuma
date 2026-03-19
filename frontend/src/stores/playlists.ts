@@ -15,8 +15,9 @@ import { addToast } from "./toasts";
 import { playerState, type Track } from "./player";
 import { fetchTracksByIDs } from "./library";
 import { resolveLocalTracksByPaths, isLocalId } from "./localLibrary";
-import { recordRecentPlaylist } from "./recentAlbums";
+import { recordRecentPlaylist, removeRecentPlaylist } from "./recentAlbums";
 import { wsSend } from "./ws";
+import { serverFetch } from "../utils/api";
 
 export interface PlaylistSummary {
   id: string;
@@ -82,7 +83,19 @@ export async function createPlaylist(name: string, description = "") {
 
 export async function deletePlaylist(id: string) {
   try {
+    const pl = get(playlists).find((p) => p.id === id);
     await DeleteLocalPlaylist(id);
+
+    // remove from recently played
+    removeRecentPlaylist(id);
+
+    // remove from remote server if applicable
+    if (pl?.remote_playlist_id) {
+      serverFetch(`/api/playlists/${pl.remote_playlist_id}`, {
+        method: "DELETE"
+      }).catch((e) => console.warn("Failed to delete remote playlist:", e));
+    }
+
     await loadPlaylists();
     // If we're viewing the deleted playlist, clear selection.
     if (get(selectedPlaylistId) === id) {

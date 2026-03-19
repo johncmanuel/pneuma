@@ -445,14 +445,6 @@ export async function removeLocalFolder(dir: string) {
   await scanLocalFolders();
 }
 
-/**
- * Scan all registered local folders, streaming per-file progress.
- *
- * Each folder is scanned via ScanLocalFolderStream which emits Wails events:
- *   "local:scan:start"    → { folder, total }
- *   "local:track:scanned" → { folder, done, total, track }
- *   "local:scan:done"     → { folder, count }
- */
 export async function scanLocalFolders() {
   const dirs = get(localFolders);
   if (dirs.length === 0) {
@@ -461,8 +453,6 @@ export async function scanLocalFolders() {
   }
 
   const myGen = ++scanGeneration;
-
-  // Show existing data immediately while the scan runs in the background.
   const existingTracks = get(localTracks);
   const hasCache = existingTracks.length > 0;
 
@@ -478,7 +468,6 @@ export async function scanLocalFolders() {
         )
     );
 
-    // Set up a per-file progress listener.
     const cancelTrackListener = EventsOn("local:track:scanned", (data: any) => {
       if (scanGeneration !== myGen) return;
       scanProgress.set({
@@ -488,7 +477,6 @@ export async function scanLocalFolders() {
       });
     });
 
-    // Scan each folder sequentially
     for (const dir of effectiveDirs) {
       if (scanGeneration !== myGen) break;
       try {
@@ -498,13 +486,11 @@ export async function scanLocalFolders() {
       }
     }
 
-    // Clean up event listener.
     cancelTrackListener();
     scanProgress.set(null);
 
     if (scanGeneration !== myGen) return;
 
-    // Refresh album groups from the database (paginated).
     await loadLocalAlbumGroups(0, get(localAlbumFilter));
   } finally {
     localLoading.set(false);

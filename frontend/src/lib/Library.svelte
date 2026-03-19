@@ -703,7 +703,7 @@
         {:else if $activeTab === "local" && $scanProgress}
           <div style="text-align: center; padding: 24px;">
             <p class="text-3" style="margin-bottom: 8px;">
-              Scanning folders...
+              Scanning music files in: {$scanProgress.folder}
             </p>
             <p class="text-3">
               {$scanProgress.done} / {$scanProgress.total} files
