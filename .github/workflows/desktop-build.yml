@@ -46,7 +46,7 @@ jobs:
           # need to keep node at 22.x rather than latest to avoid build issues with
           # libwebkit2gtk-4.0-dev (AFAIK, ubuntu 24 drops this specific package). This
           # version is needed to work with wails
-          # node-version: "22.x"
+          node-version: "22.x"
 
       # - name: Build wails
       #   uses: dAppServer/wails-build-action@v2.2
