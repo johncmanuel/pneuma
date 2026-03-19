@@ -235,8 +235,10 @@ export function streamUrl(trackId: string, localPath?: string): string {
     return `http://127.0.0.1:${p}/local/stream?path=${encodeURIComponent(trackId)}`;
   }
 
-  // If an explicit local path is provided and the port is available, use the local server
-  if (localPath && p) {
+  // If an explicit local path is provided and the port is available, use the local server.
+  // Only applies when the trackId is a local (path-style) ID; remote tracks with UUID IDs
+  // have server-side paths that the desktop app can never access.
+  if (localPath && isLocalId(trackId) && p) {
     return `http://127.0.0.1:${p}/local/stream?path=${encodeURIComponent(localPath)}`;
   }
 

@@ -496,6 +496,15 @@
     skipNext();
   }
 
+  function onAudioError(event: Event) {
+    const target = event.currentTarget as HTMLAudioElement;
+    const err = target.error;
+
+    console.error(
+      `[Audio]: ${err?.message ?? "no message"}, error code: ${err?.code ?? "unknown"}, src: ${target.src}`
+    );
+  }
+
   function onTimeUpdate() {
     if (!seeking) {
       playerState.update((s) => ({
@@ -535,6 +544,7 @@
     on:ended={onEnded}
     on:loadedmetadata={changeAudioDuration}
     on:durationchange={changeAudioDuration}
+    on:error={onAudioError}
     preload="metadata"
   ></audio>
   <div class="now-playing">
