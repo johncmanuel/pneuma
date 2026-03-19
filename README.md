@@ -2,7 +2,12 @@
 
 pneuma is an open-source, self-hostable, and local-first music project, designed to give a Spotify-like experience. It is composed of a desktop application for local music playback and a server for music storage and streaming.
 
-<!-- TODO: add demo as mp4, add screenshots -->
+<!-- TODO: add demo as mp4 -->
+
+![Screenshot 1](.github/imgs/Screenshot_20260319_105737.png)
+![Screenshot 2](.github/imgs/Screenshot_20260319_110300.png)
+![Screenshot 3](.github/imgs/Screenshot_20260319_110354.png)
+![Screenshot 4](.github/imgs/Screenshot_20260319_110437.png)
 
 > NOTE: This project is currently under active development. Expect bugs and possibly breaking changes.
 
@@ -32,6 +37,22 @@ pneuma is built with:
 5. sqlc
 6. Svelte
 7. Docker (for server deployment)
+
+## Metadata Structure
+
+pneuma supports the following metadata for each individual track.
+
+1. Title
+2. Artist
+3. Album
+4. Album Artist
+5. Track Number
+6. Disc Number
+7. Duration
+8. Album Artwork
+9. Sample Rate
+10. Bitrate
+11. Genre
 
 ## Getting Started
 
