@@ -1,18 +1,11 @@
-# https://wails.io/docs/guides/crossplatform-build
-# https://github.com/dAppServer/wails-build-action/blob/main/action.yml
-
 name: Wails build
 
 on:
   push:
     tags:
-      # Match any new tag (e.g., v1.0.0)
       - "*"
 
 env:
-  # Necessary for most environments as build failure can occur due to OOM issues
-  NODE_OPTIONS: "--max-old-space-size=4096"
-
   APP_NAME: "pneuma"
 
 jobs:
@@ -29,6 +22,7 @@ jobs:
           - platform: "darwin/universal"
             os: "macos-latest"
 
+    # https://github.com/dAppServer/wails-build-action/tree/dev/actions/build/wails2#wails-v2-full-pipeline 
     runs-on: ${{ matrix.build.os }}
     steps:
       - name: Checkout
@@ -37,15 +31,27 @@ jobs:
           submodules: recursive
 
       - name: Build wails
-        uses: dAppServer/wails-build-action@v2.2
+        uses: host-uk/build@v4
         id: build
         with:
           build-name: ${{ env.APP_NAME }}
           build-platform: ${{ matrix.build.platform }}
-          package: true
-          go-version: "1.23"
+          # go-version: "1.23"
           # need to keep node at 22.x rather than latest to avoid build issues with
           # libwebkit2gtk-4.0-dev (AFAIK, ubuntu 24 drops this specific package). This
           # version is needed to work with wails
-          # See linux installation here: https://wails.io/docs/gettingstarted/installation/
-          node-version: "22.x"
+          # node-version: "22.x"
+
+      # - name: Build wails
+      #   uses: dAppServer/wails-build-action@v2.2
+      #   id: build
+      #   with:
+      #     build-name: ${{ env.APP_NAME }}
+      #     build-platform: ${{ matrix.build.platform }}
+      #     package: true
+      #     go-version: "1.23"
+      #     # need to keep node at 22.x rather than latest to avoid build issues with
+      #     # libwebkit2gtk-4.0-dev (AFAIK, ubuntu 24 drops this specific package). This
+      #     # version is needed to work with wails
+      #     # See linux installation here: https://wails.io/docs/gettingstarted/installation/
+      #     node-version: "22.x"
