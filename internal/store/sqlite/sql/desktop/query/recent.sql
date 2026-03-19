@@ -22,6 +22,9 @@ ON CONFLICT(key) DO UPDATE SET
 -- name: DeleteRecentAlbum :exec
 DELETE FROM recent_albums WHERE key = ?;
 
+-- name: DeleteAllRecentAlbums :exec
+DELETE FROM recent_albums;
+
 -- name: GetRecentPlaylists :many
 SELECT id, name, artwork_path, played_at 
 FROM recent_playlists 
@@ -42,3 +45,6 @@ ON CONFLICT(id) DO UPDATE SET
 
 -- name: DeleteRecentPlaylist :exec
 DELETE FROM recent_playlists WHERE id = ?;
+
+-- name: DeleteAllRecentPlaylists :exec
+DELETE FROM recent_playlists;

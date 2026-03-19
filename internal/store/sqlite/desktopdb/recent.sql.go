@@ -10,6 +10,24 @@ import (
 	"database/sql"
 )
 
+const deleteAllRecentAlbums = `-- name: DeleteAllRecentAlbums :exec
+DELETE FROM recent_albums
+`
+
+func (q *Queries) DeleteAllRecentAlbums(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllRecentAlbums)
+	return err
+}
+
+const deleteAllRecentPlaylists = `-- name: DeleteAllRecentPlaylists :exec
+DELETE FROM recent_playlists
+`
+
+func (q *Queries) DeleteAllRecentPlaylists(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllRecentPlaylists)
+	return err
+}
+
 const deleteRecentAlbum = `-- name: DeleteRecentAlbum :exec
 DELETE FROM recent_albums WHERE key = ?
 `

@@ -54,6 +54,19 @@ export function loadSession(): SavedSession | null {
   }
 }
 
+/** Decode a JWT and return the user_id claim, or null if unavailable. */
+export function decodeJWTUserId(token: string): string | null {
+  if (!token) return null;
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1]));
+    return payload.user_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function initApi() {
   try {
     const port = await GetLocalPort();

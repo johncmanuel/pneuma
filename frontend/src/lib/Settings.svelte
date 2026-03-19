@@ -14,6 +14,9 @@
     isReconnecting,
     stopAutoReconnect
   } from "../utils/api";
+  import { recentAlbums, recentPlaylists } from "../stores/recentAlbums";
+  import { db } from "../utils/db";
+  import { addToast } from "../stores/toasts";
   import { RotateCcw } from "@lucide/svelte";
   import { BrowserOpenURL } from "../../wailsjs/runtime";
 
@@ -59,6 +62,13 @@
     ClearArtworkCache();
     cacheCleared = true;
     setTimeout(() => (cacheCleared = false), 3000);
+  }
+
+  async function handleResetRecent() {
+    await db.clearAllRecent();
+    recentAlbums.set([]);
+    recentPlaylists.set([]);
+    addToast("Recently played has been reset.", "info");
   }
 </script>
 
@@ -122,6 +132,14 @@
     </p>
     <button on:click={handleArtworkCacheClear}>Clear Artwork Cache</button>
     {#if cacheCleared}<p class="msg">Cache cleared.</p>{/if}
+  </div>
+
+  <div class="group">
+    <h3>Data</h3>
+    <p class="text-3">
+      Clear all recently played albums and playlists from the sidebar.
+    </p>
+    <button on:click={handleResetRecent}>Reset Recently Played</button>
   </div>
 
   <div class="group">

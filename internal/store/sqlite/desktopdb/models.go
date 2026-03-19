@@ -8,11 +8,6 @@ import (
 	"database/sql"
 )
 
-type Kv struct {
-	Key   string
-	Value string
-}
-
 type LocalPlaylist struct {
 	ID               string
 	Name             string

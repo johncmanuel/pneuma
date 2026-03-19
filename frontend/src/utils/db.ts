@@ -1,11 +1,9 @@
 import {
-  AppDBGet,
-  AppDBSet,
-  AppDBDelete,
   GetRecentAlbums,
   GetRecentPlaylists,
   SetRecentAlbum,
-  SetRecentPlaylist
+  SetRecentPlaylist,
+  ClearAllRecent
 } from "../../wailsjs/go/desktop/App";
 import type { desktop } from "../../wailsjs/go/models";
 
@@ -13,40 +11,13 @@ type RecentAlbum = desktop.RecentAlbum;
 type RecentPlaylist = desktop.RecentPlaylist;
 
 /**
- * Async key-value store backed by the app's local SQLite database.
- * Helps with interactions with database.
+ * helper functions backed by the app's local SQLite database for recent
+ * albums/playlists.
  *
- * All methods are fire-safe: errors are swallowed so a DB hiccup never
- * crashes the UI.  The Go backend returns "" for missing keys, which is
- * translated to `null` here so callers can distinguish "not stored" from
- * an explicitly empty string.
- *
- * When running outside Wails, the window.go bridge is absent and every call
- * falls through to the `catch` blocks, returning null or doing nothing.
- * The app will still work, but without persistence.
+ * All methods are fire-safe by ensuring errors are swallowed so a DB hiccup never
+ * crashes the UI.
  */
 export const db = {
-  async get(key: string): Promise<string | null> {
-    try {
-      const v = await AppDBGet(key);
-      return v === "" ? null : v;
-    } catch {
-      return null;
-    }
-  },
-
-  async set(key: string, value: string): Promise<void> {
-    try {
-      await AppDBSet(key, value);
-    } catch {}
-  },
-
-  async del(key: string): Promise<void> {
-    try {
-      await AppDBDelete(key);
-    } catch {}
-  },
-
   async getRecentAlbums(): Promise<RecentAlbum[]> {
     try {
       return await GetRecentAlbums();
@@ -72,6 +43,12 @@ export const db = {
   async setRecentPlaylist(playlist: RecentPlaylist): Promise<void> {
     try {
       await SetRecentPlaylist(playlist);
+    } catch {}
+  },
+
+  async clearAllRecent(): Promise<void> {
+    try {
+      await ClearAllRecent();
     } catch {}
   }
 };

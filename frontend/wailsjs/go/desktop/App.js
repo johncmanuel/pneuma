@@ -6,20 +6,12 @@ export function AddLocalPlaylistItem(arg1, arg2) {
   return window['go']['desktop']['App']['AddLocalPlaylistItem'](arg1, arg2);
 }
 
-export function AppDBDelete(arg1) {
-  return window['go']['desktop']['App']['AppDBDelete'](arg1);
-}
-
-export function AppDBGet(arg1) {
-  return window['go']['desktop']['App']['AppDBGet'](arg1);
-}
-
-export function AppDBSet(arg1, arg2) {
-  return window['go']['desktop']['App']['AppDBSet'](arg1, arg2);
-}
-
 export function ChooseLocalFolder() {
   return window['go']['desktop']['App']['ChooseLocalFolder']();
+}
+
+export function ClearAllRecent() {
+  return window['go']['desktop']['App']['ClearAllRecent']();
 }
 
 export function ClearArtworkCache() {

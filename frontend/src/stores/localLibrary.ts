@@ -11,7 +11,7 @@ import {
   UnwatchLocalFolder
 } from "../../wailsjs/go/desktop/App";
 import { EventsOn } from "../../wailsjs/runtime/runtime";
-import { db } from "../utils/db";
+import { authToken, decodeJWTUserId } from "../utils/api";
 import { playerState, type Track } from "./player";
 import { addToast } from "./toasts";
 
@@ -37,14 +37,26 @@ export function isLocalId(id: string): boolean {
   return id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(id);
 }
 
-const KEY_FOLDERS = "local_folders";
+const LOCAL_FOLDERS_KEY_PREFIX = "pneuma_local_folders";
+
+/**
+ * Returns the localStorage key for local folders, scoped by the current
+ * user's ID from the JWT token. Falls back to "default" when no token
+ * is available so folders can still be managed while disconnected.
+ */
+function getLocalFoldersKey(): string {
+  const token = get(authToken);
+  const userId = decodeJWTUserId(token);
+  return `${LOCAL_FOLDERS_KEY_PREFIX}_${userId ?? "default"}`;
+}
 
 let _initialized = false;
 
 export const localFolders = writable<string[]>([]);
 
 localFolders.subscribe((v) => {
-  if (_initialized) void db.set(KEY_FOLDERS, JSON.stringify(v));
+  if (_initialized)
+    localStorage.setItem(getLocalFoldersKey(), JSON.stringify(v));
 });
 
 export const localTracks = writable<LocalTrack[]>([]);
@@ -330,10 +342,10 @@ export async function resolveLocalTracksByPaths(
 }
 
 /**
- * Load all persisted local-library state from SQLite into the Svelte stores.
+ * Load all persisted local-library state from localStorage into the Svelte stores.
  */
 export async function initLocalLibrary(): Promise<void> {
-  const foldersRaw = await db.get(KEY_FOLDERS);
+  const foldersRaw = localStorage.getItem(getLocalFoldersKey());
 
   _initialized = true;
 
@@ -341,7 +353,7 @@ export async function initLocalLibrary(): Promise<void> {
   try {
     if (foldersRaw) folders = JSON.parse(foldersRaw);
   } catch {
-    console.warn("Failed to parse local folders from DB");
+    console.warn("Failed to parse local folders from localStorage");
   }
 
   localFolders.set(folders);

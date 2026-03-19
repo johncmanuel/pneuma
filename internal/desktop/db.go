@@ -127,36 +127,6 @@ func (a *App) closeAppDB() {
 	}
 }
 
-// AppDBGet returns the stored value for key, or "" if the key does not exist.
-func (a *App) AppDBGet(key string) string {
-	if a.dq == nil {
-		return ""
-	}
-
-	val, err := a.dq.GetKV(context.Background(), key)
-	if err != nil {
-		return ""
-	}
-
-	return val
-}
-
-// AppDBSet stores or replaces value for key (upsert).
-func (a *App) AppDBSet(key, value string) error {
-	if a.dq == nil {
-		return fmt.Errorf("appDB not initialised")
-	}
-	return a.dq.SetKV(context.Background(), desktopdb.SetKVParams{Key: key, Value: value})
-}
-
-// AppDBDelete removes key from the store. It is a no-op when the key does not exist.
-func (a *App) AppDBDelete(key string) error {
-	if a.dq == nil {
-		return nil
-	}
-	return a.dq.DeleteKV(context.Background(), key)
-}
-
 // RecentAlbum represents a recently played album.
 type RecentAlbum struct {
 	Key            string
@@ -254,4 +224,21 @@ func (a *App) SetRecentPlaylist(playlist RecentPlaylist) error {
 		ArtworkPath: dbconv.NullStr(playlist.ArtworkPath),
 		PlayedAt:    playlist.PlayedAt,
 	})
+}
+
+// ClearAllRecent deletes all recently played albums and playlists.
+func (a *App) ClearAllRecent() error {
+	if a.dq == nil {
+		return fmt.Errorf("appDB not initialised")
+	}
+
+	if err := a.dq.DeleteAllRecentAlbums(context.Background()); err != nil {
+		return err
+	}
+
+	if err := a.dq.DeleteAllRecentPlaylists(context.Background()); err != nil {
+		return err
+	}
+
+	return nil
 }

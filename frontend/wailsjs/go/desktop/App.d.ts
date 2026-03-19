@@ -5,13 +5,9 @@ import {options} from '../models';
 
 export function AddLocalPlaylistItem(arg1:string,arg2:desktop.LocalPlaylistItem):Promise<void>;
 
-export function AppDBDelete(arg1:string):Promise<void>;
-
-export function AppDBGet(arg1:string):Promise<string>;
-
-export function AppDBSet(arg1:string,arg2:string):Promise<void>;
-
 export function ChooseLocalFolder():Promise<string>;
+
+export function ClearAllRecent():Promise<void>;
 
 export function ClearArtworkCache():Promise<void>;
 
