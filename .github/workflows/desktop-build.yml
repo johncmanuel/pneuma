@@ -37,7 +37,7 @@ jobs:
           submodules: recursive
 
       - name: Build wails
-        uses: dAppCore/build@v4 
+        uses: dAppCore/build@v4.0.0 
         id: build
         with:
           build-name: ${{ env.APP_NAME }}
