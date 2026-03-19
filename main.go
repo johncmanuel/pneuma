@@ -17,15 +17,16 @@ func main() {
 	app := desktop.NewApp()
 
 	err := wails.Run(&options.App{
-		Title:             "pneuma",
-		Width:             1280,
-		Height:            800,
-		MinWidth:          960,
-		MinHeight:         600,
-		Frameless:         false,
-		StartHidden:       false,
-		HideWindowOnClose: true,
-		BackgroundColour:  &options.RGBA{R: 15, G: 15, B: 15, A: 255},
+		Title:       "pneuma",
+		Width:       1280,
+		Height:      800,
+		MinWidth:    960,
+		MinHeight:   600,
+		Frameless:   false,
+		StartHidden: false,
+		//
+		// HideWindowOnClose: true,
+		BackgroundColour: &options.RGBA{R: 15, G: 15, B: 15, A: 255},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
