@@ -4,10 +4,17 @@ pneuma is an open-source, self-hostable, and local-first music project, designed
 
 <!-- TODO: add demo as mp4 -->
 
+## Screenshots
+
+### Desktop application
+
 ![Screenshot 1](.github/imgs/Screenshot_20260319_105737.png)
 ![Screenshot 2](.github/imgs/Screenshot_20260319_110300.png)
-![Screenshot 3](.github/imgs/Screenshot_20260319_110354.png)
-![Screenshot 4](.github/imgs/Screenshot_20260319_110437.png)
+![Screenshot 3](.github/imgs/Screenshot_20260319_113205.png)
+
+### Admin server interface
+
+![Screenshot 4](.github/imgs/Screenshot_20260319_113102.png)
 
 > NOTE: This project is currently under active development. Expect bugs and possibly breaking changes.
 
