@@ -31,30 +31,35 @@ func (a *App) stopLocalWatcher() {
 }
 
 // WatchLocalFolder recursively adds dir (and all its subdirectories) to the
-// fsnotify watcher so that file removals are detected. It is idempotent —
-// calling it again for a folder that is already watched is harmless.
+// fsnotify watcher so that file removals are detected.
 func (a *App) WatchLocalFolder(dir string) error {
 	if a.localWatcher == nil {
 		return nil
 	}
+
 	// Track the root folder so Create events can upsert to the right folder.
 	a.mu.Lock()
 	alreadyRoot := false
+
 	for _, r := range a.watchedRoots {
 		if r == dir {
 			alreadyRoot = true
 			break
 		}
 	}
+
 	if !alreadyRoot {
 		a.watchedRoots = append(a.watchedRoots, dir)
 	}
+
 	a.mu.Unlock()
 
 	return filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		// skip unreadable paths
 		if err != nil {
-			return nil // skip unreadable paths
+			return nil
 		}
+
 		if d.IsDir() {
 			if addErr := a.localWatcher.Add(path); addErr != nil {
 				slog.Warn("watcher: failed to watch dir", "path", path, "err", addErr)
@@ -140,17 +145,19 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 				slog.Warn("watcher: failed to add new dir", "path", path, "err", addErr)
 			}
 		} else {
-			// Audio file appeared (new copy or moved in), so debounce per-path
-			// so that Linux inotify's Create+Write+Chmod burst only fires once.
 			ext := strings.ToLower(filepath.Ext(path))
 			if !audioExts[ext] {
 				return
 			}
 			a.mu.Lock()
+
+			// about 600ms delay to allow for file to be fully written
+			delayMs := 600 * time.Millisecond
+
 			if t, exists := a.pendingCreates[path]; exists {
-				t.Reset(600 * time.Millisecond)
+				t.Reset(delayMs)
 			} else {
-				a.pendingCreates[path] = time.AfterFunc(600*time.Millisecond, func() {
+				a.pendingCreates[path] = time.AfterFunc(delayMs, func() {
 					a.mu.Lock()
 					delete(a.pendingCreates, path)
 					a.mu.Unlock()

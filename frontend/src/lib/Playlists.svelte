@@ -70,12 +70,15 @@
     })
     .sort((a, b) => {
       if (sortField === "default") return a.position - b.position;
+
       let cmp = 0;
+
       if (sortField === "title") cmp = a.ref_title.localeCompare(b.ref_title);
       else if (sortField === "added_at")
         cmp = a.added_at.localeCompare(b.added_at);
       else if (sortField === "duration")
         cmp = a.ref_duration_ms - b.ref_duration_ms;
+
       return sortDir === "desc" ? -cmp : cmp;
     });
 
@@ -106,10 +109,13 @@
 
   async function handleCreate() {
     if (!newName.trim()) return;
+
     const id = await createPlaylist(newName.trim(), newDesc.trim());
+
     newName = "";
     newDesc = "";
     showNewDialog = false;
+
     if (id) {
       pushNav({ view: "playlists", playlistId: id });
     }
@@ -172,6 +178,7 @@
   function totalDuration(ms: number): string {
     const totalMin = Math.floor(ms / 60000);
     if (totalMin < 60) return `${totalMin} min`;
+
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
     return `${h} hr ${m} min`;

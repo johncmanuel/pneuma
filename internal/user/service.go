@@ -85,6 +85,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (*models
 	if err != nil {
 		return nil, err
 	}
+
 	u := dbconv.UserToModel(row)
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
 		return nil, ErrWrongPassword
@@ -144,12 +145,13 @@ func (s *Service) UpdatePermissions(ctx context.Context, userID string, canUploa
 	})
 }
 
-// DeleteUser removes a user. callerID is the user performing the action —
-// a user cannot delete themselves.
+// DeleteUser removes a user. callerID is the user performing the action.
+// A user cannot delete themselves.
 func (s *Service) DeleteUser(ctx context.Context, callerID, targetID string) error {
 	if callerID == targetID {
 		return ErrSelfDelete
 	}
+
 	_, err := s.q.UserByID(ctx, targetID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound

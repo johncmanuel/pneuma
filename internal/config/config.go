@@ -187,7 +187,7 @@ func applyEnvOverrides(cfg *Config) {
 
 // Load reads the TOML config file at path and overlays it onto DefaultConfig.
 // The resulting config is always written back to disk so that any
-// auto-generated values (especially the JWT secret) are persisted on the very
+// auto-generated values (especially the JWT secret) are persisted on the
 // first run and on upgrades where new fields are added.
 func Load(path string, dataDir string) (*Config, error) {
 	cfg := DefaultConfig(dataDir)
@@ -197,7 +197,6 @@ func Load(path string, dataDir string) (*Config, error) {
 	}
 
 	if err == nil {
-		// File exists — overlay its values onto the defaults.
 		if err := toml.Unmarshal(data, cfg); err != nil {
 			return nil, err
 		}
@@ -205,7 +204,7 @@ func Load(path string, dataDir string) (*Config, error) {
 
 	applyEnvOverrides(cfg)
 
-	// Always save back so auto-generated fields (like SecretKey) are persisted
+	// Always save back so auto-generated fields are persisted
 	// even when the file pre-existed without them.
 	if err := Save(path, cfg); err != nil {
 		slog.Warn("could not persist config to disk (read-only filesystem?)", "path", path, "err", err)

@@ -152,7 +152,7 @@
         }
       }
     } catch {
-      // ignore — return null
+      console.warn("Failed to find track by ID:", id);
     }
     return null;
   }
@@ -346,6 +346,7 @@
   }
 
   function toggleRepeat() {
+    //  TODO: use enums instead of numbers, see Player.svelte TODO comment on enums
     const nextMode = (($playerState.repeat + 1) % 3) as 0 | 1 | 2;
     playerState.update((s) => ({ ...s, repeat: nextMode }));
 

@@ -22,6 +22,7 @@
     fetchLocalAlbumTracks,
     localChangeSeq,
     localTrackToTrack,
+    scanProgress,
     type LocalAlbumGroup
   } from "../stores/localLibrary";
   import { playerState } from "../stores/player";
@@ -278,13 +279,10 @@
       loadRemoteAlbumGroupsPage(0);
     }
     if ($localFolders.length > 0) {
-      if (get(localAlbumGroups).length === 0) {
-        // First mount — populate the SQLite cache with a full scan.
-        scanLocalFolders();
-      } else {
-        // Returning from another view — data is in memory, just reload the page.
-        loadLocalAlbumGroups(0, get(localAlbumFilter));
-      }
+      // If the local album groups are empty, scan the local folders, else load the local album groups.
+      get(localAlbumGroups).length === 0
+        ? scanLocalFolders()
+        : loadLocalAlbumGroups(0, get(localAlbumFilter));
     }
   });
 
@@ -702,8 +700,19 @@
                 : "Open Settings to connect to your pneuma server."}
             </p>
           </div>
+        {:else if $activeTab === "local" && $scanProgress}
+          <div style="text-align: center; padding: 24px;">
+            <p class="text-3" style="margin-bottom: 8px;">
+              Scanning folders...
+            </p>
+            <p class="text-3">
+              {$scanProgress.done} / {$scanProgress.total} files
+            </p>
+          </div>
         {:else if isLoading}
-          <p class="text-3">Loading...</p>
+          <p class="text-3" style="text-align: center; padding: 24px;">
+            Loading...
+          </p>
         {:else if displayedGroups.length === 0}
           {#if $activeTab === "local"}
             <p class="text-3">

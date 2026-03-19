@@ -95,7 +95,6 @@ type PlaylistItem struct {
 
 	AddedAt time.Time `json:"added_at"`
 
-	// Resolved at runtime — not persisted.
 	Resolved  bool   `json:"resolved"`             // true when a matching track was found
 	Missing   bool   `json:"missing"`              // true when no match exists on this device
 	LocalPath string `json:"local_path,omitempty"` // resolved local file path (client-only, never uploaded)

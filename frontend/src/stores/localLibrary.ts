@@ -132,7 +132,7 @@ async function injectTrackIntoQueue(newTrack: LocalTrack) {
     return;
 
   const newId = newTrack.path;
-  if (s.queue.includes(newId)) return; // already present — no-op
+  if (s.queue.includes(newId)) return;
 
   // Re-fetch the full sorted track list for this album so we get the canonical
   // disc/track-number ordering without having to keep metadata for every queue entry.
@@ -158,9 +158,9 @@ async function injectTrackIntoQueue(newTrack: LocalTrack) {
     let newQueue: string[];
     let newQueueIndex: number;
 
+    // Slip the new track in right after current position so it
+    // plays next naturally, without disturbing the rest of the shuffle order.
     if (cur.shuffle) {
-      // Shuffled: slip the new track in right after current position so it
-      // plays next naturally, without disturbing the rest of the shuffle order.
       const insertAt = cur.queueIndex + 1;
       newQueue = [
         ...cur.queue.slice(0, insertAt),
@@ -169,7 +169,7 @@ async function injectTrackIntoQueue(newTrack: LocalTrack) {
       ];
       newQueueIndex = cur.queueIndex;
     } else {
-      // Unshuffled: queue mirrors baseQueue ordering.
+      // queue mirrors baseQueue ordering
       newQueue = newBase;
       newQueueIndex = newBase.indexOf(currentId);
       if (newQueueIndex < 0) newQueueIndex = cur.queueIndex;
@@ -191,19 +191,16 @@ let scanGeneration = 0;
 let removedRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
- * Serial promise chain for queue injections — ensures concurrent local:track:added
- * events are processed one-at-a-time so each injection sees the state the
+ * Serial promise chain for queue injections. Ensures concurrent local:track:added
+ * events are processed sequentially so each injection sees the state the
  * previous one wrote, preventing lost updates when multiple files arrive at once.
  */
 let injectionChain: Promise<void> = Promise.resolve();
 
 /**
  * Incremented each time a file is added or removed by the fsnotify watcher.
- * Library.svelte subscribes to this to refresh the open album detail view.
  */
 export const localChangeSeq = writable(0);
-
-/* ── Album Groups (paginated, computed in Go SQL) ──────────────────────────── */
 
 export interface LocalAlbumGroup {
   key: string;
@@ -215,7 +212,6 @@ export interface LocalAlbumGroup {
 
 const ALBUM_PAGE_SIZE = 50;
 
-/** Paginated album groups — only the current page is held in memory. */
 export const localAlbumGroups = writable<LocalAlbumGroup[]>([]);
 export const localAlbumGroupsTotal = writable(0);
 export const localAlbumGroupsOffset = writable(0);
@@ -224,12 +220,14 @@ export const localAlbumFilter = writable("");
 /** Load a page of local album groups from Go. */
 export async function loadLocalAlbumGroups(offset = 0, filter = "") {
   const dirs = get(localFolders);
+
   if (dirs.length === 0) {
     localAlbumGroups.set([]);
     localAlbumGroupsTotal.set(0);
     localAlbumGroupsOffset.set(0);
     return;
   }
+
   try {
     const result = await GetLocalAlbumGroups(
       dirs,
@@ -253,7 +251,9 @@ export async function loadMoreLocalAlbumGroups(filter = "") {
   const current = get(localAlbumGroupsOffset);
   const total = get(localAlbumGroupsTotal);
   const next = current + ALBUM_PAGE_SIZE;
+
   if (next >= total) return;
+
   try {
     const result = await GetLocalAlbumGroups(
       dirs,
@@ -287,7 +287,7 @@ export async function fetchLocalAlbumTracks(
   }
 }
 
-/** Search local tracks via Go LIKE query. */
+/** Search and query local tracks. */
 export async function searchLocalTracksQuery(
   query: string
 ): Promise<LocalTrack[]> {
@@ -300,12 +300,13 @@ export async function searchLocalTracksQuery(
   }
 }
 
-/** Search local album groups by name/artist filter (non-destructive, doesn't touch main store). */
+/** Search local album groups by name/artist filter. */
 export async function searchLocalAlbumGroups(
   query: string
 ): Promise<LocalAlbumGroup[]> {
   const dirs = get(localFolders);
   if (dirs.length === 0) return [];
+
   try {
     const result = await GetLocalAlbumGroups(dirs, query, 0, 10);
     return result?.albums ?? [];
@@ -328,11 +329,8 @@ export async function resolveLocalTracksByPaths(
   }
 }
 
-/* ── Initialisation ─────────────────────────────────────────────── */
-
 /**
  * Load all persisted local-library state from SQLite into the Svelte stores.
- * Tracks are loaded from the relational `local_tracks` table (indexed, fast).
  */
 export async function initLocalLibrary(): Promise<void> {
   const foldersRaw = await db.get(KEY_FOLDERS);
@@ -343,12 +341,11 @@ export async function initLocalLibrary(): Promise<void> {
   try {
     if (foldersRaw) folders = JSON.parse(foldersRaw);
   } catch {
-    /* corrupt — keep default */
+    console.warn("Failed to parse local folders from DB");
   }
+
   localFolders.set(folders);
 
-  // Hydrate the track list from the indexed relational table — instant.
-  // Now we only load album groups (paginated) instead of all tracks.
   if (folders.length > 0) {
     try {
       await loadLocalAlbumGroups(0, "");
@@ -365,7 +362,7 @@ export async function initLocalLibrary(): Promise<void> {
   }
 
   // Listen for file-removal events emitted by the Go fsnotify watcher.
-  // Queue is purged immediately; album groups are debounced to batch rapid events.
+  // Queue is purged immediately but album groups are debounced to batch rapid events.
   // Payload may be { path: string } (single file/dir) or { paths: string[] } (scan prune batch).
   EventsOn(
     "local:track:removed",
@@ -375,7 +372,9 @@ export async function initLocalLibrary(): Promise<void> {
       } else if (data.path) {
         purgePathsFromQueue(data.path);
       }
+
       if (removedRefreshTimer !== null) clearTimeout(removedRefreshTimer);
+
       removedRefreshTimer = setTimeout(async () => {
         removedRefreshTimer = null;
         await loadLocalAlbumGroups(0, get(localAlbumFilter));
@@ -394,10 +393,12 @@ export async function initLocalLibrary(): Promise<void> {
       injectionChain = injectionChain
         .then(() => injectTrackIntoQueue(data.track))
         .catch(() => {
-          /* best-effort */
+          console.warn("Failed to inject track into queue:", data.track);
         });
     }
+
     if (removedRefreshTimer !== null) clearTimeout(removedRefreshTimer);
+
     removedRefreshTimer = setTimeout(async () => {
       removedRefreshTimer = null;
       await loadLocalAlbumGroups(0, get(localAlbumFilter));
@@ -406,16 +407,18 @@ export async function initLocalLibrary(): Promise<void> {
   });
 }
 
-/* ── Actions ────────────────────────────────────────────────────── */
-
 export async function addLocalFolder(): Promise<string | null> {
   try {
     const dir = await ChooseLocalFolder();
     if (!dir) return null;
+
     const current = get(localFolders);
     if (current.includes(dir)) return dir;
+
     localFolders.set([...current, dir]);
+
     await scanLocalFolders();
+
     // Start watching the new folder after the initial scan so removals are detected.
     WatchLocalFolder(dir).catch((e) =>
       console.warn("WatchLocalFolder failed:", dir, e)
@@ -427,15 +430,17 @@ export async function addLocalFolder(): Promise<string | null> {
 }
 
 export async function removeLocalFolder(dir: string) {
-  // Stop watching before clearing so no spurious removal events are emitted.
+  // Stop watching before clearing to prevent any weird removal events
   UnwatchLocalFolder(dir).catch((e) =>
     console.warn("UnwatchLocalFolder failed:", dir, e)
   );
+
   localFolders.update((dirs) => dirs.filter((d) => d !== dir));
+
   try {
     await ClearLocalFolder(dir);
   } catch {
-    /* best-effort */
+    console.warn("Failed to clear local folder:", dir);
   }
   await scanLocalFolders();
 }
@@ -447,9 +452,6 @@ export async function removeLocalFolder(dir: string) {
  *   "local:scan:start"    → { folder, total }
  *   "local:track:scanned" → { folder, done, total, track }
  *   "local:scan:done"     → { folder, count }
- *
- * Tracks are persisted to the relational local_tracks table by Go as they
- * are scanned — no JSON blob serialisation needed.
  */
 export async function scanLocalFolders() {
   const dirs = get(localFolders);
@@ -486,7 +488,7 @@ export async function scanLocalFolders() {
       });
     });
 
-    // Scan each folder sequentially (Go does the heavy lifting).
+    // Scan each folder sequentially
     for (const dir of effectiveDirs) {
       if (scanGeneration !== myGen) break;
       try {
