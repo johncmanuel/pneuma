@@ -13,21 +13,22 @@ Before submission:
 3. Create a minimum reproducible example and link it here.
 
 **Describe the bug**
-A clear and concise description of what the bug is.
+_A clear and concise description of what the bug is._
 
 **To Reproduce**
-Steps to reproduce the behavior.
+_Steps to reproduce the behavior._
 
 **Expected behavior**
-A clear and concise description of what you expected to happen.
+_A clear and concise description of what you expected to happen._
 
 **Media**
-If applicable, add screenshots, videos, or other forms of media to help explain your problem.
+_If applicable, add screenshots, videos, or other forms of media to help explain your problem._
 
 **Attempted fixes**
+_Write about any attempts to fix this issue._
 
 **System information**
-List as much information as possible about your system. Operating system, device model, etc.
+_List as much information as possible about your system. Operating system, device model, etc._
 
 **Additional context**
-Add any other context about the problem here.
+_Add any other context about the problem here._
