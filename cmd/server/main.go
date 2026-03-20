@@ -32,7 +32,7 @@ func main() {
 	cfgPath := flag.String("config", "", "path to config.toml (default: <data-dir>/config.toml)")
 	flag.Parse()
 
-	slog.SetDefault(slog.New(newConsoleHandler(os.Stdout, slog.LevelInfo)))
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	dir := *dataDir
 	if dir == "" {
