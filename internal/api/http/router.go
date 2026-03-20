@@ -62,7 +62,6 @@ func NewRouter(svc Services) *echo.Echo {
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries)
 	plh := handlers.NewPlaylistHandler(svc.Playlist, svc.Hub)
 
-	// Wire inbound WebSocket messages to the playback engine.
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
 
 	// WebSocket: validate JWT from ?token= query param for user identity.
@@ -141,13 +140,10 @@ func NewRouter(svc Services) *echo.Echo {
 	play.POST("/repeat", ph.SetRepeat)
 	play.POST("/shuffle", ph.SetShuffle)
 
-	// Web UI (SPA fallback)
+	// Serve static assets directly; anything that doesn't match a file.
 	if svc.WebUI != nil {
-		// Serve static assets directly; anything that doesn't match a file
-		// falls back to index.html (SPA routing).
 		fileServer := http.FileServer(http.FS(svc.WebUI))
 		spaHandler := echo.WrapHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Try to serve the file as-is first.
 			path := r.URL.Path
 			if path == "/" {
 				path = "index.html"

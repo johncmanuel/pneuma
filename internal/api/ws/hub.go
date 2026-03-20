@@ -127,10 +127,12 @@ type client struct {
 func (c *client) readPump() {
 	defer c.hub.unregister(c)
 
+	deadline := 60 * time.Second
+
 	c.conn.SetReadLimit(4096)
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.conn.SetReadDeadline(time.Now().Add(deadline))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		c.conn.SetReadDeadline(time.Now().Add(deadline))
 		return nil
 	})
 
@@ -153,10 +155,12 @@ func (c *client) writePump() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
+	deadline := 10 * time.Second
+
 	for {
 		select {
 		case msg, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			c.conn.SetWriteDeadline(time.Now().Add(deadline))
 			if !ok {
 				c.conn.WriteMessage(websocket.CloseMessage, nil)
 				return
@@ -165,7 +169,7 @@ func (c *client) writePump() {
 				return
 			}
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			c.conn.SetWriteDeadline(time.Now().Add(deadline))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
