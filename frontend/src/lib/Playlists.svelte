@@ -17,6 +17,7 @@
     uploadPlaylist,
     updatePlaylist,
     pickPlaylistArtwork,
+    generateRandomPlaylist,
     type PlaylistItem,
     type PlaylistSummary
   } from "../stores/playlists";
@@ -33,6 +34,14 @@
   let showNewDialog = false;
   let newName = "";
   let newDesc = "";
+
+  let showGenerateDialog = false;
+  let generateName = "";
+  let generateDesc = "";
+  let generateDuration = 30;
+  let generateUseRemote = false;
+  let generating = false;
+
   let editingId: string | null = null;
   let editName = "";
   let editDesc = "";
@@ -182,6 +191,44 @@
     const h = Math.floor(totalMin / 60);
     const m = totalMin % 60;
     return `${h} hr ${m} min`;
+  }
+
+  function handleCancelCreate() {
+    showNewDialog = false;
+    newName = "";
+    newDesc = "";
+  }
+
+  function handleCancelGenerate() {
+    showGenerateDialog = false;
+    generateName = "";
+    generateDesc = "";
+    generateDuration = 30;
+    generateUseRemote = false;
+  }
+
+  async function handleGenerate() {
+    if (!generateName.trim() || generateDuration < 1) return;
+
+    generating = true;
+
+    try {
+      const id = await generateRandomPlaylist(
+        generateName.trim(),
+        generateDesc.trim(),
+        generateDuration,
+        generateUseRemote
+      );
+
+      // reset the form after generation completes
+      handleCancelGenerate();
+
+      if (id) {
+        pushNav({ view: "playlists", playlistId: id });
+      }
+    } finally {
+      generating = false;
+    }
   }
 
   onMount(() => {
@@ -355,9 +402,14 @@
   <div class="playlist-list">
     <div class="list-header">
       <h2>Playlists</h2>
-      <button class="new-btn" on:click={() => (showNewDialog = true)}
-        >+ New Playlist</button
-      >
+      <div class="list-header-actions">
+        <button class="new-btn" on:click={() => (showGenerateDialog = true)}
+          >Generate Random</button
+        >
+        <button class="new-btn" on:click={() => (showNewDialog = true)}
+          >+ New Playlist</button
+        >
+      </div>
     </div>
 
     {#if showNewDialog}
@@ -378,14 +430,83 @@
         />
         <div class="new-actions">
           <button class="small-btn" on:click={handleCreate}>Create</button>
+          <button class="small-btn secondary" on:click={handleCancelCreate}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    {#if showGenerateDialog}
+      <div class="new-dialog">
+        <!-- svelte-ignore a11y_autofocus -->
+        <input
+          class="new-input"
+          placeholder="Playlist name"
+          bind:value={generateName}
+          on:keydown={(e) => e.key === "Enter" && handleGenerate()}
+          autofocus
+        />
+        <input
+          class="new-input"
+          placeholder="Description (optional)"
+          bind:value={generateDesc}
+          on:keydown={(e) => e.key === "Enter" && handleGenerate()}
+        />
+        <div class="generate-duration-row">
+          <label class="generate-label" for="gen-duration">Duration</label>
+          <input
+            id="gen-duration"
+            type="number"
+            class="new-input gen-duration-input"
+            min="1"
+            max="999"
+            bind:value={generateDuration}
+          />
+          <span class="generate-unit">minutes</span>
+        </div>
+        {#if $connected}
+          <div class="generate-source-row">
+            <span class="generate-label">Library</span>
+            <div class="generate-source-options">
+              <label class="generate-radio">
+                <input
+                  type="radio"
+                  name="gen-source"
+                  value={false}
+                  bind:group={generateUseRemote}
+                />
+                Local only
+              </label>
+              <label class="generate-radio">
+                <input
+                  type="radio"
+                  name="gen-source"
+                  value={true}
+                  bind:group={generateUseRemote}
+                />
+                Local + Remote
+              </label>
+            </div>
+          </div>
+        {/if}
+        <div class="new-actions">
+          <button
+            class="small-btn"
+            on:click={handleGenerate}
+            disabled={generating ||
+              !generateName.trim() ||
+              generateDuration < 1}
+          >
+            {generating ? "Generating..." : "Generate"}
+          </button>
           <button
             class="small-btn secondary"
-            on:click={() => {
-              showNewDialog = false;
-              newName = "";
-              newDesc = "";
-            }}>Cancel</button
+            on:click={handleCancelGenerate}
+            disabled={generating}
           >
+            Cancel
+          </button>
         </div>
       </div>
     {/if}
@@ -442,6 +563,11 @@
     margin: 0;
     font-size: 20px;
     font-weight: 700;
+  }
+
+  .list-header-actions {
+    display: flex;
+    gap: 8px;
   }
 
   .new-btn {
@@ -736,5 +862,41 @@
   .loading-msg {
     padding: 20px 12px;
     text-align: center;
+  }
+
+  .generate-duration-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .gen-duration-input {
+    width: 80px;
+    text-align: center;
+  }
+  .generate-label {
+    font-size: 12px;
+    color: var(--text-2);
+    white-space: nowrap;
+  }
+  .generate-unit {
+    font-size: 12px;
+    color: var(--text-3);
+  }
+  .generate-source-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .generate-source-options {
+    display: flex;
+    gap: 12px;
+  }
+  .generate-radio {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-1);
+    cursor: pointer;
   }
 </style>

@@ -21,6 +21,8 @@ export function DeleteLocalPlaylist(arg1:string):Promise<void>;
 
 export function DisconnectFromServer():Promise<void>;
 
+export function GenerateRandomPlaylist(arg1:string,arg2:string,arg3:number,arg4:boolean):Promise<desktop.LocalPlaylistSummary>;
+
 export function GetLocalAlbumGroups(arg1:Array<string>,arg2:string,arg3:number,arg4:number):Promise<desktop.LocalAlbumGroupsResult>;
 
 export function GetLocalAlbumTracks(arg1:Array<string>,arg2:string,arg3:string):Promise<Array<desktop.LocalTrack>>;

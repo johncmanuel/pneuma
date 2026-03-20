@@ -38,6 +38,10 @@ export function DisconnectFromServer() {
   return window['go']['desktop']['App']['DisconnectFromServer']();
 }
 
+export function GenerateRandomPlaylist(arg1, arg2, arg3, arg4) {
+  return window['go']['desktop']['App']['GenerateRandomPlaylist'](arg1, arg2, arg3, arg4);
+}
+
 export function GetLocalAlbumGroups(arg1, arg2, arg3, arg4) {
   return window['go']['desktop']['App']['GetLocalAlbumGroups'](arg1, arg2, arg3, arg4);
 }

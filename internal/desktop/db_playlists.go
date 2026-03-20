@@ -5,11 +5,15 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/jpeg"
 	_ "image/png"
+	"io"
 	"math"
+	"math/rand/v2"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -510,4 +514,191 @@ func writeThumbnail(dir, fileName string, data []byte) error {
 	}
 
 	return nil
+}
+
+// randomTrack holds the minimum info needed for random playlist generation.
+type randomTrack struct {
+	source      string // "local_ref" or "remote"
+	trackID     string
+	localPath   string
+	title       string
+	album       string
+	albumArtist string
+	durationMS  int64
+}
+
+// GenerateRandomPlaylist creates a new playlist filled with randomly selected
+// tracks targeting the given duration in minutes. Local tracks are always
+// included. If useRemote is true and the app is connected to a server, remote
+// tracks are added to the pool as well, producing a mix of both sources.
+func (a *App) GenerateRandomPlaylist(name, description string, durationMinutes int, useRemote bool) (*LocalPlaylistSummary, error) {
+	if a.dq == nil {
+		return nil, fmt.Errorf("db not initialised")
+	}
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("playlist name is required")
+	}
+	if durationMinutes <= 0 {
+		return nil, fmt.Errorf("duration must be at least 1 minute")
+	}
+
+	targetMS := int64(durationMinutes) * 60 * 1000
+
+	var candidates []randomTrack
+
+	// TODO: improve efficiency by limiting number of local tracks loaded from DB
+	// and remote tracks from server. this could be a bottleneck if the user has a lot of
+	// local songs, i feel.
+
+	rows, err := a.dq.ListAllLocalTracks(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("list local tracks: %w", err)
+	}
+	for _, t := range rows {
+		if t.DurationMs > 0 {
+			candidates = append(candidates, randomTrack{
+				source:      "local_ref",
+				localPath:   t.Path,
+				title:       t.Title,
+				album:       t.Album,
+				albumArtist: t.AlbumArtist,
+				durationMS:  t.DurationMs,
+			})
+		}
+	}
+
+	if useRemote {
+		a.mu.RLock()
+		serverURL := a.serverURL
+		token := a.token
+		a.mu.RUnlock()
+
+		const pageSize = 200
+
+		if serverURL != "" && token != "" {
+			tracks, err := a.fetchAllRemoteTracks(serverURL, token, pageSize)
+			if err == nil {
+				for _, t := range tracks {
+					if t.DurationMS > 0 {
+						candidates = append(candidates, randomTrack{
+							source:      "remote",
+							trackID:     t.ID,
+							title:       t.Title,
+							album:       t.AlbumName,
+							albumArtist: t.AlbumArtist,
+							durationMS:  t.DurationMS,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("no track candidates available")
+	}
+
+	// Deduplicate by title+album+album_artist
+	deduped := make([]randomTrack, 0, len(candidates))
+	seen := make(map[string]struct{}, len(candidates))
+	for _, t := range candidates {
+		key := strings.ToLower(t.title) + "|" + strings.ToLower(t.album) + "|" + strings.ToLower(t.albumArtist)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		deduped = append(deduped, t)
+	}
+
+	rand.Shuffle(
+		len(deduped),
+		func(i, j int) {
+			deduped[i], deduped[j] = deduped[j], deduped[i]
+		},
+	)
+
+	var selected []randomTrack
+	var cumulative int64
+	for _, t := range deduped {
+		if cumulative >= targetMS {
+			break
+		}
+		selected = append(selected, t)
+		cumulative += t.durationMS
+	}
+
+	if len(selected) == 0 {
+		return nil, fmt.Errorf("no selected tracks available")
+	}
+
+	pl, err := a.CreateLocalPlaylist(name, description)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]LocalPlaylistItem, len(selected))
+	for i, t := range selected {
+		items[i] = LocalPlaylistItem{
+			Position:       i,
+			Source:         t.source,
+			TrackID:        t.trackID,
+			LocalPath:      t.localPath,
+			RefTitle:       t.title,
+			RefAlbum:       t.album,
+			RefAlbumArtist: t.albumArtist,
+			RefDurationMS:  t.durationMS,
+		}
+	}
+
+	if err := a.SetLocalPlaylistItems(pl.ID, items); err != nil {
+		_ = a.DeleteLocalPlaylist(pl.ID)
+		return nil, fmt.Errorf("set items: %w", err)
+	}
+
+	return pl, nil
+}
+
+// fetchAllRemoteTracks retrieves all tracks from the connected server via
+// paginated requests.
+func (a *App) fetchAllRemoteTracks(serverURL, token string, pageSize int) ([]models.Track, error) {
+	offset := 0
+	var all []models.Track
+
+	for {
+		url := fmt.Sprintf("%s/api/library/tracks?offset=%d&limit=%d", serverURL, offset, pageSize)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("server unreachable: %w", err)
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("fetch tracks failed (%d): %s", resp.StatusCode, string(body))
+		}
+
+		var page struct {
+			Tracks []models.Track `json:"tracks"`
+			Total  int            `json:"total"`
+		}
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, fmt.Errorf("decode response: %w", err)
+		}
+
+		all = append(all, page.Tracks...)
+
+		if offset+len(page.Tracks) >= page.Total {
+			break
+		}
+		offset += pageSize
+	}
+
+	return all, nil
 }

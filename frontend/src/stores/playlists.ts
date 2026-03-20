@@ -9,7 +9,8 @@ import {
   AddLocalPlaylistItem,
   ResolvePlaylistItems,
   UploadPlaylistToServer,
-  PickPlaylistArtwork
+  PickPlaylistArtwork,
+  GenerateRandomPlaylist
 } from "../../wailsjs/go/desktop/App";
 import { addToast } from "./toasts";
 import { playerState, type Track } from "./player";
@@ -492,6 +493,37 @@ export async function pickPlaylistArtwork(playlistId: string) {
   } catch (e: any) {
     addToast(`Failed to set artwork: ${e}`, "error");
   }
+}
+
+/**
+ * Generate a random playlist targeting a specific duration.
+ * Falls back to local tracks if not connected to a server.
+ */
+export async function generateRandomPlaylist(
+  name: string,
+  description: string,
+  durationMinutes: number,
+  useRemote: boolean
+): Promise<string | null> {
+  try {
+    const pl = await GenerateRandomPlaylist(
+      name,
+      description,
+      durationMinutes,
+      useRemote
+    );
+    if (pl) {
+      await loadPlaylists();
+      addToast(
+        `Playlist "${name}" generated with ${pl.item_count} songs`,
+        "success"
+      );
+      return pl.id;
+    }
+  } catch (e: any) {
+    addToast(`Failed to generate playlist: ${e}`, "error");
+  }
+  return null;
 }
 
 export async function initPlaylists() {
