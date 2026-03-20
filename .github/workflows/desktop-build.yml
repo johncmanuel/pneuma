@@ -17,7 +17,6 @@ env:
 jobs:
   build:
     strategy:
-      # Failure in one platform build won't impact the others
       fail-fast: false
       matrix:
         build:
@@ -28,7 +27,6 @@ jobs:
           - platform: "darwin/universal"
             os: "macos-latest"
 
-    # https://github.com/dAppServer/wails-build-action/tree/dev/actions/build/wails2#wails-v2-full-pipeline 
     runs-on: ${{ matrix.build.os }}
     steps:
       - name: Checkout
@@ -36,28 +34,16 @@ jobs:
         with:
           submodules: recursive
 
+      # https://github.com/dAppServer/wails-build-action/tree/dev/actions/build/wails2#wails-v2-full-pipeline 
       - name: Build wails
-        uses: host-uk/build@v4
+        uses: dAppCore/build/actions/build/wails2@v4.0.0
         id: build
         with:
           build-name: ${{ env.APP_NAME }}
           build-platform: ${{ matrix.build.platform }}
-          # go-version: "1.23"
+          package: true
+          go-version: "1.23"
           # need to keep node at 22.x rather than latest to avoid build issues with
-          # libwebkit2gtk-4.0-dev (AFAIK, ubuntu 24 drops this specific package). This
-          # version is needed to work with wails
-          # node-version: "22.x"
-
-      # - name: Build wails
-      #   uses: dAppServer/wails-build-action@v2.2
-      #   id: build
-      #   with:
-      #     build-name: ${{ env.APP_NAME }}
-      #     build-platform: ${{ matrix.build.platform }}
-      #     package: true
-      #     go-version: "1.23"
-      #     # need to keep node at 22.x rather than latest to avoid build issues with
-      #     # libwebkit2gtk-4.0-dev (AFAIK, ubuntu 24 drops this specific package). This
-      #     # version is needed to work with wails
-      #     # See linux installation here: https://wails.io/docs/gettingstarted/installation/
-      #     node-version: "22.x"
+          # libwebkit2gtk-4.0-dev (AFAIK, ubuntu 24 drops this specific package) as well
+          # as get Vite to work properly. This version is needed to work with wails
+          node-version: "22.x"
