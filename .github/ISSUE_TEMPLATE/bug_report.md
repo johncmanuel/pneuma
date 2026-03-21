@@ -1,13 +1,13 @@
 ---
 name: Bug report
 about: Create a report to help us improve
-title: ''
-labels: ''
-assignees: ''
-
+title: ""
+labels: ""
+assignees: ""
 ---
 
 Before submission:
+
 1. Search the issues for any duplicates
 2. Try solving it on your own first beforehand. Document your thoughts while doing so.
 3. Create a minimum reproducible example and link it here.
