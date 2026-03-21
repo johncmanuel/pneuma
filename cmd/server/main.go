@@ -15,6 +15,7 @@ import (
 	api "pneuma/internal/api/http"
 	apws "pneuma/internal/api/ws"
 
+	"pneuma/dashboard"
 	"pneuma/internal/config"
 	"pneuma/internal/library"
 	"pneuma/internal/metadata/parser"
@@ -24,7 +25,6 @@ import (
 	"pneuma/internal/store/sqlite"
 	"pneuma/internal/store/sqlite/serverdb"
 	"pneuma/internal/user"
-	"pneuma/web"
 )
 
 func main() {
@@ -90,7 +90,7 @@ func main() {
 		JWTSecret:   cfg.Auth.SecretKey,
 		UploadsDir:  cfg.Upload.Dir,
 		UploadMaxMB: cfg.Upload.MaxSizeMB,
-		WebUI:       web.FS(),
+		WebUI:       dashboard.FS(),
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

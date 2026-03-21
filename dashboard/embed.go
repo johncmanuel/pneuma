@@ -1,6 +1,6 @@
 //go:build !no_embed
 
-package web
+package dashboard
 
 import (
 	"embed"

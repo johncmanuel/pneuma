@@ -41,7 +41,7 @@ jobs:
           node-version: "20"
 
       - name: Build Svelte Frontend
-        working-directory: ./web
+        working-directory: ./dashboard
         run: |
           npm ci
           npm run build

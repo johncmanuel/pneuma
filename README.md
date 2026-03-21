@@ -84,7 +84,7 @@ Upon first start, the desktop application will create a directory `${OS_CACHE}/p
 First, run the following to build the UI:
 
 ```bash
-cd web
+cd dashboard
 npm run build
 ```
 
@@ -96,7 +96,7 @@ Run `go build -o build/bin/server ./cmd/server` to create the server executable 
 
 Upon first start, the server will create a directory `${HOME}/.pneuma/` for storing its SQLite database and other types of data. Visit `localhost:8989` to register an admin user and perform operations like managing music files for others to stream.
 
-By default, it embeds the admin dashboard UI from `./web/dist/` (if it exists). To exclude the UI, run `go build -tags no_embed -o build/bin/server ./cmd/server`.
+By default, it embeds the admin dashboard UI from `./dashboard/dist/` (if it exists). To exclude the UI, run `go build -tags no_embed -o build/bin/server ./cmd/server`.
 
 #### Docker
 
