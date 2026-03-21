@@ -400,20 +400,26 @@
     if (!uploadActive) startUpload();
   }
 
+  // Determine concurrency level based on number of file uploads
+  // It's hardcoded to 1 for small uploads to avoid unnecessary
+  // overhead, and goes up to 3 for large uploads to speed up the process.
+  // TODO: may want to make this more dynamic in the future
+  function getConcurrencyLevel(pendingCount: number): number {
+    if (pendingCount <= 5) return 1;
+    if (pendingCount <= 30) return 2;
+    return 3;
+  }
+
   async function startUpload() {
     uploadActive = true;
     uploadCancelled = false;
 
-    // Adaptive concurrency: 1 for ≤5 files, 2 for ≤30, 3 for more
     const pendingCount = uploadQueue.filter(
       (i) => i.status === "pending"
     ).length;
-    const concurrency = pendingCount <= 5 ? 1 : pendingCount <= 30 ? 2 : 3;
+    const concurrency = getConcurrencyLevel(pendingCount);
 
-    const workers: Promise<void>[] = [];
-    for (let w = 0; w < concurrency; w++) {
-      workers.push(uploadWorker());
-    }
+    const workers = Array.from({ length: concurrency }, () => uploadWorker());
     await Promise.all(workers);
 
     uploadActive = false;
@@ -524,6 +530,7 @@
   on:dragover={handleDragOver}
   on:dragleave={handleDragLeave}
   on:drop={handleDrop}
+  role="region"
 >
   <div class="actions-bar">
     <input
