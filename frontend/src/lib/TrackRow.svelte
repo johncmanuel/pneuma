@@ -1,12 +1,5 @@
-<script lang="ts" context="module">
-  export function formatDuration(ms: number): string {
-    const s = Math.floor(ms / 1000);
-    const m = Math.floor(s / 60);
-    return `${m}:${String(s % 60).padStart(2, "0")}`;
-  }
-</script>
-
 <script lang="ts">
+  import { formatDuration } from "../utils";
   import { onDestroy } from "svelte";
   import type { Track } from "../stores/player";
   import {

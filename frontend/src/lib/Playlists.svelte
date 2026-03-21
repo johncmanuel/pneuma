@@ -28,6 +28,7 @@
   import TrackRow from "./TrackRow.svelte";
   import SortButton from "./SortButton.svelte";
   import "../assets/css/track-list.css";
+  import { totalDuration } from "../utils";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -182,15 +183,6 @@
 
   function cancelEdit() {
     editingId = null;
-  }
-
-  function totalDuration(ms: number): string {
-    const totalMin = Math.floor(ms / 60000);
-    if (totalMin < 60) return `${totalMin} min`;
-
-    const h = Math.floor(totalMin / 60);
-    const m = totalMin % 60;
-    return `${h} hr ${m} min`;
   }
 
   function handleCancelCreate() {

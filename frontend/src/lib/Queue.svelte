@@ -3,7 +3,7 @@
   import { fetchTracksByIDs } from "../stores/library";
   import { resolveLocalTracksByPaths, isLocalId } from "../stores/localLibrary";
   import { closePanel } from "../stores/ui";
-  import { formatDuration } from "./TrackRow.svelte";
+  import { formatDuration } from "../utils";
   import { artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { addToast } from "../stores/toasts";

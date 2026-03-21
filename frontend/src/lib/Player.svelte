@@ -8,7 +8,7 @@
     currentView,
     pushNav
   } from "../stores/ui";
-  import { formatDuration } from "./TrackRow.svelte";
+  import { formatDuration } from "../utils";
   import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { onMount } from "svelte";

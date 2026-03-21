@@ -26,6 +26,7 @@
     type LocalAlbumGroup
   } from "../stores/localLibrary";
   import { playerState } from "../stores/player";
+  import { totalDuration } from "../utils";
   import TrackRow from "./TrackRow.svelte";
   import SortButton from "./SortButton.svelte";
   import "../assets/css/track-list.css";
@@ -558,7 +559,13 @@
           <div class="album-detail-info">
             <h2 class="album-detail-title">{currentAlbumGroup.name}</h2>
             <p class="album-meta text-2">
-              {currentAlbumGroup.artist} · {currentAlbumGroup.trackCount} tracks
+              {currentAlbumGroup.artist} · {currentAlbumGroup.trackCount} tracks ·
+              {totalDuration(
+                albumDetailTracks.reduce(
+                  (sum, t) => sum + (t.duration_ms ?? 0),
+                  0
+                )
+              )}
             </p>
             <div class="album-filter-bar">
               <input
