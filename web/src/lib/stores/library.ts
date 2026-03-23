@@ -62,14 +62,31 @@ export async function fetchAlbumTracks(
 export async function fetchTracksByIDs(ids: string[]): Promise<Track[]> {
   if (ids.length === 0) return [];
 
+  const remoteIds = ids.filter((id) => !isLocalId(id));
+  if (remoteIds.length === 0) return [];
+
   const params = new URLSearchParams();
-  params.set("ids", ids.join(","));
+  params.set("ids", remoteIds.join(","));
 
   const r = await apiFetch(`/api/library/tracks?${params}`);
   if (!r.ok) return [];
 
   const data = await r.json();
+  if (!data) return [];
+
   return Array.isArray(data) ? data : (data.tracks ?? []);
+}
+
+// check if:
+// 1. the ID looks like a missing track placeholder, or
+// 2. the ID looks like a file path (absolute or relative)
+// 3. the ID matches a Windows drive letter pattern (e.g. C:\ or D:/)
+export function isLocalId(id: string): boolean {
+  return (
+    id.startsWith("missing-") ||
+    id.startsWith("/") ||
+    /^[a-zA-Z]:[/\\]/.test(id)
+  );
 }
 
 export async function searchTracks(query: string): Promise<Track[]> {

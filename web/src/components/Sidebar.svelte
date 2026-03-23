@@ -2,12 +2,11 @@
   import { logout } from "../lib/api";
 
   let {
-    activeView = "home",
+    activeView = "library",
     onnavigate
   }: { activeView?: string; onnavigate?: (id: string) => void } = $props();
 
   const navItems = [
-    { id: "home", label: "Home" },
     { id: "library", label: "Library" },
     { id: "playlists", label: "Playlists" }
   ];

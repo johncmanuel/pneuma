@@ -19,7 +19,6 @@
   import QueuePanel from "./components/QueuePanel.svelte";
   import Toasts from "./components/Toasts.svelte";
   import SearchBar from "./components/SearchBar.svelte";
-  import Home from "./views/Home.svelte";
   import Library from "./views/Library.svelte";
   import Playlists from "./views/Playlists.svelte";
   import Login from "./views/Login.svelte";
@@ -27,6 +26,24 @@
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
 
   let wasLoggedIn = false;
+  let searchBar: any = undefined;
+
+  function handleKeydown(e: KeyboardEvent) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+      e.preventDefault();
+      searchBar?.focus();
+    }
+  }
+
+  function handleMouseUp(e: MouseEvent) {
+    if (e.button === 3) {
+      e.preventDefault();
+      goBack();
+    } else if (e.button === 4) {
+      e.preventDefault();
+      goForward();
+    }
+  }
 
   onMount(async () => {
     await tryAutoAuth();
@@ -55,6 +72,8 @@
     });
   }
 </script>
+
+<svelte:window onkeydown={handleKeydown} onmouseup={handleMouseUp} />
 
 {#if !$loggedIn}
   <div class="auth-shell">
@@ -90,14 +109,12 @@
         </button>
       </div>
       <div class="search-wrapper">
-        <SearchBar />
+        <SearchBar bind:this={searchBar} />
       </div>
     </header>
 
     <main class="content">
-      {#if $currentView === "home"}
-        <Home onnavigate={handleNavigate} />
-      {:else if $currentView === "library"}
+      {#if $currentView === "library"}
         <Library />
       {:else if $currentView === "playlists"}
         <Playlists />

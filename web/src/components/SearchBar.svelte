@@ -19,6 +19,11 @@
   let resultsEl = $state<HTMLDivElement | null>(null);
   let focused = $state(false);
 
+  export function focus() {
+    inputEl?.focus();
+    inputEl?.select();
+  }
+
   let trackResults: Track[] = $state([]);
   let albumResults: AlbumGroup[] = $state([]);
   let activeResultKey: string | null = $state(null);

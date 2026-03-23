@@ -77,7 +77,9 @@ export function wsSend(type: string, payload: object) {
 function handleMessage(msg: { type: string; payload: any }) {
   switch (msg.type) {
     case "playback.changed":
-      handlePlaybackChanged(msg.payload);
+      if (handlePlaybackChanged(msg.payload)) {
+        wsSend("playback.next", {});
+      }
       break;
     case "track.added":
     case "track.updated":

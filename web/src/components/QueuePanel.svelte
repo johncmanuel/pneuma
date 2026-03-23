@@ -1,13 +1,13 @@
 <script lang="ts">
   import { playerState } from "../lib/stores/playback";
-  import { fetchTracksByIDs } from "../lib/stores/library";
+  import { fetchTracksByIDs, isLocalId } from "../lib/stores/library";
   import { closePanel } from "../lib/stores/ui";
   import { formatDuration } from "../lib/utils";
   import { artworkUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import type { Track } from "../lib/types";
 
-  $: queue = $playerState.queue ?? [];
+  $: queue = ($playerState.queue ?? []).filter((id) => !isLocalId(id));
   $: currentIndex = $playerState.queueIndex ?? 0;
   $: nowPlayingTrack = $playerState.track;
 
@@ -49,15 +49,6 @@
   }
 
   function playFromQueue(track: Track, idx: number) {
-    const newIndex = currentIndex + 1 + idx;
-    playerState.update((s) => ({
-      ...s,
-      trackId: track.id,
-      track,
-      queueIndex: newIndex,
-      positionMs: 0,
-      paused: false
-    }));
     wsSend("playback.play", {
       track_id: track.id,
       position_ms: 0
@@ -99,15 +90,15 @@
     {#if upNext.length === 0}
       <p class="empty text-3">Nothing in queue</p>
     {:else}
-      {#each upNext as track, i (track.id + "-" + i)}
-        <button class="queue-item" onclick={() => playFromQueue(track, i)}>
+      {#each upNext as entry, i (i)}
+        <button class="queue-item" onclick={() => playFromQueue(entry, i)}>
           <div class="track-info">
-            <span class="name truncate">{track.title}</span>
+            <span class="name truncate">{entry.title}</span>
             <span class="artist truncate text-3"
-              >{track.artist_name || track.album_artist || "Unknown"}</span
+              >{entry.artist_name || entry.album_artist || "Unknown"}</span
             >
           </div>
-          <span class="dur text-3">{formatDuration(track.duration_ms)}</span>
+          <span class="dur text-3">{formatDuration(entry.duration_ms)}</span>
         </button>
       {/each}
     {/if}

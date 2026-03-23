@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { playerState } from "../lib/stores/playback";
-  import { apiFetch, artworkUrl, getStreamToken, streamUrl } from "../lib/api";
+  import { artworkUrl, getStreamToken, streamUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import { formatDuration } from "../lib/utils";
   import {
@@ -18,6 +18,7 @@
     List
   } from "@lucide/svelte";
   import { activePanel, toggleQueuePanel } from "../lib/stores/ui";
+  import { isLocalId } from "../lib/stores/library";
 
   let audio: HTMLAudioElement;
   let volume = 1;
@@ -85,7 +86,9 @@
     streamTokenTimer = setInterval(refreshToken, TOKEN_REFRESH_TIMER_MS);
   }
 
-  // Sync the audio element to the store's playback state
+  // Sync the audio element to the store's playback state.
+  // Local/missing tracks are blocked by handlePlaybackChanged in playback.ts
+  // before they reach the store, so this only handles remote tracks.
   $: if (audio && $playerState.trackId) {
     const trackChanged = $playerState.trackId !== lastTrackId;
     const pausedChanged = $playerState.paused !== lastPaused;
@@ -170,25 +173,75 @@
     });
   }
 
+  /** Filter the queue to remote-only tracks for navigation. */
+  function remoteQueue(): string[] {
+    return $playerState.queue.filter((id) => !isLocalId(id));
+  }
+
+  /** Find the current track's position in the filtered queue. */
+  function currentRemoteIndex(): number {
+    const rq = remoteQueue();
+    return rq.indexOf($playerState.trackId);
+  }
+
   async function skipNext() {
     if (!hasTrack) return;
-    const q = $playerState.queue;
-    if (q.length === 0) return;
+    const rq = remoteQueue();
+    if (rq.length === 0) return;
 
     if ($playerState.repeat === 2) {
       wsSend("playback.play", {
-        track_id: q[$playerState.queueIndex],
+        track_id: $playerState.trackId,
         position_ms: 0
       });
       return;
     }
 
-    wsSend("playback.next", {});
+    const idx = currentRemoteIndex();
+    if (idx < 0) return;
+
+    const nextIdx = idx + 1;
+    if (nextIdx >= rq.length) {
+      playerState.update((s) => ({ ...s, paused: true }));
+      return;
+    }
+
+    wsSend("playback.play", {
+      track_id: rq[nextIdx],
+      position_ms: 0
+    });
   }
 
   async function skipPrev() {
     if (!hasTrack) return;
-    wsSend("playback.prev", {});
+    const rq = remoteQueue();
+    if (rq.length === 0) return;
+
+    const idx = currentRemoteIndex();
+    if (idx < 0) return;
+
+    const currentTime = audio ? audio.currentTime * 1000 : displayPosition;
+    if (currentTime > 3000) {
+      wsSend("playback.play", {
+        track_id: $playerState.trackId,
+        position_ms: 0
+      });
+      return;
+    }
+
+    const prevIdx = idx - 1;
+    if (prevIdx < 0) {
+      wsSend("playback.play", {
+        track_id: $playerState.trackId,
+        position_ms: 0
+      });
+      return;
+    }
+
+    wsSend("playback.play", {
+      track_id: rq[prevIdx],
+      position_ms: 0
+    });
   }
 
   function toggleShuffle() {
@@ -249,27 +302,46 @@
     )
       return;
 
-    if (e.code === "Space" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+    const ctrl = e.ctrlKey || e.metaKey;
+
+    // Space -> play/pause
+    if (e.code === "Space" && !ctrl && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       togglePause();
       return;
     }
-    if (e.code === "ArrowLeft" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+    // Ctrl/Cmd+S -> shuffle
+    if (ctrl && e.key === "s" && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      toggleShuffle();
+      return;
+    }
+    // Ctrl/Cmd+R -> repeat
+    if (ctrl && e.key === "r" && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      toggleRepeat();
+      return;
+    }
+    // Alt+Shift+Q -> toggle queue panel
+    if (e.altKey && e.shiftKey && (e.key === "Q" || e.key === "q")) {
+      e.preventDefault();
+      toggleQueuePanel();
+      return;
+    }
+    // Left arrow -> previous track
+    if (e.code === "ArrowLeft" && !ctrl && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       skipPrev();
       return;
     }
-    if (e.code === "ArrowRight" && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+    // Right arrow -> next track
+    if (e.code === "ArrowRight" && !ctrl && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       skipNext();
       return;
     }
-    if (
-      (e.key === "m" || e.key === "M") &&
-      !e.ctrlKey &&
-      !e.altKey &&
-      !e.shiftKey
-    ) {
+    // M -> mute/unmute
+    if ((e.key === "m" || e.key === "M") && !ctrl && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       toggleMute();
       return;

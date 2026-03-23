@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import type { Track } from "../types";
+import { isLocalId } from "./library";
 
 export type RepeatMode = 0 | 1 | 2;
 
@@ -27,9 +28,18 @@ const initial: PlayerState = {
 
 export const playerState = writable<PlayerState>(initial);
 
-/** Called from ws.ts when a playback.changed event arrives. */
-export function handlePlaybackChanged(payload: any) {
-  if (!payload || typeof payload !== "object") return;
+function isLocalPayload(payload: any): boolean {
+  const id: string | undefined = payload?.track_id;
+  if (!id) return false;
+  return isLocalId(id);
+}
+
+export function handlePlaybackChanged(payload: any): boolean {
+  if (!payload || typeof payload !== "object") return false;
+
+  if (isLocalPayload(payload)) {
+    return true;
+  }
 
   const incomingTrackId: string | undefined = payload.track_id;
   const incomingPlaying: boolean | undefined = payload.playing;
@@ -61,4 +71,6 @@ export function handlePlaybackChanged(payload: any) {
       shuffle: payload.shuffle ?? s.shuffle
     };
   });
+
+  return false;
 }

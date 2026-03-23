@@ -3,7 +3,7 @@ import { writable, derived, get } from "svelte/store";
 export type PanelName = "queue" | null;
 
 export const activePanel = writable<PanelName>(null);
-export const currentView = writable<string>("home");
+export const currentView = writable<string>("library");
 
 export function togglePanel(name: "queue") {
   activePanel.update((v) => (v === name ? null : name));
@@ -45,7 +45,7 @@ function applyNavState(s: NavState) {
 
 const _navStack = writable<NavState[]>([
   {
-    view: "home",
+    view: "library",
     albumKey: null,
     playlistId: null
   }
