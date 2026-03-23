@@ -9,8 +9,7 @@
   const navItems = [
     { id: "home", label: "Home" },
     { id: "library", label: "Library" },
-    { id: "playlists", label: "Playlists" },
-    { id: "search", label: "Search" }
+    { id: "playlists", label: "Playlists" }
   ];
 </script>
 

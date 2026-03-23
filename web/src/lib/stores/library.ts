@@ -13,7 +13,7 @@ export async function loadAlbumGroupsPage(offset = 0, search = "") {
     const params = new URLSearchParams();
     params.set("offset", String(offset));
     params.set("limit", String(PAGE_SIZE));
-    if (search) params.set("search", search);
+    if (search) params.set("filter", search);
 
     const r = await apiFetch(`/api/library/albumgroups?${params}`);
     if (!r.ok) return;
@@ -85,12 +85,12 @@ export async function searchTracks(query: string): Promise<Track[]> {
 
 export async function searchAlbumGroups(query: string): Promise<AlbumGroup[]> {
   const params = new URLSearchParams();
-  params.set("q", query);
-  params.set("type", "albums");
+  params.set("filter", query);
+  params.set("limit", "10");
 
-  const r = await apiFetch(`/api/library/search?${params}`);
+  const r = await apiFetch(`/api/library/albumgroups?${params}`);
   if (!r.ok) return [];
 
   const data = await r.json();
-  return Array.isArray(data) ? data : (data.albums ?? []);
+  return data.groups ?? [];
 }

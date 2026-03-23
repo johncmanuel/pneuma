@@ -1,6 +1,7 @@
 <script lang="ts">
   import { formatDuration } from "../lib/utils";
   import { onDestroy } from "svelte";
+  import { portal } from "../lib/dom";
   import type { Track } from "../lib/types";
 
   export let track: Track | null = null;
@@ -8,6 +9,7 @@
   export let hideAlbum: boolean = false;
   export let dateAdded: string | undefined = undefined;
   export let showRemove: boolean = false;
+  export let isLocal: boolean = false;
 
   export let onplay: ((track: Track | null) => void) | undefined = undefined;
   export let onselect: (() => void) | undefined = undefined;
@@ -18,18 +20,25 @@
   let showMenu = false;
   let menuX = 0;
   let menuY = 0;
+  let closeMenuListener: (() => void) | null = null;
 
   function onContext(e: MouseEvent) {
     e.preventDefault();
+
     menuX = e.clientX;
     menuY = e.clientY;
     showMenu = true;
 
-    const close = () => {
+    if (closeMenuListener)
+      window.removeEventListener("click", closeMenuListener);
+
+    closeMenuListener = () => {
       showMenu = false;
-      window.removeEventListener("click", close);
+      window.removeEventListener("click", closeMenuListener!);
+      closeMenuListener = null;
     };
-    window.addEventListener("click", close);
+    // defer so this very click doesn't immediately close it
+    setTimeout(() => window.addEventListener("click", closeMenuListener!), 0);
   }
 
   function handleAddToQueue() {
@@ -44,6 +53,8 @@
 
   onDestroy(() => {
     showMenu = false;
+    if (closeMenuListener)
+      window.removeEventListener("click", closeMenuListener);
   });
 </script>
 
@@ -51,9 +62,14 @@
   class="track-row"
   class:active
   class:hide-album={hideAlbum}
-  ondblclick={() => onplay?.(track)}
+  class:local-only={isLocal}
+  ondblclick={() => !isLocal && onplay?.(track)}
   onclick={() => onselect?.()}
   oncontextmenu={onContext}
+  disabled={isLocal}
+  title={isLocal
+    ? "Local track — only available on the desktop app"
+    : undefined}
 >
   <span class="num text-3">{track?.track_number || "-"}</span>
   <span class="title truncate">{track?.title ?? "Unknown"}</span>
@@ -71,13 +87,18 @@
 </button>
 
 {#if showMenu}
-  <div class="ctx-menu" style="left:{menuX}px;top:{menuY}px">
-    <button onclick={handleAddToQueue}>Add to queue</button>
+  <div class="ctx-menu" use:portal style="left:{menuX}px;top:{menuY}px">
+    {#if !isLocal}
+      <button onclick={handleAddToQueue}>Add to queue</button>
+    {/if}
     {#if showRemove}
-      <hr class="ctx-sep" />
+      {#if !isLocal}<hr class="ctx-sep" />{/if}
       <button class="ctx-danger" onclick={handleRemove}
         >Remove from playlist</button
       >
+    {/if}
+    {#if isLocal && !showRemove}
+      <button disabled class="ctx-disabled">Local track</button>
     {/if}
   </div>
 {/if}
@@ -93,7 +114,9 @@
     text-align: left;
     border-radius: var(--r-sm);
     color: var(--text-1);
-    transition: background 0.1s;
+    transition:
+      background 0.1s,
+      color 0.1s;
   }
   .track-row.hide-album {
     grid-template-columns: 32px 2fr 1fr 76px;
@@ -104,6 +127,15 @@
   .track-row.active {
     color: var(--accent);
   }
+
+  .track-row.local-only {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .track-row.local-only:hover {
+    opacity: 0.5;
+  }
+
   .num {
     font-size: 12px;
     text-align: right;
@@ -146,5 +178,9 @@
   }
   .ctx-danger:hover {
     background: rgba(231, 76, 60, 0.1) !important;
+  }
+  .ctx-disabled {
+    color: var(--text-3) !important;
+    cursor: default;
   }
 </style>

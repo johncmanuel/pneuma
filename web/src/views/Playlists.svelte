@@ -155,16 +155,6 @@
 
 {#if $selectedPlaylistView && $selectedPlaylist}
   <div class="playlist-detail">
-    <button
-      class="back-btn"
-      onclick={() => {
-        selectedPlaylistView.set(null);
-        pushNav({ view: "playlists", playlistId: null });
-      }}
-    >
-      &larr; Back to playlists
-    </button>
-
     <div class="detail-header">
       <div class="detail-hero">
         <div class="detail-art">
@@ -276,6 +266,7 @@
                 active={$currentTrackId === track.id}
                 dateAdded={formatDate(item.added_at)}
                 showRemove={true}
+                isLocal={item.source === "local_ref"}
                 onplay={() => handlePlay(item)}
                 onselect={() => {}}
                 onaddtoqueue={() => {}}
@@ -368,16 +359,6 @@
     margin: 0;
     font-size: 20px;
     font-weight: 700;
-  }
-
-  .back-btn {
-    font-size: 13px;
-    color: var(--text-2);
-    padding: 4px 0;
-    margin-bottom: 12px;
-  }
-  .back-btn:hover {
-    color: var(--accent);
   }
 
   .new-btn {

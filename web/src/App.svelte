@@ -18,10 +18,10 @@
   import PlayerBar from "./components/PlayerBar.svelte";
   import QueuePanel from "./components/QueuePanel.svelte";
   import Toasts from "./components/Toasts.svelte";
+  import SearchBar from "./components/SearchBar.svelte";
   import Home from "./views/Home.svelte";
   import Library from "./views/Library.svelte";
   import Playlists from "./views/Playlists.svelte";
-  import Search from "./views/Search.svelte";
   import Login from "./views/Login.svelte";
   import Register from "./views/Register.svelte";
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
@@ -89,6 +89,9 @@
           <ChevronRight size={18} />
         </button>
       </div>
+      <div class="search-wrapper">
+        <SearchBar />
+      </div>
     </header>
 
     <main class="content">
@@ -98,8 +101,6 @@
         <Library />
       {:else if $currentView === "playlists"}
         <Playlists />
-      {:else if $currentView === "search"}
-        <Search />
       {/if}
     </main>
 
@@ -192,6 +193,12 @@
   .nav-btn:disabled {
     opacity: 0.3;
     cursor: default;
+  }
+
+  .search-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
   }
 
   .content {
