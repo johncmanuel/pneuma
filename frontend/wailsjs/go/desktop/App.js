@@ -110,6 +110,14 @@ export function PickPlaylistArtwork(arg1) {
   return window['go']['desktop']['App']['PickPlaylistArtwork'](arg1);
 }
 
+export function RefreshPlaylistArtByRemoteID(arg1) {
+  return window['go']['desktop']['App']['RefreshPlaylistArtByRemoteID'](arg1);
+}
+
+export function RefreshPlaylistArtFromServer(arg1) {
+  return window['go']['desktop']['App']['RefreshPlaylistArtFromServer'](arg1);
+}
+
 export function ResolvePlaylistItems(arg1) {
   return window['go']['desktop']['App']['ResolvePlaylistItems'](arg1);
 }

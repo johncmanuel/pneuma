@@ -13,16 +13,17 @@
     selectPlaylist,
     removePlaylistItem,
     itemToTrack,
-    updatePlaylist
+    updatePlaylist,
+    handleAddToPlaylist
   } from "../lib/stores/playlists";
   import { selectedPlaylistView, pushNav } from "../lib/stores/ui";
   import { playerState } from "../lib/stores/playback";
-  import { artworkUrl } from "../lib/api";
+  import { playlistArtUrl, uploadPlaylistArtwork } from "../lib/api";
   import { wsSend } from "../lib/ws";
-  import { Music } from "@lucide/svelte";
+  import { Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "../components/TrackRow.svelte";
   import { totalDuration } from "../lib/utils";
-  import type { PlaylistItem } from "../lib/types";
+  import type { PlaylistItem, PlaylistSummary } from "../lib/types";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -34,6 +35,28 @@
   let editName = "";
   let editDesc = "";
   let trackListEl: HTMLDivElement;
+  let artInput: HTMLInputElement;
+  let uploadingArt = false;
+
+  async function handleArtUpload(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || !$selectedPlaylistView) return;
+
+    uploadingArt = true;
+    try {
+      await uploadPlaylistArtwork($selectedPlaylistView, file);
+      await selectPlaylist($selectedPlaylistView);
+      await loadPlaylists();
+    } finally {
+      uploadingArt = false;
+      input.value = "";
+    }
+  }
+
+  function triggerArtUpload() {
+    artInput?.click();
+  }
 
   $: if ($selectedPlaylistView) {
     selectPlaylist($selectedPlaylistView);
@@ -73,7 +96,7 @@
     }
   }
 
-  function openPlaylist(pl: import("../lib/types").PlaylistSummary) {
+  function openPlaylist(pl: PlaylistSummary) {
     pushNav({ view: "playlists", playlistId: pl.id });
   }
 
@@ -120,7 +143,7 @@
     });
   }
 
-  function startEdit(pl: import("../lib/types").PlaylistSummary) {
+  function startEdit(pl: PlaylistSummary) {
     editingId = pl.id;
     editName = pl.name;
     editDesc = pl.description;
@@ -157,16 +180,34 @@
   <div class="playlist-detail">
     <div class="detail-header">
       <div class="detail-hero">
-        <div class="detail-art">
+        <input
+          type="file"
+          accept="image/*"
+          bind:this={artInput}
+          onchange={handleArtUpload}
+          style="display:none"
+        />
+        <button
+          class="detail-art"
+          onclick={triggerArtUpload}
+          disabled={uploadingArt}
+          title="Change artwork"
+        >
           {#if $selectedPlaylist.artwork_path}
             <img
-              src={artworkUrl($selectedPlaylist.artwork_path)}
+              src={playlistArtUrl(
+                $selectedPlaylist.id,
+                $selectedPlaylist.updated_at
+              )}
               alt=""
               onerror={hideImg}
             />
           {/if}
           <span class="art-placeholder"><Music size={24} /></span>
-        </div>
+          <div class="art-overlay">
+            <SquarePen size={24} />
+          </div>
+        </button>
         <div class="detail-meta">
           {#if editingId === $selectedPlaylist.id}
             <input
@@ -267,10 +308,12 @@
                 dateAdded={formatDate(item.added_at)}
                 showRemove={true}
                 isLocal={item.source === "local_ref"}
+                playlists={$playlists}
                 onplay={() => handlePlay(item)}
                 onselect={() => {}}
                 onaddtoqueue={() => {}}
                 onremove={() => handleRemove(item)}
+                onaddtoplaylist={(t, id) => handleAddToPlaylist(t, id)}
               />
             </div>
           {/each}
@@ -321,7 +364,7 @@
             <div class="pl-art">
               {#if pl.artwork_path}
                 <img
-                  src={artworkUrl(pl.artwork_path)}
+                  src={playlistArtUrl(pl.id, pl.updated_at)}
                   alt=""
                   onerror={hideImg}
                 />
@@ -481,6 +524,9 @@
     justify-content: center;
     position: relative;
     overflow: hidden;
+    cursor: pointer;
+    padding: 0;
+    border: none;
   }
   .detail-art img {
     position: absolute;
@@ -488,6 +534,21 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+  .art-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 0.15s;
+    color: var(--text-1);
+    z-index: 2;
+  }
+  .detail-art:hover .art-overlay {
+    opacity: 1;
   }
 
   .art-placeholder {

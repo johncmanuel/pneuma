@@ -49,6 +49,7 @@ export interface PlaylistSummary {
   total_duration_ms: number;
   artwork_path: string;
   owner_id: string;
+  updated_at: string;
 }
 
 export interface PlaylistItem {

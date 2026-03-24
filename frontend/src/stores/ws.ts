@@ -2,6 +2,7 @@ import { writable } from "svelte/store";
 import { playerState } from "./player";
 import type { Track } from "./player";
 import { loadRemoteAlbumGroupsPage, tracks } from "./library";
+import { loadPlaylists, selectPlaylist, selectedPlaylistId } from "./playlists";
 import {
   wsBase,
   authToken,
@@ -12,6 +13,7 @@ import {
 import { addToast } from "./toasts";
 import { isLocalId } from "./localLibrary";
 import { get } from "svelte/store";
+import { RefreshPlaylistArtByRemoteID } from "../../wailsjs/go/desktop/App";
 
 export const serverDisconnected = writable(false);
 
@@ -61,6 +63,21 @@ export function connectWS() {
             "warning"
           );
           loadRemoteAlbumGroupsPage(0);
+          break;
+        }
+        case "playlist.updated": {
+          const remoteID: string = msg.payload?.id ?? "";
+          if (remoteID) {
+            RefreshPlaylistArtByRemoteID(remoteID)
+              .then(() => loadPlaylists())
+              .then(() => {
+                const selId = get(selectedPlaylistId);
+                if (selId) return selectPlaylist(selId);
+              })
+              .catch((e: any) =>
+                console.warn("Failed to refresh playlist art from server:", e)
+              );
+          }
           break;
         }
         case "playback.changed": {

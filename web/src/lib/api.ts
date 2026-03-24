@@ -185,3 +185,28 @@ export function artworkUrl(trackId: string): string {
   const base = apiBase();
   return `${base}/api/library/tracks/${trackId}/art?token=${encodeURIComponent(token)}`;
 }
+
+export function playlistArtUrl(playlistId: string, cacheBust?: string): string {
+  const token = get(authToken);
+  const base = apiBase();
+  const v = cacheBust ? `&v=${encodeURIComponent(cacheBust)}` : "";
+  return `${base}/api/playlists/${playlistId}/art?token=${encodeURIComponent(token)}${v}`;
+}
+
+export async function uploadPlaylistArtwork(
+  playlistId: string,
+  file: File
+): Promise<string | null> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await apiFetch(`/api/playlists/${playlistId}/artwork`, {
+    method: "POST",
+    body: formData
+  });
+
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  return data.artwork_path ?? null;
+}

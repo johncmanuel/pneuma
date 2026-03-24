@@ -12,6 +12,10 @@
   } from "../lib/stores/library";
   import { playerState } from "../lib/stores/playback";
   import { selectedAlbum, pushNav } from "../lib/stores/ui";
+  import {
+    playlists as playlistsStore,
+    handleAddToPlaylist
+  } from "../lib/stores/playlists";
   import { artworkUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import { totalDuration } from "../lib/utils";
@@ -248,9 +252,11 @@
                     track={filteredTracks[row.index]}
                     hideAlbum={true}
                     active={$currentTrackId === filteredTracks[row.index]?.id}
+                    playlists={$playlistsStore}
                     onplay={(t) => t && playTrack(t)}
                     onselect={() => {}}
                     onaddtoqueue={(t) => t && addToQueue(t)}
+                    onaddtoplaylist={(t, id) => handleAddToPlaylist(t, id)}
                   />
                 </div>
               {/each}

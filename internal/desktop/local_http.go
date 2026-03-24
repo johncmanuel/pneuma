@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/dhowden/tag"
+
+	"pneuma/internal/artwork"
 )
 
 // handleLocalStream serves a local audio file for the <audio> element.
@@ -127,13 +129,13 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// then resize and persist the thumbnail.
-	thumbData, err := resizeToThumbnail(artData)
+	thumbData, err := artwork.ResizeToThumbnail(artData, thumbMaxDim)
 	if err != nil {
 		http.Error(w, "failed to process artwork", http.StatusInternalServerError)
 		return
 	}
 
-	if err := writeThumbnail(a.thumbDir, artHash+".jpg", thumbData); err != nil {
+	if err := artwork.WriteThumbnail(a.thumbDir, artHash+".jpg", thumbData); err != nil {
 		http.Error(w, "cache write failed", http.StatusInternalServerError)
 		return
 	}

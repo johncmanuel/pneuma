@@ -57,6 +57,10 @@ export function OpenLocalFolder():Promise<Array<string>>;
 
 export function PickPlaylistArtwork(arg1:string):Promise<string>;
 
+export function RefreshPlaylistArtByRemoteID(arg1:string):Promise<void>;
+
+export function RefreshPlaylistArtFromServer(arg1:string):Promise<void>;
+
 export function ResolvePlaylistItems(arg1:string):Promise<Array<desktop.LocalPlaylistItem>>;
 
 export function RestoreSession(arg1:string,arg2:string):Promise<void>;

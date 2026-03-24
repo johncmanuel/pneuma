@@ -1,6 +1,7 @@
 import { writable, get } from "svelte/store";
 import { authToken, wsBase } from "./api";
 import { handlePlaybackChanged } from "./stores/playback";
+import { loadPlaylists, selectedPlaylist } from "./stores/playlists";
 
 export const libraryVersion = writable(0);
 export const scanRunning = writable(false);
@@ -104,6 +105,15 @@ function handleMessage(msg: { type: string; payload: any }) {
     case "playlist.updated":
     case "playlist.deleted":
       libraryVersion.update((n) => n + 1);
+      loadPlaylists();
+
+      // refresh the playlist view if selected
+      if (msg.type === "playlist.updated" && msg.payload?.id) {
+        const sel = get(selectedPlaylist);
+        if (sel?.id === msg.payload.id) {
+          selectedPlaylist.set(msg.payload);
+        }
+      }
       break;
   }
 }

@@ -35,8 +35,9 @@ type Services struct {
 	} // *scanner.Scheduler
 	JWTSecret   string
 	UploadsDir  string
-	UploadMaxMB int   // max upload body size in MB (0 = default 500 MB)
-	WebUI       fs.FS // embedded web UI assets (nil = disabled)
+	ArtworkDir  string // directory for playlist artwork thumbnails
+	UploadMaxMB int    // max upload body size in MB (0 = default 500 MB)
+	WebUI       fs.FS  // embedded web UI assets (nil = disabled)
 }
 
 // NewRouter builds and returns the configured Echo router.
@@ -60,7 +61,7 @@ func NewRouter(svc Services) *echo.Echo {
 	ph := handlers.NewPlaybackHandler(svc.Playback)
 	uh := handlers.NewUserHandler(svc.User, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries)
-	plh := handlers.NewPlaylistHandler(svc.Playlist, svc.Hub)
+	plh := handlers.NewPlaylistHandler(svc.Playlist, svc.Hub, svc.ArtworkDir)
 
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
 
@@ -122,6 +123,8 @@ func NewRouter(svc Services) *echo.Echo {
 	pl.GET("/:id/items", plh.GetPlaylistItems)
 	pl.PUT("/:id/items", plh.SetPlaylistItems)
 	pl.POST("/:id/items", plh.AddPlaylistItem)
+	pl.POST("/:id/artwork", plh.UploadPlaylistArt)
+	pl.GET("/:id/art", plh.ServePlaylistArt)
 
 	// Stream (supports query-param token for <audio> elements)
 	// This is an alternative stream endpoint that accepts ?token= for clients

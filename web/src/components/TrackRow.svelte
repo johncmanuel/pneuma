@@ -2,7 +2,9 @@
   import { formatDuration } from "../lib/utils";
   import { onDestroy } from "svelte";
   import { portal } from "../lib/dom";
+  import { ChevronRight } from "@lucide/svelte";
   import type { Track } from "../lib/types";
+  import type { PlaylistSummary } from "../lib/types";
 
   export let track: Track | null = null;
   export let active: boolean = false;
@@ -10,16 +12,21 @@
   export let dateAdded: string | undefined = undefined;
   export let showRemove: boolean = false;
   export let isLocal: boolean = false;
+  export let playlists: PlaylistSummary[] = [];
 
   export let onplay: ((track: Track | null) => void) | undefined = undefined;
   export let onselect: (() => void) | undefined = undefined;
   export let onaddtoqueue: ((track: Track | null) => void) | undefined =
     undefined;
   export let onremove: ((track: Track | null) => void) | undefined = undefined;
+  export let onaddtoplaylist:
+    | ((track: Track | null, playlistId: string) => void)
+    | undefined = undefined;
 
   let showMenu = false;
   let menuX = 0;
   let menuY = 0;
+  let showPlaylistSub = false;
   let closeMenuListener: (() => void) | null = null;
 
   function onContext(e: MouseEvent) {
@@ -28,12 +35,14 @@
     menuX = e.clientX;
     menuY = e.clientY;
     showMenu = true;
+    showPlaylistSub = false;
 
     if (closeMenuListener)
       window.removeEventListener("click", closeMenuListener);
 
     closeMenuListener = () => {
       showMenu = false;
+      showPlaylistSub = false;
       window.removeEventListener("click", closeMenuListener!);
       closeMenuListener = null;
     };
@@ -49,6 +58,12 @@
   function handleRemove() {
     onremove?.(track);
     showMenu = false;
+  }
+
+  function handleAddToPlaylist(pl: PlaylistSummary) {
+    onaddtoplaylist?.(track, pl.id);
+    showMenu = false;
+    showPlaylistSub = false;
   }
 
   onDestroy(() => {
@@ -90,6 +105,27 @@
   <div class="ctx-menu" use:portal style="left:{menuX}px;top:{menuY}px">
     {#if !isLocal}
       <button onclick={handleAddToQueue}>Add to queue</button>
+      {#if playlists.length > 0}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="ctx-submenu-wrap"
+          onmouseenter={() => (showPlaylistSub = true)}
+          onmouseleave={() => (showPlaylistSub = false)}
+        >
+          <button class="has-sub"
+            >Add to playlist <ChevronRight size={14} /></button
+          >
+          {#if showPlaylistSub}
+            <div class="ctx-submenu">
+              {#each playlists as pl (pl.id)}
+                <button onclick={() => handleAddToPlaylist(pl)}
+                  >{pl.name}</button
+                >
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
     {/if}
     {#if showRemove}
       {#if !isLocal}<hr class="ctx-sep" />{/if}
@@ -182,5 +218,29 @@
   .ctx-disabled {
     color: var(--text-3) !important;
     cursor: default;
+  }
+
+  .ctx-submenu-wrap {
+    position: relative;
+  }
+
+  .has-sub {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .ctx-submenu {
+    position: absolute;
+    top: -4px;
+    left: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    min-width: 160px;
+    max-height: 240px;
+    overflow-y: auto;
   }
 </style>

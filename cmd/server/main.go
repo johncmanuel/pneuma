@@ -27,6 +27,9 @@ import (
 	"pneuma/internal/user"
 )
 
+// TODO: consider moving this to a config file or env var
+const artworkSubdir = "playlist-artwork"
+
 func main() {
 	dataDir := flag.String("data", "", "path to data directory (default: $PNEUMA_DATA_DIR or ~/.pneuma)")
 	cfgPath := flag.String("config", "", "path to config.toml (default: <data-dir>/config.toml)")
@@ -89,6 +92,7 @@ func main() {
 		Scanner:     sched,
 		JWTSecret:   cfg.Auth.SecretKey,
 		UploadsDir:  cfg.Upload.Dir,
+		ArtworkDir:  filepath.Join(dir, artworkSubdir),
 		UploadMaxMB: cfg.Upload.MaxSizeMB,
 		WebUI:       dashboard.FS(),
 	})

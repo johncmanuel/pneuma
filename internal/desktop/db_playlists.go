@@ -7,22 +7,20 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/jpeg"
-	_ "image/png"
 	"io"
+	"log/slog"
 	"math"
 	"math/rand/v2"
+	"mime/multipart"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	wailsrt "github.com/wailsapp/wails/v2/pkg/runtime"
-	"golang.org/x/image/draw"
 
+	"pneuma/internal/artwork"
 	"pneuma/internal/models"
 	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/desktopdb"
@@ -422,7 +420,7 @@ func (a *App) PickPlaylistArtwork(playlistID string) (string, error) {
 		return "", fmt.Errorf("read image: %w", err)
 	}
 
-	thumbData, err := resizeToThumbnail(raw)
+	thumbData, err := artwork.ResizeToThumbnail(raw, thumbMaxDim)
 	if err != nil {
 		return "", err
 	}
@@ -432,7 +430,7 @@ func (a *App) PickPlaylistArtwork(playlistID string) (string, error) {
 	artHash := "pl-" + hex.EncodeToString(sum[:])[:24]
 	fileName := artHash + ".jpg"
 
-	if err := writeThumbnail(a.thumbDir, fileName, thumbData); err != nil {
+	if err := artwork.WriteThumbnail(a.thumbDir, fileName, thumbData); err != nil {
 		return "", err
 	}
 
@@ -445,75 +443,154 @@ func (a *App) PickPlaylistArtwork(playlistID string) (string, error) {
 		return "", fmt.Errorf("update playlist artwork: %w", err)
 	}
 
+	go a.uploadPlaylistArtToServer(playlistID, thumbData)
+
 	return fileName, nil
 }
 
-// resizeToThumbnail decodes raw image bytes, scales the image down to
-// thumbMaxDim (preserving aspect ratio), and returns the result encoded as
-// a JPEG. If the image is already within thumbMaxDim it is only re-encoded.
-func resizeToThumbnail(raw []byte) ([]byte, error) {
-	src, _, err := image.Decode(bytes.NewReader(raw))
+// uploadPlaylistArtToServer uploads playlist artwork to the server.
+// Called in a goroutine after local artwork is picked.
+func (a *App) uploadPlaylistArtToServer(playlistID string, jpgData []byte) {
+	a.mu.RLock()
+	serverURL := a.serverURL
+	token := a.token
+	a.mu.RUnlock()
+
+	if serverURL == "" || token == "" {
+		return
+	}
+
+	// skip any playlists that aren't synced to the server
+	ctx := context.Background()
+	lp, err := a.dq.GetLocalPlaylistByID(ctx, playlistID)
+	if err != nil || lp.RemotePlaylistID == "" {
+		return
+	}
+
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+
+	fw, err := w.CreateFormFile("file", "artwork.jpg")
 	if err != nil {
-		return nil, fmt.Errorf("decode image: %w", err)
+		slog.Warn("playlist art upload: create form file", "err", err)
+		return
 	}
-
-	b := src.Bounds()
-	srcW, srcH := b.Dx(), b.Dy()
-	dstW, dstH := srcW, srcH
-
-	if srcW > thumbMaxDim || srcH > thumbMaxDim {
-		if srcW >= srcH {
-			dstW = thumbMaxDim
-			dstH = srcH * thumbMaxDim / srcW
-		} else {
-			dstH = thumbMaxDim
-			dstW = srcW * thumbMaxDim / srcH
-		}
+	if _, err := fw.Write(jpgData); err != nil {
+		slog.Warn("playlist art upload: write data", "err", err)
+		return
 	}
+	w.Close()
 
-	// Clamp to at least 1x1 to avoid zero-dimension images.
-	if dstW < 1 {
-		dstW = 1
+	url := fmt.Sprintf("%s/api/playlists/%s/artwork", serverURL, lp.RemotePlaylistID)
+	req, err := http.NewRequest("POST", url, &body)
+	if err != nil {
+		slog.Warn("playlist art upload: new request", "err", err)
+		return
 	}
-	if dstH < 1 {
-		dstH = 1
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		slog.Warn("playlist art upload: request failed", "err", err)
+		return
 	}
+	defer resp.Body.Close()
 
-	dst := image.NewNRGBA(image.Rect(0, 0, dstW, dstH))
-	draw.BiLinear.Scale(dst, dst.Bounds(), src, b, draw.Over, nil)
-
-	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 85}); err != nil {
-		return nil, fmt.Errorf("encode thumbnail: %w", err)
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		slog.Warn("playlist art upload: server error", "status", resp.StatusCode, "body", string(body))
 	}
-
-	return buf.Bytes(), nil
 }
 
-// writeThumbnail atomically writes data to dir/fileName using a temp file and later
-// renames it so that a crash mid-write never leaves a corrupt file behind.
-func writeThumbnail(dir, fileName string, data []byte) error {
-	thumbPath := filepath.Join(dir, fileName)
+// RefreshPlaylistArtFromServer downloads the server's artwork for a playlist
+// that has a remote_playlist_id, stores it locally, and updates the DB.
+// Called when a playlist.updated WS event arrives from the server.
+func (a *App) RefreshPlaylistArtFromServer(playlistID string) error {
+	a.mu.RLock()
+	serverURL := a.serverURL
+	token := a.token
+	a.mu.RUnlock()
 
-	tmp, err := os.CreateTemp(dir, "tmp-pl-*.jpg")
+	if serverURL == "" || token == "" {
+		return fmt.Errorf("not connected to server")
+	}
+
+	ctx := context.Background()
+	lp, err := a.dq.GetLocalPlaylistByID(ctx, playlistID)
 	if err != nil {
-		return fmt.Errorf("temp file: %w", err)
+		return fmt.Errorf("get local playlist: %w", err)
 	}
-	tmpName := tmp.Name()
 
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		os.Remove(tmpName)
-		return fmt.Errorf("write thumbnail: %w", err)
+	// playlist isn't synced to the server, so there's no artwork to refresh
+	if lp.RemotePlaylistID == "" {
+		return nil
 	}
-	tmp.Close()
 
-	if err := os.Rename(tmpName, thumbPath); err != nil {
-		os.Remove(tmpName)
-		return fmt.Errorf("rename thumbnail: %w", err)
+	url := fmt.Sprintf("%s/api/playlists/%s/art", serverURL, lp.RemotePlaylistID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("download artwork: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned %d", resp.StatusCode)
+	}
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("read artwork: %w", err)
+	}
+
+	thumbData, err := artwork.ResizeToThumbnail(raw, thumbMaxDim)
+	if err != nil {
+		return fmt.Errorf("resize artwork: %w", err)
+	}
+
+	sum := sha256.Sum256(thumbData)
+
+	// 24 characters is good enough
+	hashPrefix := hex.EncodeToString(sum[:])[:24]
+
+	fileName := "pl-" + hashPrefix + ".jpg"
+	if err := artwork.WriteThumbnail(a.thumbDir, fileName, thumbData); err != nil {
+		return fmt.Errorf("write artwork: %w", err)
+	}
+
+	now := dbconv.FormatTime(time.Now())
+	if err := a.dq.UpdateLocalPlaylistArtwork(ctx, desktopdb.UpdateLocalPlaylistArtworkParams{
+		ArtworkPath: fileName,
+		UpdatedAt:   now,
+		ID:          playlistID,
+	}); err != nil {
+		return fmt.Errorf("update artwork: %w", err)
 	}
 
 	return nil
+}
+
+// RefreshPlaylistArtByRemoteID finds the local playlist linked to the given
+// server playlist ID and refreshes its artwork from the server.
+// Called by the WS handler when playlist.updated arrives with a server playlist ID.
+func (a *App) RefreshPlaylistArtByRemoteID(remotePlaylistID string) error {
+	if remotePlaylistID == "" {
+		return nil
+	}
+
+	ctx := context.Background()
+	lp, err := a.dq.GetLocalPlaylistByRemoteID(ctx, remotePlaylistID)
+	if err != nil {
+		return nil
+	}
+
+	return a.RefreshPlaylistArtFromServer(lp.ID)
 }
 
 // randomTrack holds the minimum info needed for random playlist generation.

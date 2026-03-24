@@ -101,6 +101,14 @@ export async function addTracksToPlaylist(playlistId: string, tracks: Track[]) {
   }
 }
 
+export async function handleAddToPlaylist(
+  track: Track | null,
+  playlistId: string
+) {
+  if (!track) return;
+  await addTracksToPlaylist(playlistId, [track]);
+}
+
 export async function removePlaylistItem(playlistId: string, position: number) {
   const current = get(selectedPlaylistItems);
   const remaining = current
