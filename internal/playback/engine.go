@@ -29,6 +29,7 @@ const (
 // EventBus can publish events (satisfied by *ws.Hub).
 type EventBus interface {
 	Publish(eventType string, payload any)
+	PublishToUser(userID string, eventType string, payload any)
 }
 
 // State represents the current playback state of a user.
@@ -307,7 +308,7 @@ func (e *Engine) getOrCreate(userID string) *State {
 
 // persist saves the session to the database and publishes state to WS clients.
 func (e *Engine) persist(ctx context.Context, userID string, s *State) error {
-	defer e.bus.Publish("playback.changed", map[string]any{
+	e.bus.PublishToUser(userID, "playback.changed", map[string]any{
 		"track_id":    s.TrackID,
 		"playing":     s.Playing,
 		"position_ms": s.PositionMS,

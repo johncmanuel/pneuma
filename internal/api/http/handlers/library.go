@@ -32,6 +32,7 @@ type scanTrigger interface {
 // eventPublisher is satisfied by *ws.Hub.
 type eventPublisher interface {
 	Publish(eventType string, payload any)
+	PublishToUser(userID string, eventType string, payload any)
 }
 
 // LibraryHandler serves library-related API routes.

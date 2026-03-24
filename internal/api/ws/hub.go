@@ -70,6 +70,23 @@ func (h *Hub) Publish(eventType string, payload any) {
 	}
 }
 
+// PublishToUser sends an event only to clients authenticated as the given user.
+func (h *Hub) PublishToUser(userID, eventType string, payload any) {
+	env := Envelope{Type: eventType, Payload: payload}
+	data := mustMarshal(env)
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.clients {
+		if c.userID == userID {
+			select {
+			case c.send <- data:
+			default:
+			}
+		}
+	}
+}
+
 // ConnectedCount returns the number of active WebSocket clients.
 func (h *Hub) ConnectedCount() int {
 	h.mu.RLock()

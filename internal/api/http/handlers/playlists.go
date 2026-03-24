@@ -102,14 +102,15 @@ func (h *PlaylistHandler) CreatePlaylist(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	h.hub.Publish(string(models.EventPlaylistCreated), pl)
+	h.hub.PublishToUser(claims.UserID, string(models.EventPlaylistCreated), pl)
 	return c.JSON(http.StatusCreated, pl)
 }
 
 // UpdatePlaylist updates a playlist by ID.
 func (h *PlaylistHandler) UpdatePlaylist(c echo.Context) error {
 	id := c.Param("id")
-	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+	pl, err := h.getPlaylistIfOwner(c, id)
+	if err != nil {
 		return err
 	}
 
@@ -127,15 +128,16 @@ func (h *PlaylistHandler) UpdatePlaylist(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	pl, _ := h.svc.GetByID(c.Request().Context(), id)
-	h.hub.Publish(string(models.EventPlaylistUpdated), pl)
+	updated, _ := h.svc.GetByID(c.Request().Context(), id)
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // DeletePlaylist deletes a playlist by ID.
 func (h *PlaylistHandler) DeletePlaylist(c echo.Context) error {
 	id := c.Param("id")
-	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+	pl, err := h.getPlaylistIfOwner(c, id)
+	if err != nil {
 		return err
 	}
 
@@ -143,7 +145,7 @@ func (h *PlaylistHandler) DeletePlaylist(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	h.hub.Publish(string(models.EventPlaylistDeleted), map[string]string{"id": id})
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistDeleted), map[string]string{"id": id})
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -165,7 +167,8 @@ func (h *PlaylistHandler) GetPlaylistItems(c echo.Context) error {
 // SetPlaylistItems replaces all items in a playlist with the given items.
 func (h *PlaylistHandler) SetPlaylistItems(c echo.Context) error {
 	id := c.Param("id")
-	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+	pl, err := h.getPlaylistIfOwner(c, id)
+	if err != nil {
 		return err
 	}
 
@@ -179,8 +182,8 @@ func (h *PlaylistHandler) SetPlaylistItems(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	pl, _ := h.svc.GetByID(c.Request().Context(), id)
-	h.hub.Publish(string(models.EventPlaylistUpdated), pl)
+	updated, _ := h.svc.GetByID(c.Request().Context(), id)
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -188,7 +191,8 @@ func (h *PlaylistHandler) SetPlaylistItems(c echo.Context) error {
 // AddPlaylistItem adds an item to a playlist by ID.
 func (h *PlaylistHandler) AddPlaylistItem(c echo.Context) error {
 	id := c.Param("id")
-	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+	pl, err := h.getPlaylistIfOwner(c, id)
+	if err != nil {
 		return err
 	}
 
@@ -202,8 +206,8 @@ func (h *PlaylistHandler) AddPlaylistItem(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	pl, _ := h.svc.GetByID(c.Request().Context(), id)
-	h.hub.Publish(string(models.EventPlaylistUpdated), pl)
+	updated, _ := h.svc.GetByID(c.Request().Context(), id)
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -264,7 +268,7 @@ func (h *PlaylistHandler) UploadPlaylistArt(c echo.Context) error {
 	}
 
 	updated, _ := h.svc.GetByID(ctx, pl.ID)
-	h.hub.Publish(string(models.EventPlaylistUpdated), updated)
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
 
 	return c.JSON(http.StatusOK, map[string]string{"artwork_path": fileName})
 }
