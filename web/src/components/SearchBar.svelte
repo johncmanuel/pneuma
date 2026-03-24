@@ -1,10 +1,6 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import {
-    searchTracks,
-    searchAlbumGroups,
-    fetchAlbumTracks
-  } from "../lib/stores/library";
+  import { searchTracks, searchAlbumGroups } from "../lib/stores/library";
   import { playerState } from "../lib/stores/playback";
   import { artworkUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
@@ -141,9 +137,6 @@
 
   // After results refresh, restore focus to the same item
   $effect(() => {
-    // Read these to subscribe
-    const _tracks = trackResults;
-    const _albums = albumResults;
     const key = activeResultKey;
     if (key && resultsEl) {
       const el = resultsEl.querySelector(
