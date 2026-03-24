@@ -4,6 +4,9 @@
   import { libraryVersion, scanRunning, scanResult } from "../ws";
   import { formatDuration } from "../utils";
 
+  // TODO: fix reactivity when uploading multiple files (not with uploading a folder)
+  // seems like it's blinking (i.e it's always switching between Loading.. and the table views)
+
   interface Track {
     id: string;
     title: string;
