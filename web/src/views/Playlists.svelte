@@ -20,6 +20,10 @@
   import { playerState } from "../lib/stores/playback";
   import { playlistArtUrl, uploadPlaylistArtwork } from "../lib/api";
   import { wsSend } from "../lib/ws";
+  import {
+    recordRecentPlaylist,
+    removeRecentPlaylist
+  } from "../lib/stores/recent";
   import { Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "../components/TrackRow.svelte";
   import { totalDuration } from "../lib/utils";
@@ -106,6 +110,12 @@
       (i) => i.position === item.position
     );
     const queueIds = tracks.map((t) => t.id);
+
+    if ($selectedPlaylist) {
+      recordRecentPlaylist({
+        playlist_id: $selectedPlaylist.id
+      });
+    }
 
     playerState.update((s) => ({
       ...s,
@@ -259,8 +269,10 @@
         <button
           class="action-btn danger"
           onclick={() => {
-            if (confirm("Delete this playlist?") && $selectedPlaylist)
+            if (confirm("Delete this playlist?") && $selectedPlaylist) {
               deletePlaylist($selectedPlaylist.id);
+              removeRecentPlaylist($selectedPlaylist.id);
+            }
           }}
         >
           Delete

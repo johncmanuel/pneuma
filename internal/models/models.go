@@ -126,6 +126,20 @@ type AuditEntry struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type RecentAlbum struct {
+	AlbumName    string `json:"album_name"`
+	AlbumArtist  string `json:"album_artist"`
+	FirstTrackID string `json:"first_track_id"`
+	PlayedAt     string `json:"played_at"`
+}
+
+type RecentPlaylist struct {
+	PlaylistID  string `json:"playlist_id"`
+	Name        string `json:"name"`
+	ArtworkPath string `json:"artwork_path,omitempty"`
+	PlayedAt    string `json:"played_at"`
+}
+
 type EventType string
 
 const (

@@ -18,6 +18,7 @@
   } from "../lib/stores/playlists";
   import { artworkUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
+  import { recordRecentAlbum } from "../lib/stores/recent";
   import { totalDuration } from "../lib/utils";
   import type { Track, AlbumGroup } from "../lib/types";
   import TrackRow from "../components/TrackRow.svelte";
@@ -131,6 +132,14 @@
   async function playTrack(track: Track) {
     const idx = albumDetailTracks.findIndex((t) => t.id === track.id);
     const queueIds = albumDetailTracks.map((t) => t.id);
+
+    if (currentAlbumGroup) {
+      recordRecentAlbum({
+        album_artist: currentAlbumGroup.artist,
+        album_name: currentAlbumGroup.name,
+        first_track_id: currentAlbumGroup.first_track_id
+      });
+    }
 
     playerState.update((s) => ({
       ...s,

@@ -4,6 +4,7 @@
   import { connectWS, disconnectWS } from "./lib/ws";
   import { loadAlbumGroupsPage } from "./lib/stores/library";
   import { loadPlaylists } from "./lib/stores/playlists";
+  import { loadRecent } from "./lib/stores/recent";
   import {
     activePanel,
     currentView,
@@ -59,6 +60,7 @@
     connectWS();
     loadAlbumGroupsPage(0);
     loadPlaylists();
+    loadRecent();
   } else if (!$loggedIn && wasLoggedIn) {
     wasLoggedIn = false;
     disconnectWS();

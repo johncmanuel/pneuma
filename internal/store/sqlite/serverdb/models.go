@@ -49,6 +49,20 @@ type PlaylistItem struct {
 	AddedAt        string
 }
 
+type RecentAlbum struct {
+	UserID       string
+	AlbumName    string
+	AlbumArtist  string
+	FirstTrackID string
+	PlayedAt     string
+}
+
+type RecentPlaylist struct {
+	UserID     string
+	PlaylistID string
+	PlayedAt   string
+}
+
 type Track struct {
 	ID               string
 	Path             string

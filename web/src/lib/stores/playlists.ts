@@ -92,7 +92,7 @@ export async function addTracksToPlaylist(playlistId: string, tracks: Track[]) {
 
   await apiFetch(`/api/playlists/${playlistId}/items`, {
     method: "PUT",
-    body: JSON.stringify({ items })
+    body: JSON.stringify(items)
   });
 
   // Refresh if this is the selected playlist
@@ -123,7 +123,7 @@ export async function removePlaylistItem(playlistId: string, position: number) {
 
   await apiFetch(`/api/playlists/${playlistId}/items`, {
     method: "PUT",
-    body: JSON.stringify({ items: remaining })
+    body: JSON.stringify(remaining)
   });
 
   await selectPlaylist(playlistId);

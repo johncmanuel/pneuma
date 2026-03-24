@@ -62,6 +62,7 @@ func NewRouter(svc Services) *echo.Echo {
 	uh := handlers.NewUserHandler(svc.User, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries)
 	plh := handlers.NewPlaylistHandler(svc.Playlist, svc.Hub, svc.ArtworkDir)
+	rh := handlers.NewRecentHandler(svc.Queries)
 
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
 
@@ -142,6 +143,13 @@ func NewRouter(svc Services) *echo.Echo {
 	play.POST("/queue", ph.SetQueue)
 	play.POST("/repeat", ph.SetRepeat)
 	play.POST("/shuffle", ph.SetShuffle)
+
+	// Recently played (authenticated)
+	recent := e.Group("/api/recent", authMW)
+	recent.GET("", rh.GetRecent)
+	recent.POST("/albums", rh.RecordAlbum)
+	recent.POST("/playlists", rh.RecordPlaylist)
+	recent.DELETE("/playlists/:id", rh.DeleteRecentPlaylist)
 
 	// Serve static assets directly; anything that doesn't match a file.
 	if svc.WebUI != nil {
