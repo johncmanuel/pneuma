@@ -169,6 +169,12 @@
         track.id,
         ...s.queue.slice(insertAt)
       ];
+
+      wsSend("playback.queue", {
+        track_ids: newQueue,
+        start_index: s.queueIndex
+      });
+
       return { ...s, queue: newQueue };
     });
   }

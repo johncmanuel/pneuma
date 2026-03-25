@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { playerState } from "../lib/stores/playback";
-  import { artworkUrl, getStreamToken, streamUrl } from "../lib/api";
+  import { apiFetch, artworkUrl, getStreamToken, streamUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import { formatDuration } from "../lib/utils";
   import {
@@ -103,6 +103,26 @@
       }
 
       (async () => {
+        // Fetch track metadata if the store's track object is stale.
+        // Happens when playback.changed arrives from the server (skipNext,
+        // auto-advance, other client) which only carries track_id, not the
+        // full Track object.
+        if ($playerState.track?.id !== $playerState.trackId) {
+          try {
+            const res = await apiFetch(
+              `/api/library/tracks/${$playerState.trackId}`
+            );
+            if (res.ok) {
+              const t = await res.json();
+              playerState.update((s) =>
+                s.trackId === $playerState.trackId ? { ...s, track: t } : s
+              );
+            }
+          } catch {
+            console.error("Failed to fetch track metadata for", $playerState.trackId);
+          }
+        }
+
         if (!streamToken) {
           await refreshToken();
           startTokenRefresh();
