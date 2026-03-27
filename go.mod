@@ -12,13 +12,14 @@ require (
 	github.com/labstack/echo/v4 v4.13.3
 	github.com/mewkiz/flac v1.0.13
 	github.com/pelletier/go-toml/v2 v2.2.4
-	github.com/wailsapp/wails/v2 v2.11.0
+	github.com/wailsapp/wails/v2 v2.12.0
 	golang.org/x/crypto v0.45.0
 	golang.org/x/image v0.36.0
 	modernc.org/sqlite v1.46.1
 )
 
 require (
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
