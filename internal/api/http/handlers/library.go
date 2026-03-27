@@ -18,6 +18,7 @@ import (
 
 	"pneuma/internal/api/http/middleware"
 	"pneuma/internal/library"
+	"pneuma/internal/media"
 	"pneuma/internal/models"
 	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/serverdb"
@@ -314,7 +315,7 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	}
 
 	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if !isAudioExt(ext) {
+	if !media.IsSupportedAudio(ext) {
 		return echo.NewHTTPError(http.StatusBadRequest, "unsupported audio format: "+ext)
 	}
 
@@ -501,16 +502,4 @@ func mimeFromExt(path string) string {
 	default:
 		return "application/octet-stream"
 	}
-}
-
-// TODO: move this to the config file or something similar; would want a
-// shared, single source of truth that other parts of the application can use.
-var allowedAudioExts = map[string]bool{
-	".mp3": true, ".flac": true, ".ogg": true, ".opus": true,
-	".m4a": true, ".aac": true, ".wav": true, ".aiff": true,
-	".wma": true, ".alac": true, ".ape": true, ".wv": true,
-}
-
-func isAudioExt(ext string) bool {
-	return allowedAudioExts[ext]
 }

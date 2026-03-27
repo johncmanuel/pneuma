@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"pneuma/internal/media"
 	"strings"
 
 	"github.com/dhowden/tag"
@@ -67,9 +68,12 @@ func (a *App) ScanLocalFolderStream(dir string) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		if audioExts[strings.ToLower(filepath.Ext(path))] {
+
+		ext := strings.ToLower(filepath.Ext(path))
+		if media.IsSupportedAudio(ext) {
 			total++
 		}
+
 		return nil
 	})
 
@@ -85,8 +89,9 @@ func (a *App) ScanLocalFolderStream(dir string) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}
+
 		ext := strings.ToLower(filepath.Ext(path))
-		if !audioExts[ext] {
+		if !media.IsSupportedAudio(ext) {
 			return nil
 		}
 
@@ -211,8 +216,7 @@ func (a *App) OpenLocalFiles() ([]string, error) {
 	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
 		Title: "Open Audio Files",
 		Filters: []runtime.FileFilter{
-			// TODO: define single source of truth for audio file extensions
-			{DisplayName: "Audio Files", Pattern: "*.mp3;*.flac;*.ogg;*.opus;*.m4a;*.aac;*.wav;*.aiff"},
+			{DisplayName: "Audio Files", Pattern: media.DesktopFilterPattern()},
 		},
 	})
 	if err != nil {
@@ -243,10 +247,12 @@ func (a *App) OpenLocalFolder() ([]string, error) {
 		if err != nil {
 			return nil
 		}
+
 		ext := strings.ToLower(filepath.Ext(path))
-		if audioExts[ext] {
+		if media.IsSupportedAudio(ext) {
 			files = append(files, path)
 		}
+
 		return nil
 	})
 	return files, nil

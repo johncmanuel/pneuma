@@ -11,6 +11,7 @@ import (
 	"github.com/dhowden/tag"
 
 	"pneuma/internal/artwork"
+	"pneuma/internal/media"
 )
 
 // handleLocalStream serves a local audio file for the <audio> element.
@@ -22,7 +23,7 @@ func (a *App) handleLocalStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
-	if !audioExts[ext] {
+	if !media.IsSupportedAudio(ext) {
 		http.Error(w, "not an audio file", http.StatusBadRequest)
 		return
 	}
@@ -74,7 +75,7 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
-	if !audioExts[ext] {
+	if !media.IsSupportedAudio(ext) {
 		http.Error(w, "not an audio file", http.StatusBadRequest)
 		return
 	}

@@ -11,15 +11,9 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"pneuma/internal/library"
+	"pneuma/internal/media"
 	"pneuma/internal/metadata/parser"
 )
-
-// audioExts is the set of recognised audio file extensions.
-var audioExts = map[string]bool{
-	".mp3": true, ".flac": true, ".ogg": true, ".opus": true,
-	".m4a": true, ".aac": true, ".wav": true, ".aiff": true,
-	".wv": true, ".ape": true,
-}
 
 // EventBus is any type that can publish library change events.
 type EventBus interface {
@@ -89,8 +83,9 @@ func (w *Watcher) Start(ctx context.Context) {
 
 func (w *Watcher) handleEvent(e fsnotify.Event) {
 	path := e.Name
+
 	ext := strings.ToLower(filepath.Ext(path))
-	if !audioExts[ext] {
+	if !media.IsSupportedAudio(ext) {
 		return
 	}
 
