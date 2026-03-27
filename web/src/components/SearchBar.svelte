@@ -2,7 +2,7 @@
   import { onDestroy } from "svelte";
   import { searchTracks, searchAlbumGroups } from "../lib/stores/library";
   import { playerState } from "../lib/stores/playback";
-  import { artworkUrl } from "../lib/api";
+  import { artworkUrl, apiFetch } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import { pushNav } from "../lib/stores/ui";
   import { Music, Search } from "@lucide/svelte";
@@ -75,7 +75,7 @@
       params.set("album_name", track.album_name ?? "");
       if (track.album_artist) params.set("album_artist", track.album_artist);
 
-      const r = await fetch(`/api/library/tracks?${params}`);
+      const r = await apiFetch(`/api/library/tracks?${params}`);
       if (r.ok) {
         const data = await r.json();
         const fetched: Track[] = Array.isArray(data)
@@ -94,21 +94,21 @@
     }
 
     const idx = albumTracks.findIndex((t) => t.id === track.id);
-    const queueIds = albumTracks.map((t) => t.id);
+    const queueIds = albumTracks.slice(Math.max(0, idx)).map((t) => t.id);
 
     playerState.update((s) => ({
       ...s,
       trackId: track.id,
       track,
       queue: queueIds,
-      queueIndex: idx >= 0 ? idx : 0,
+      queueIndex: 0,
       positionMs: 0,
       paused: false
     }));
 
     wsSend("playback.queue", {
       track_ids: queueIds,
-      start_index: idx >= 0 ? idx : 0
+      start_index: 0
     });
     wsSend("playback.play", {
       track_id: track.id,

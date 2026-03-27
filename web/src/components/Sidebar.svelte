@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { logout, artworkUrl, playlistArtUrl } from "../lib/api";
+  import { currentUser, artworkUrl, playlistArtUrl } from "../lib/api";
   import { recentAlbums, recentPlaylists } from "../lib/stores/recent";
   import { pushNav } from "../lib/stores/ui";
   import { Music } from "@lucide/svelte";
@@ -9,10 +9,16 @@
     onnavigate
   }: { activeView?: string; onnavigate?: (id: string) => void } = $props();
 
-  const navItems = [
+  const baseNavItems = [
     { id: "library", label: "Library" },
     { id: "playlists", label: "Playlists" }
   ];
+
+  let navItems = $derived(
+    $currentUser?.is_admin
+      ? [...baseNavItems, { id: "__dashboard", label: "Dashboard" }]
+      : baseNavItems
+  );
 
   let recentItems = $derived(
     [
@@ -54,8 +60,14 @@
     {#each navItems as item}
       <li>
         <button
-          class:active={activeView === item.id}
-          onclick={() => onnavigate?.(item.id)}
+          class:active={item.id !== "__dashboard" && activeView === item.id}
+          onclick={() => {
+            if (item.id === "__dashboard") {
+              window.location.href = "/dashboard";
+            } else {
+              onnavigate?.(item.id);
+            }
+          }}
         >
           {item.label}
         </button>
@@ -96,10 +108,6 @@
   {/if}
 
   <div class="spacer"></div>
-
-  <div class="bottom">
-    <button class="logout-btn" onclick={logout}> Sign out </button>
-  </div>
 </nav>
 
 <style>
@@ -218,28 +226,5 @@
 
   .spacer {
     flex: 1;
-  }
-
-  .bottom {
-    padding: 16px;
-    border-top: 1px solid var(--border);
-  }
-
-  .logout-btn {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 8px 16px;
-    color: var(--text-3);
-    font-size: 13px;
-    border-radius: var(--r-sm);
-    transition:
-      background 0.1s,
-      color 0.1s;
-  }
-
-  .logout-btn:hover {
-    background: var(--surface-hover);
-    color: var(--text-1);
   }
 </style>

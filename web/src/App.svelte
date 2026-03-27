@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { tryAutoAuth, loggedIn } from "./lib/api";
+  import { tryAutoAuth, loggedIn, logout } from "./lib/api";
   import { connectWS, disconnectWS } from "./lib/ws";
   import { loadAlbumGroupsPage } from "./lib/stores/library";
   import { loadPlaylists } from "./lib/stores/playlists";
@@ -113,6 +113,8 @@
       <div class="search-wrapper">
         <SearchBar bind:this={searchBar} />
       </div>
+      <div class="topbar-spacer"></div>
+      <button class="sign-out-btn" onclick={logout}>Sign out</button>
     </header>
 
     <main class="content">
@@ -218,6 +220,24 @@
     position: relative;
     width: 100%;
     max-width: 420px;
+  }
+
+  .topbar-spacer {
+    flex: 1;
+  }
+
+  .sign-out-btn {
+    font-size: 13px;
+    color: var(--text-3);
+    padding: 6px 12px;
+    border-radius: var(--r-sm);
+    transition:
+      background 0.1s,
+      color 0.1s;
+  }
+  .sign-out-btn:hover {
+    background: var(--surface-hover);
+    color: var(--danger);
   }
 
   .content {

@@ -49,6 +49,17 @@
   }
 
   function playFromQueue(track: Track, idx: number) {
+    const newQueueIndex = currentIndex + 1 + idx;
+
+    playerState.update((s) => ({
+      ...s,
+      trackId: track.id,
+      track,
+      queueIndex: newQueueIndex,
+      positionMs: 0,
+      paused: false
+    }));
+
     wsSend("playback.play", {
       track_id: track.id,
       position_ms: 0

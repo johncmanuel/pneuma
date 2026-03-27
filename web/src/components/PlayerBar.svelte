@@ -3,7 +3,7 @@
   import { playerState } from "../lib/stores/playback";
   import { apiFetch, artworkUrl, getStreamToken, streamUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
-  import { formatDuration } from "../lib/utils";
+  import { formatDuration, shuffle } from "../lib/utils";
   import {
     Play,
     Pause,
@@ -119,7 +119,10 @@
               );
             }
           } catch {
-            console.error("Failed to fetch track metadata for", $playerState.trackId);
+            console.error(
+              "Failed to fetch track metadata for",
+              $playerState.trackId
+            );
           }
         }
 
@@ -210,6 +213,7 @@
     if (rq.length === 0) return;
 
     if ($playerState.repeat === 2) {
+      playerState.update((s) => ({ ...s, positionMs: 0 }));
       wsSend("playback.play", {
         track_id: $playerState.trackId,
         position_ms: 0
@@ -225,6 +229,14 @@
       playerState.update((s) => ({ ...s, paused: true }));
       return;
     }
+
+    playerState.update((s) => ({
+      ...s,
+      trackId: rq[nextIdx],
+      track: null,
+      positionMs: 0,
+      paused: false
+    }));
 
     wsSend("playback.play", {
       track_id: rq[nextIdx],
@@ -242,6 +254,7 @@
 
     const currentTime = audio ? audio.currentTime * 1000 : displayPosition;
     if (currentTime > 3000) {
+      playerState.update((s) => ({ ...s, positionMs: 0 }));
       wsSend("playback.play", {
         track_id: $playerState.trackId,
         position_ms: 0
@@ -251,12 +264,21 @@
 
     const prevIdx = idx - 1;
     if (prevIdx < 0) {
+      playerState.update((s) => ({ ...s, positionMs: 0 }));
       wsSend("playback.play", {
         track_id: $playerState.trackId,
         position_ms: 0
       });
       return;
     }
+
+    playerState.update((s) => ({
+      ...s,
+      trackId: rq[prevIdx],
+      track: null,
+      positionMs: 0,
+      paused: false
+    }));
 
     wsSend("playback.play", {
       track_id: rq[prevIdx],
@@ -266,8 +288,20 @@
 
   function toggleShuffle() {
     const newState = !$playerState.shuffle;
-    playerState.update((s) => ({ ...s, shuffle: newState }));
-    wsSend("playback.shuffle", { enabled: newState });
+    playerState.update((s) => {
+      if (newState && s.queue.length > 1) {
+        const current = s.queue[s.queueIndex];
+        const rest = s.queue.filter((_, i) => i !== s.queueIndex);
+        shuffle(rest);
+        return {
+          ...s,
+          shuffle: true,
+          queue: [current, ...rest],
+          queueIndex: 0
+        };
+      }
+      return { ...s, shuffle: newState };
+    });
   }
 
   function toggleRepeat() {
