@@ -25,6 +25,10 @@ type PlaybackSession struct {
 	PositionMs sql.NullInt64
 	QueueJson  sql.NullString
 	UpdatedAt  string
+	QueueIndex sql.NullInt64
+	RepeatMode sql.NullInt64
+	Shuffle    sql.NullInt64
+	Playing    sql.NullInt64
 }
 
 type Playlist struct {
@@ -80,8 +84,6 @@ type Track struct {
 	FileSizeBytes    sql.NullInt64
 	LastModified     string
 	Fingerprint      sql.NullString
-	ReplayGainTrack  sql.NullFloat64
-	ReplayGainAlbum  sql.NullFloat64
 	UploadedByUserID sql.NullString
 	DeletedAt        sql.NullString
 	CreatedAt        string

@@ -128,7 +128,6 @@ const trackColumns = `id,path,title,
 	COALESCE(album_artist,''),COALESCE(album_name,''),COALESCE(genre,''),COALESCE(year,0),
 	COALESCE(track_number,0),COALESCE(disc_number,0),COALESCE(duration_ms,0),COALESCE(bitrate_kbps,0),COALESCE(sample_rate_hz,0),
 	COALESCE(codec,''),COALESCE(file_size_bytes,0),last_modified,COALESCE(fingerprint,''),
-	COALESCE(replay_gain_track,0),COALESCE(replay_gain_album,0),
 	COALESCE(uploaded_by_user_id,''),deleted_at,created_at,updated_at`
 
 type scanner interface {
@@ -145,7 +144,6 @@ func scanTrack(row scanner) (*models.Track, error) {
 		&t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.BitrateKbps,
 		&t.SampleRateHz, &t.Codec, &t.FileSizeBytes,
 		(*timeStr)(&t.LastModified), &t.Fingerprint,
-		&t.ReplayGainTrack, &t.ReplayGainAlbum,
 		&t.UploadedByUserID, &deletedAt,
 		(*timeStr)(&t.CreatedAt), (*timeStr)(&t.UpdatedAt),
 	)

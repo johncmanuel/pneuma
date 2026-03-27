@@ -15,7 +15,6 @@ export interface Track {
   disc_number: number;
   duration_ms: number;
   bitrate_kbps: number;
-  replay_gain_track: number;
   artwork_id: string;
 }
 

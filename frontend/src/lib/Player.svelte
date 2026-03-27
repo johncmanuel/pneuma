@@ -138,7 +138,6 @@
             disc_number: lt.disc_number,
             duration_ms: lt.duration_ms,
             bitrate_kbps: 0,
-            replay_gain_track: 0,
             artwork_id: ""
           } as Track;
           trackCache.set(id, t);

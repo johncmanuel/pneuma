@@ -92,6 +92,10 @@ func SessionByUserToModel(r serverdb.PlaybackSessionByUserRow) *models.PlaybackS
 		UserID:     r.UserID,
 		TrackID:    r.TrackID,
 		PositionMS: r.PositionMs.Int64,
+		QueueIndex: int(r.QueueIndex.Int64),
+		RepeatMode: int(r.RepeatMode.Int64),
+		Shuffle:    r.Shuffle.Int64 != 0,
+		Playing:    r.Playing.Int64 != 0,
 		UpdatedAt:  parseTime(r.UpdatedAt),
 	}
 	if r.QueueJson.Valid {
@@ -125,8 +129,6 @@ type trackRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -151,8 +153,6 @@ func trackToModel(r trackRow) *models.Track {
 		FileSizeBytes:    r.FileSizeBytes,
 		LastModified:     parseTime(r.LastModified),
 		Fingerprint:      r.Fingerprint,
-		ReplayGainTrack:  r.ReplayGainTrack,
-		ReplayGainAlbum:  r.ReplayGainAlbum,
 		UploadedByUserID: r.UploadedByUserID,
 		CreatedAt:        parseTime(r.CreatedAt),
 		UpdatedAt:        parseTime(r.UpdatedAt),

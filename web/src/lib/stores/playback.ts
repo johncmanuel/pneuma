@@ -1,5 +1,6 @@
 import { writable } from "svelte/store";
 import type { Track } from "../types";
+import { apiFetch } from "../api";
 import { isLocalId } from "./library";
 
 export type RepeatMode = 0 | 1 | 2;
@@ -27,6 +28,34 @@ const initial: PlayerState = {
 };
 
 export const playerState = writable<PlayerState>(initial);
+
+/**
+ * Fetch the current playback state from the server and hydrate the store.
+ * Called on auth success so the player restores where the user left off.
+ */
+export async function loadPlaybackState() {
+  try {
+    const res = await apiFetch("/api/playback");
+    if (!res.ok) return;
+    const s = await res.json();
+    playerState.set({
+      trackId: s.track_id ?? "",
+
+      // fetched lazily by PlayerBar reactive block
+      track: null,
+
+      queue: s.queue ?? [],
+      queueIndex: s.queue_index ?? 0,
+      positionMs: s.position_ms ?? 0,
+
+      // start paused to avoid playing immediately
+      paused: true,
+
+      repeat: s.repeat ?? 0,
+      shuffle: s.shuffle ?? false
+    });
+  } catch {}
+}
 
 function isLocalPayload(payload: any): boolean {
   const id: string | undefined = payload?.track_id;

@@ -145,7 +145,6 @@ export function itemToTrack(item: PlaylistItem): Track {
     disc_number: 0,
     duration_ms: item.ref_duration_ms,
     bitrate_kbps: 0,
-    replay_gain_track: 0,
     artwork_id: ""
   };
 }

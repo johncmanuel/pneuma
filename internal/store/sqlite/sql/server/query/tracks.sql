@@ -3,9 +3,9 @@ INSERT INTO tracks (
     id, path, title, album_artist, album_name, genre, year,
     track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
     codec, file_size_bytes, last_modified, fingerprint,
-    replay_gain_track, replay_gain_album, uploaded_by_user_id,
+    uploaded_by_user_id,
     created_at, updated_at
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(path) DO UPDATE SET
     title=excluded.title,
     album_artist=excluded.album_artist, album_name=excluded.album_name,
@@ -15,8 +15,6 @@ ON CONFLICT(path) DO UPDATE SET
     bitrate_kbps=excluded.bitrate_kbps, sample_rate_hz=excluded.sample_rate_hz,
     codec=excluded.codec, file_size_bytes=excluded.file_size_bytes,
     last_modified=excluded.last_modified, fingerprint=excluded.fingerprint,
-    replay_gain_track=excluded.replay_gain_track,
-    replay_gain_album=excluded.replay_gain_album,
     uploaded_by_user_id=excluded.uploaded_by_user_id,
     updated_at=excluded.updated_at;
 
@@ -29,8 +27,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.path = ? LIMIT 1;
@@ -44,8 +40,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.id = ? LIMIT 1;
@@ -59,8 +53,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL ORDER BY title COLLATE NOCASE;
@@ -74,8 +66,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL ORDER BY title COLLATE NOCASE LIMIT ? OFFSET ?;
@@ -92,8 +82,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.fingerprint = ? AND fingerprint != '' LIMIT 1;
@@ -107,8 +95,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks
@@ -147,8 +133,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks
@@ -168,8 +152,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND TRIM(COALESCE(album_name,''))=''
@@ -184,8 +166,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ?
@@ -200,8 +180,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ? AND COALESCE(album_artist,'') = ?

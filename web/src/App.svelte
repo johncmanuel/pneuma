@@ -5,6 +5,7 @@
   import { loadAlbumGroupsPage } from "./lib/stores/library";
   import { loadPlaylists } from "./lib/stores/playlists";
   import { loadRecent } from "./lib/stores/recent";
+  import { loadPlaybackState } from "./lib/stores/playback";
   import {
     activePanel,
     currentView,
@@ -58,6 +59,7 @@
   $: if ($loggedIn && !wasLoggedIn) {
     wasLoggedIn = true;
     connectWS();
+    loadPlaybackState();
     loadAlbumGroupsPage(0);
     loadPlaylists();
     loadRecent();

@@ -49,6 +49,8 @@ export function GetToken():Promise<string>;
 
 export function IsConnected():Promise<boolean>;
 
+export function LoadPlaybackSession():Promise<desktop.LocalPlaybackSession|boolean>;
+
 export function Notify(arg1:string,arg2:string):Promise<void>;
 
 export function OpenLocalFiles():Promise<Array<string>>;
@@ -64,6 +66,8 @@ export function RefreshPlaylistArtFromServer(arg1:string):Promise<void>;
 export function ResolvePlaylistItems(arg1:string):Promise<Array<desktop.LocalPlaylistItem>>;
 
 export function RestoreSession(arg1:string,arg2:string):Promise<void>;
+
+export function SavePlaybackSession(arg1:desktop.LocalPlaybackSession):Promise<void>;
 
 export function ScanLocalFolderStream(arg1:string):Promise<void>;
 

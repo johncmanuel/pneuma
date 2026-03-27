@@ -526,7 +526,6 @@ export function localTrackToTrack(t: LocalTrack): Track {
     disc_number: t.disc_number,
     duration_ms: t.duration_ms,
     bitrate_kbps: 0,
-    replay_gain_track: 0,
     artwork_id: ""
   };
 }

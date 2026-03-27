@@ -159,8 +159,6 @@ func (s *Service) UpsertTrack(ctx context.Context, t *models.Track) error {
 		FileSizeBytes:    sql.NullInt64{Int64: t.FileSizeBytes, Valid: true},
 		LastModified:     dbconv.FormatTime(t.LastModified),
 		Fingerprint:      dbconv.NullStr(t.Fingerprint),
-		ReplayGainTrack:  dbconv.NullFloat(t.ReplayGainTrack),
-		ReplayGainAlbum:  dbconv.NullFloat(t.ReplayGainAlbum),
 		UploadedByUserID: dbconv.NullStr(t.UploadedByUserID),
 		CreatedAt:        dbconv.FormatTime(t.CreatedAt),
 		UpdatedAt:        dbconv.FormatTime(t.UpdatedAt),
