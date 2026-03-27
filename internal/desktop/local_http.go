@@ -41,24 +41,7 @@ func (a *App) handleLocalStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch ext {
-	case ".mp3":
-		w.Header().Set("Content-Type", "audio/mpeg")
-	case ".flac":
-		w.Header().Set("Content-Type", "audio/flac")
-	case ".ogg":
-		w.Header().Set("Content-Type", "audio/ogg")
-	case ".opus":
-		w.Header().Set("Content-Type", "audio/opus")
-	case ".m4a", ".aac":
-		w.Header().Set("Content-Type", "audio/mp4")
-	case ".wav":
-		w.Header().Set("Content-Type", "audio/wav")
-	case ".aiff":
-		w.Header().Set("Content-Type", "audio/aiff")
-	default:
-		w.Header().Set("Content-Type", "application/octet-stream")
-	}
+	w.Header().Set("Content-Type", media.MimeFromExt(ext))
 
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }

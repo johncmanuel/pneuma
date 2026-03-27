@@ -7,7 +7,7 @@ import "strings"
 //
 // TODO: support more formats, especially audiophile popular ones like ALAC, APE, WV, etc, but need to support transcoding
 // with ffmpeg first
-var SupportedAudioExts = map[string]struct{}{
+var supportedAudioExts = map[string]struct{}{
 	".mp3":  {},
 	".flac": {},
 	".ogg":  {},
@@ -33,16 +33,27 @@ var contentTypes = map[string]string{
 	".weba": "audio/webm",
 }
 
-// IsSupportedAudio checks if the extension exists in our set. Ensure it includes the dot, e.g., ".mp3".
+// MimeFromExt returns the MIME type for a given file extension, or binary data,
+// "application/octet-stream" if unknown.
+func MimeFromExt(ext string) string {
+	ext = strings.ToLower(ext)
+	if ct, exists := contentTypes[ext]; exists {
+		return ct
+	}
+	return "application/octet-stream"
+}
+
+// IsSupportedAudio checks if the extension exists.
+// Ensure it includes the dot, e.g., ".mp3".
 func IsSupportedAudio(ext string) bool {
-	_, exists := SupportedAudioExts[strings.ToLower(ext)]
+	_, exists := supportedAudioExts[strings.ToLower(ext)]
 	return exists
 }
 
 // DesktopFilterPattern generates the "*.mp3;*.flac;..." string for native file dialogs in the desktop app.
 func DesktopFilterPattern() string {
 	var patterns []string
-	for ext := range SupportedAudioExts {
+	for ext := range supportedAudioExts {
 		patterns = append(patterns, "*"+ext)
 	}
 	return strings.Join(patterns, ";")

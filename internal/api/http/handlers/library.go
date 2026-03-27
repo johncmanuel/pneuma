@@ -145,8 +145,11 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	c.Response().Header().Set("Content-Type", mimeFromExt(track.Path))
+	ext := strings.ToLower(filepath.Ext(track.Path))
+
+	c.Response().Header().Set("Content-Type", media.MimeFromExt(ext))
 	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
+
 	return nil
 }
 
@@ -480,26 +483,4 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 
 	h.hub.Publish(string(models.EventTrackRemoved), track)
 	return c.NoContent(http.StatusNoContent)
-}
-
-func mimeFromExt(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".mp3":
-		return "audio/mpeg"
-	case ".flac":
-		return "audio/flac"
-	case ".ogg":
-		return "audio/ogg"
-	case ".opus":
-		return "audio/opus"
-	case ".m4a", ".aac":
-		return "audio/mp4"
-	case ".wav":
-		return "audio/wav"
-	case ".aiff":
-		return "audio/aiff"
-	default:
-		return "application/octet-stream"
-	}
 }
