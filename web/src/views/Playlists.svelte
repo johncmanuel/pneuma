@@ -698,6 +698,9 @@
   .playlist-row.missing {
     opacity: 0.45;
   }
+  .playlist-row.missing :global(.track-row) {
+    pointer-events: none;
+  }
 
   .empty-msg {
     padding: 40px 12px;

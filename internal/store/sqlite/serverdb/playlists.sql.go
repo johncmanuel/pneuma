@@ -120,12 +120,17 @@ func (q *Queries) InsertPlaylistItem(ctx context.Context, arg InsertPlaylistItem
 }
 
 const listPlaylistItems = `-- name: ListPlaylistItems :many
-SELECT playlist_id, position, source,
-       COALESCE(track_id, '') AS track_id,
-       ref_title, ref_album, ref_album_artist, ref_duration_ms, added_at
-FROM playlist_items
-WHERE playlist_id = ?
-ORDER BY position
+SELECT pi.playlist_id, pi.position, pi.source,
+       COALESCE(pi.track_id, '') AS track_id,
+       pi.ref_title, pi.ref_album, pi.ref_album_artist, pi.ref_duration_ms, pi.added_at,
+       CASE
+           WHEN pi.source = 'remote' AND (pi.track_id IS NULL OR t.id IS NULL OR t.deleted_at IS NOT NULL)
+           THEN 1 ELSE 0
+       END AS missing
+FROM playlist_items pi
+LEFT JOIN tracks t ON t.id = pi.track_id
+WHERE pi.playlist_id = ?
+ORDER BY pi.position
 `
 
 type ListPlaylistItemsRow struct {
@@ -138,6 +143,7 @@ type ListPlaylistItemsRow struct {
 	RefAlbumArtist string
 	RefDurationMs  int64
 	AddedAt        string
+	Missing        int64
 }
 
 func (q *Queries) ListPlaylistItems(ctx context.Context, playlistID string) ([]ListPlaylistItemsRow, error) {
@@ -159,6 +165,7 @@ func (q *Queries) ListPlaylistItems(ctx context.Context, playlistID string) ([]L
 			&i.RefAlbumArtist,
 			&i.RefDurationMs,
 			&i.AddedAt,
+			&i.Missing,
 		); err != nil {
 			return nil, err
 		}

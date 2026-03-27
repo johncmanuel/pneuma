@@ -290,6 +290,7 @@ func PlaylistItemToModel(r serverdb.ListPlaylistItemsRow) models.PlaylistItem {
 		RefAlbumArtist: r.RefAlbumArtist,
 		RefDurationMS:  r.RefDurationMs,
 		AddedAt:        parseTime(r.AddedAt),
+		Missing:        r.Missing != 0,
 	}
 }
 
