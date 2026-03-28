@@ -1,6 +1,6 @@
 # pneuma
 
-pneuma is an open-source, self-hostable, and local-first music project, designed to give a Spotify-like experience. It is composed of a desktop application for local music playback and a server for music storage and streaming.
+pneuma is an open-source, self-hostable, and local-first music project, designed to give a Spotify-like experience. It is composed of a desktop application for local music playback, a server for music storage and streaming, and a web player for accessible music playback.
 
 <!-- TODO: add demo as mp4 -->
 
@@ -81,7 +81,7 @@ Upon first start, the desktop application will create a directory `${OS_CACHE}/p
 
 ### Running the server
 
-First, run the following to build the UI:
+First, run the following to build the admin dashboard UI:
 
 ```bash
 cd dashboard
@@ -89,6 +89,15 @@ npm run build
 ```
 
 The build output is placed under `dist/`.
+
+Then, run the following to build the web player UI:
+
+```bash
+cd web
+npm run build
+```
+
+The build output is also placed under `dist/`.
 
 Run `go run ./cmd/server` to start the server. The default port is 8989.
 
