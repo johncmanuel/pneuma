@@ -40,8 +40,14 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Build Svelte Frontend
+      - name: Build Admin Dashboard
         working-directory: ./dashboard
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build Web Player
+        working-directory: ./web
         run: |
           npm ci
           npm run build
