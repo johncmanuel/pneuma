@@ -53,8 +53,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL ORDER BY title COLLATE NOCASE
@@ -77,8 +75,6 @@ type ListTracksRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -111,8 +107,6 @@ func (q *Queries) ListTracks(ctx context.Context) ([]ListTracksRow, error) {
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.ReplayGainTrack,
-			&i.ReplayGainAlbum,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
 			&i.CreatedAt,
@@ -140,8 +134,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ?
@@ -165,8 +157,6 @@ type ListTracksByAlbumNameRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -199,8 +189,6 @@ func (q *Queries) ListTracksByAlbumName(ctx context.Context, albumName sql.NullS
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.ReplayGainTrack,
-			&i.ReplayGainAlbum,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
 			&i.CreatedAt,
@@ -228,8 +216,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ? AND COALESCE(album_artist,'') = ?
@@ -258,8 +244,6 @@ type ListTracksByAlbumNameAndArtistRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -292,8 +276,6 @@ func (q *Queries) ListTracksByAlbumNameAndArtist(ctx context.Context, arg ListTr
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.ReplayGainTrack,
-			&i.ReplayGainAlbum,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
 			&i.CreatedAt,
@@ -321,8 +303,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND TRIM(COALESCE(album_name,''))=''
@@ -346,8 +326,6 @@ type ListTracksByAlbumUnorganizedRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -380,8 +358,6 @@ func (q *Queries) ListTracksByAlbumUnorganized(ctx context.Context) ([]ListTrack
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.ReplayGainTrack,
-			&i.ReplayGainAlbum,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
 			&i.CreatedAt,
@@ -409,8 +385,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL ORDER BY title COLLATE NOCASE LIMIT ? OFFSET ?
@@ -438,8 +412,6 @@ type ListTracksPageRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -472,8 +444,6 @@ func (q *Queries) ListTracksPage(ctx context.Context, arg ListTracksPageParams) 
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.ReplayGainTrack,
-			&i.ReplayGainAlbum,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
 			&i.CreatedAt,
@@ -515,8 +485,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks
@@ -545,8 +513,6 @@ type SearchTracksRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -579,8 +545,6 @@ func (q *Queries) SearchTracks(ctx context.Context, pattern string) ([]SearchTra
 			&i.FileSizeBytes,
 			&i.LastModified,
 			&i.Fingerprint,
-			&i.ReplayGainTrack,
-			&i.ReplayGainAlbum,
 			&i.UploadedByUserID,
 			&i.DeletedAt,
 			&i.CreatedAt,
@@ -623,8 +587,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.fingerprint = ? AND fingerprint != '' LIMIT 1
@@ -647,8 +609,6 @@ type TrackByFingerprintRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -675,8 +635,6 @@ func (q *Queries) TrackByFingerprint(ctx context.Context, fingerprint sql.NullSt
 		&i.FileSizeBytes,
 		&i.LastModified,
 		&i.Fingerprint,
-		&i.ReplayGainTrack,
-		&i.ReplayGainAlbum,
 		&i.UploadedByUserID,
 		&i.DeletedAt,
 		&i.CreatedAt,
@@ -694,8 +652,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.id = ? LIMIT 1
@@ -718,8 +674,6 @@ type TrackByIDRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -746,8 +700,6 @@ func (q *Queries) TrackByID(ctx context.Context, id string) (TrackByIDRow, error
 		&i.FileSizeBytes,
 		&i.LastModified,
 		&i.Fingerprint,
-		&i.ReplayGainTrack,
-		&i.ReplayGainAlbum,
 		&i.UploadedByUserID,
 		&i.DeletedAt,
 		&i.CreatedAt,
@@ -765,8 +717,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.path = ? LIMIT 1
@@ -789,8 +739,6 @@ type TrackByPathRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -817,8 +765,6 @@ func (q *Queries) TrackByPath(ctx context.Context, path string) (TrackByPathRow,
 		&i.FileSizeBytes,
 		&i.LastModified,
 		&i.Fingerprint,
-		&i.ReplayGainTrack,
-		&i.ReplayGainAlbum,
 		&i.UploadedByUserID,
 		&i.DeletedAt,
 		&i.CreatedAt,
@@ -836,8 +782,6 @@ SELECT id, path, title,
     COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
-    COALESCE(replay_gain_track,0) AS replay_gain_track,
-    COALESCE(replay_gain_album,0) AS replay_gain_album,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
     deleted_at, created_at, updated_at
 FROM tracks
@@ -875,8 +819,6 @@ type TrackDuplicateByMetaRow struct {
 	FileSizeBytes    int64
 	LastModified     string
 	Fingerprint      string
-	ReplayGainTrack  float64
-	ReplayGainAlbum  float64
 	UploadedByUserID string
 	DeletedAt        sql.NullString
 	CreatedAt        string
@@ -909,8 +851,6 @@ func (q *Queries) TrackDuplicateByMeta(ctx context.Context, arg TrackDuplicateBy
 		&i.FileSizeBytes,
 		&i.LastModified,
 		&i.Fingerprint,
-		&i.ReplayGainTrack,
-		&i.ReplayGainAlbum,
 		&i.UploadedByUserID,
 		&i.DeletedAt,
 		&i.CreatedAt,
@@ -924,9 +864,9 @@ INSERT INTO tracks (
     id, path, title, album_artist, album_name, genre, year,
     track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
     codec, file_size_bytes, last_modified, fingerprint,
-    replay_gain_track, replay_gain_album, uploaded_by_user_id,
+    uploaded_by_user_id,
     created_at, updated_at
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(path) DO UPDATE SET
     title=excluded.title,
     album_artist=excluded.album_artist, album_name=excluded.album_name,
@@ -936,8 +876,6 @@ ON CONFLICT(path) DO UPDATE SET
     bitrate_kbps=excluded.bitrate_kbps, sample_rate_hz=excluded.sample_rate_hz,
     codec=excluded.codec, file_size_bytes=excluded.file_size_bytes,
     last_modified=excluded.last_modified, fingerprint=excluded.fingerprint,
-    replay_gain_track=excluded.replay_gain_track,
-    replay_gain_album=excluded.replay_gain_album,
     uploaded_by_user_id=excluded.uploaded_by_user_id,
     updated_at=excluded.updated_at
 `
@@ -959,8 +897,6 @@ type UpsertTrackParams struct {
 	FileSizeBytes    sql.NullInt64
 	LastModified     string
 	Fingerprint      sql.NullString
-	ReplayGainTrack  sql.NullFloat64
-	ReplayGainAlbum  sql.NullFloat64
 	UploadedByUserID sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -984,8 +920,6 @@ func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) error 
 		arg.FileSizeBytes,
 		arg.LastModified,
 		arg.Fingerprint,
-		arg.ReplayGainTrack,
-		arg.ReplayGainAlbum,
 		arg.UploadedByUserID,
 		arg.CreatedAt,
 		arg.UpdatedAt,

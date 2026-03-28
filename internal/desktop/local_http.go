@@ -9,6 +9,9 @@ import (
 	"strings"
 
 	"github.com/dhowden/tag"
+
+	"pneuma/internal/artwork"
+	"pneuma/internal/media"
 )
 
 // handleLocalStream serves a local audio file for the <audio> element.
@@ -20,7 +23,7 @@ func (a *App) handleLocalStream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
-	if !audioExts[ext] {
+	if !media.IsSupportedAudio(ext) {
 		http.Error(w, "not an audio file", http.StatusBadRequest)
 		return
 	}
@@ -38,24 +41,7 @@ func (a *App) handleLocalStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	switch ext {
-	case ".mp3":
-		w.Header().Set("Content-Type", "audio/mpeg")
-	case ".flac":
-		w.Header().Set("Content-Type", "audio/flac")
-	case ".ogg":
-		w.Header().Set("Content-Type", "audio/ogg")
-	case ".opus":
-		w.Header().Set("Content-Type", "audio/opus")
-	case ".m4a", ".aac":
-		w.Header().Set("Content-Type", "audio/mp4")
-	case ".wav":
-		w.Header().Set("Content-Type", "audio/wav")
-	case ".aiff":
-		w.Header().Set("Content-Type", "audio/aiff")
-	default:
-		w.Header().Set("Content-Type", "application/octet-stream")
-	}
+	w.Header().Set("Content-Type", media.MimeFromExt(ext))
 
 	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }
@@ -72,7 +58,7 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ext := strings.ToLower(filepath.Ext(path))
-	if !audioExts[ext] {
+	if !media.IsSupportedAudio(ext) {
 		http.Error(w, "not an audio file", http.StatusBadRequest)
 		return
 	}
@@ -127,13 +113,13 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// then resize and persist the thumbnail.
-	thumbData, err := resizeToThumbnail(artData)
+	thumbData, err := artwork.ResizeToThumbnail(artData, thumbMaxDim)
 	if err != nil {
 		http.Error(w, "failed to process artwork", http.StatusInternalServerError)
 		return
 	}
 
-	if err := writeThumbnail(a.thumbDir, artHash+".jpg", thumbData); err != nil {
+	if err := artwork.WriteThumbnail(a.thumbDir, artHash+".jpg", thumbData); err != nil {
 		http.Error(w, "cache write failed", http.StatusInternalServerError)
 		return
 	}

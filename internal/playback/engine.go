@@ -29,6 +29,7 @@ const (
 // EventBus can publish events (satisfied by *ws.Hub).
 type EventBus interface {
 	Publish(eventType string, payload any)
+	PublishToUser(userID string, eventType string, payload any)
 }
 
 // State represents the current playback state of a user.
@@ -284,15 +285,40 @@ func (e *Engine) LoadSession(ctx context.Context, userID string) (State, error) 
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	s := &State{
+		UserID:     sess.UserID,
 		TrackID:    sess.TrackID,
 		PositionMS: sess.PositionMS,
 		Queue:      sess.Queue,
+		QueueIndex: sess.QueueIndex,
+		Repeat:     RepeatMode(sess.RepeatMode),
+		Shuffle:    sess.Shuffle,
+		Playing:    sess.Playing,
 	}
 	e.sessions[userID] = s
 	return *s, nil
 }
 
+// loadFromDB loads a session from the database without taking a lock.
+func (e *Engine) loadFromDB(userID string) (State, error) {
+	row, err := e.q.PlaybackSessionByUser(context.Background(), userID)
+	if err != nil {
+		return State{}, err
+	}
+	sess := dbconv.SessionByUserToModel(row)
+	return State{
+		UserID:     sess.UserID,
+		TrackID:    sess.TrackID,
+		PositionMS: sess.PositionMS,
+		Queue:      sess.Queue,
+		QueueIndex: sess.QueueIndex,
+		Repeat:     RepeatMode(sess.RepeatMode),
+		Shuffle:    sess.Shuffle,
+		Playing:    sess.Playing,
+	}, nil
+}
+
 // getOrCreate returns the session for a user, creating a new one if needed.
+// On first access, attempt to restore the session from the database.
 func (e *Engine) getOrCreate(userID string) *State {
 	if s, ok := e.sessions[userID]; ok {
 		if userID != "" {
@@ -300,6 +326,14 @@ func (e *Engine) getOrCreate(userID string) *State {
 		}
 		return s
 	}
+
+	if userID != "" {
+		if s, err := e.loadFromDB(userID); err == nil && s.TrackID != "" {
+			e.sessions[userID] = &s
+			return &s
+		}
+	}
+
 	s := &State{UserID: userID}
 	e.sessions[userID] = s
 	return s
@@ -307,7 +341,7 @@ func (e *Engine) getOrCreate(userID string) *State {
 
 // persist saves the session to the database and publishes state to WS clients.
 func (e *Engine) persist(ctx context.Context, userID string, s *State) error {
-	defer e.bus.Publish("playback.changed", map[string]any{
+	e.bus.PublishToUser(userID, "playback.changed", map[string]any{
 		"track_id":    s.TrackID,
 		"playing":     s.Playing,
 		"position_ms": s.PositionMS,
@@ -333,6 +367,10 @@ func (e *Engine) persist(ctx context.Context, userID string, s *State) error {
 		TrackID:    dbconv.NullStr(s.TrackID),
 		PositionMs: sql.NullInt64{Int64: s.PositionMS, Valid: true},
 		QueueJson:  sql.NullString{String: string(queueJSON), Valid: true},
+		QueueIndex: sql.NullInt64{Int64: int64(s.QueueIndex), Valid: true},
+		RepeatMode: sql.NullInt64{Int64: int64(s.Repeat), Valid: true},
+		Shuffle:    sql.NullInt64{Int64: dbconv.BoolInt(s.Shuffle), Valid: true},
+		Playing:    sql.NullInt64{Int64: dbconv.BoolInt(s.Playing), Valid: true},
 		UpdatedAt:  dbconv.FormatTime(time.Now()),
 	}); err != nil {
 		e.log.Error("persist session", "user", userID, "err", err)

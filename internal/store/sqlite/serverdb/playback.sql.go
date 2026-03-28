@@ -17,6 +17,10 @@ SELECT
     COALESCE(track_id, '') AS track_id,
     position_ms,
     queue_json,
+    queue_index,
+    repeat_mode,
+    shuffle,
+    playing,
     updated_at
 FROM playback_sessions
 WHERE user_id = ? LIMIT 1
@@ -28,6 +32,10 @@ type PlaybackSessionByUserRow struct {
 	TrackID    string
 	PositionMs sql.NullInt64
 	QueueJson  sql.NullString
+	QueueIndex sql.NullInt64
+	RepeatMode sql.NullInt64
+	Shuffle    sql.NullInt64
+	Playing    sql.NullInt64
 	UpdatedAt  string
 }
 
@@ -40,6 +48,10 @@ func (q *Queries) PlaybackSessionByUser(ctx context.Context, userID string) (Pla
 		&i.TrackID,
 		&i.PositionMs,
 		&i.QueueJson,
+		&i.QueueIndex,
+		&i.RepeatMode,
+		&i.Shuffle,
+		&i.Playing,
 		&i.UpdatedAt,
 	)
 	return i, err
@@ -47,12 +59,14 @@ func (q *Queries) PlaybackSessionByUser(ctx context.Context, userID string) (Pla
 
 const upsertPlaybackSession = `-- name: UpsertPlaybackSession :exec
 INSERT INTO playback_sessions (
-    id, user_id, track_id, position_ms, queue_json, updated_at
+    id, user_id, track_id, position_ms, queue_json, queue_index, repeat_mode, shuffle, playing, updated_at
 )
-VALUES (?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (user_id) DO UPDATE SET
     track_id = excluded.track_id, position_ms = excluded.position_ms,
-    queue_json = excluded.queue_json, updated_at = excluded.updated_at
+    queue_json = excluded.queue_json, queue_index = excluded.queue_index,
+    repeat_mode = excluded.repeat_mode, shuffle = excluded.shuffle,
+    playing = excluded.playing, updated_at = excluded.updated_at
 `
 
 type UpsertPlaybackSessionParams struct {
@@ -61,6 +75,10 @@ type UpsertPlaybackSessionParams struct {
 	TrackID    sql.NullString
 	PositionMs sql.NullInt64
 	QueueJson  sql.NullString
+	QueueIndex sql.NullInt64
+	RepeatMode sql.NullInt64
+	Shuffle    sql.NullInt64
+	Playing    sql.NullInt64
 	UpdatedAt  string
 }
 
@@ -71,6 +89,10 @@ func (q *Queries) UpsertPlaybackSession(ctx context.Context, arg UpsertPlaybackS
 		arg.TrackID,
 		arg.PositionMs,
 		arg.QueueJson,
+		arg.QueueIndex,
+		arg.RepeatMode,
+		arg.Shuffle,
+		arg.Playing,
 		arg.UpdatedAt,
 	)
 	return err

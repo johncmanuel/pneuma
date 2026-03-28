@@ -66,6 +66,32 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class LocalPlaybackSession {
+	    track_id: string;
+	    position_ms: number;
+	    queue: string[];
+	    queue_index: number;
+	    repeat_mode: number;
+	    shuffle: boolean;
+	    playing: boolean;
+	    updated_at: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalPlaybackSession(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.track_id = source["track_id"];
+	        this.position_ms = source["position_ms"];
+	        this.queue = source["queue"];
+	        this.queue_index = source["queue_index"];
+	        this.repeat_mode = source["repeat_mode"];
+	        this.shuffle = source["shuffle"];
+	        this.playing = source["playing"];
+	        this.updated_at = source["updated_at"];
+	    }
+	}
 	export class LocalPlaylistItem {
 	    position: number;
 	    source: string;

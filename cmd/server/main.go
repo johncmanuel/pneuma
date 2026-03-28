@@ -25,7 +25,11 @@ import (
 	"pneuma/internal/store/sqlite"
 	"pneuma/internal/store/sqlite/serverdb"
 	"pneuma/internal/user"
+	"pneuma/web"
 )
+
+// TODO: consider moving this to a config file or env var
+const artworkSubdir = "playlist-artwork"
 
 func main() {
 	dataDir := flag.String("data", "", "path to data directory (default: $PNEUMA_DATA_DIR or ~/.pneuma)")
@@ -89,8 +93,10 @@ func main() {
 		Scanner:     sched,
 		JWTSecret:   cfg.Auth.SecretKey,
 		UploadsDir:  cfg.Upload.Dir,
+		ArtworkDir:  filepath.Join(dir, artworkSubdir),
 		UploadMaxMB: cfg.Upload.MaxSizeMB,
 		WebUI:       dashboard.FS(),
+		WebPlayerUI: web.FS(),
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

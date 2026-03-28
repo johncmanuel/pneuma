@@ -94,6 +94,10 @@ export function IsConnected() {
   return window['go']['desktop']['App']['IsConnected']();
 }
 
+export function LoadPlaybackSession() {
+  return window['go']['desktop']['App']['LoadPlaybackSession']();
+}
+
 export function Notify(arg1, arg2) {
   return window['go']['desktop']['App']['Notify'](arg1, arg2);
 }
@@ -110,12 +114,24 @@ export function PickPlaylistArtwork(arg1) {
   return window['go']['desktop']['App']['PickPlaylistArtwork'](arg1);
 }
 
+export function RefreshPlaylistArtByRemoteID(arg1) {
+  return window['go']['desktop']['App']['RefreshPlaylistArtByRemoteID'](arg1);
+}
+
+export function RefreshPlaylistArtFromServer(arg1) {
+  return window['go']['desktop']['App']['RefreshPlaylistArtFromServer'](arg1);
+}
+
 export function ResolvePlaylistItems(arg1) {
   return window['go']['desktop']['App']['ResolvePlaylistItems'](arg1);
 }
 
 export function RestoreSession(arg1, arg2) {
   return window['go']['desktop']['App']['RestoreSession'](arg1, arg2);
+}
+
+export function SavePlaybackSession(arg1) {
+  return window['go']['desktop']['App']['SavePlaybackSession'](arg1);
 }
 
 export function ScanLocalFolderStream(arg1) {

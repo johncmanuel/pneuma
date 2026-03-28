@@ -15,6 +15,7 @@ COPY . .
 RUN if [ "$EMBED_UI" = "true" ]; then \
     apk add --no-cache nodejs npm && \
     cd dashboard && npm ci && npm run build && cd .. && \
+    cd web && npm ci && npm run build && cd .. && \
     CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /bin/prod/pneuma-server ./cmd/server ; \
     else \
     CGO_ENABLED=0 go build -tags no_embed -trimpath -ldflags="-s -w" -o /bin/prod/pneuma-server ./cmd/server ; \

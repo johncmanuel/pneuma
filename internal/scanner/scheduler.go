@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"pneuma/internal/library"
+	"pneuma/internal/media"
 	"pneuma/internal/metadata/parser"
 )
 
@@ -119,7 +120,9 @@ func (sc *Scheduler) scan(ctx context.Context) {
 			if err != nil || d.IsDir() {
 				return err
 			}
-			if !audioExts[strings.ToLower(filepath.Ext(path))] {
+
+			ext := strings.ToLower(filepath.Ext(path))
+			if !media.IsSupportedAudio(ext) {
 				return nil
 			}
 			if ctx.Err() != nil {

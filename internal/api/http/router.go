@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
@@ -35,8 +37,10 @@ type Services struct {
 	} // *scanner.Scheduler
 	JWTSecret   string
 	UploadsDir  string
-	UploadMaxMB int   // max upload body size in MB (0 = default 500 MB)
-	WebUI       fs.FS // embedded web UI assets (nil = disabled)
+	ArtworkDir  string // directory for playlist artwork thumbnails
+	UploadMaxMB int    // max upload body size in MB (0 = default 500 MB)
+	WebUI       fs.FS  // embedded dashboard assets (nil = disabled)
+	WebPlayerUI fs.FS  // embedded web player assets (nil = disabled)
 }
 
 // NewRouter builds and returns the configured Echo router.
@@ -60,7 +64,8 @@ func NewRouter(svc Services) *echo.Echo {
 	ph := handlers.NewPlaybackHandler(svc.Playback)
 	uh := handlers.NewUserHandler(svc.User, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries)
-	plh := handlers.NewPlaylistHandler(svc.Playlist, svc.Hub)
+	plh := handlers.NewPlaylistHandler(svc.Playlist, svc.Hub, svc.ArtworkDir)
+	rh := handlers.NewRecentHandler(svc.Queries)
 
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
 
@@ -122,6 +127,8 @@ func NewRouter(svc Services) *echo.Echo {
 	pl.GET("/:id/items", plh.GetPlaylistItems)
 	pl.PUT("/:id/items", plh.SetPlaylistItems)
 	pl.POST("/:id/items", plh.AddPlaylistItem)
+	pl.POST("/:id/artwork", plh.UploadPlaylistArt)
+	pl.GET("/:id/art", plh.ServePlaylistArt)
 
 	// Stream (supports query-param token for <audio> elements)
 	// This is an alternative stream endpoint that accepts ?token= for clients
@@ -140,32 +147,57 @@ func NewRouter(svc Services) *echo.Echo {
 	play.POST("/repeat", ph.SetRepeat)
 	play.POST("/shuffle", ph.SetShuffle)
 
-	// Serve static assets directly; anything that doesn't match a file.
-	if svc.WebUI != nil {
-		fileServer := http.FileServer(http.FS(svc.WebUI))
+	// Recently played (authenticated)
+	recent := e.Group("/api/recent", authMW)
+	recent.GET("", rh.GetRecent)
+	recent.POST("/albums", rh.RecordAlbum)
+	recent.POST("/playlists", rh.RecordPlaylist)
+	recent.DELETE("/playlists/:id", rh.DeleteRecentPlaylist)
+
+	// redirect to player UI if visiting root
+	e.GET("/", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently, "/player")
+	})
+
+	serveSPA := func(prefix string, ui fs.FS) {
+		if ui == nil {
+			return
+		}
+
+		fileServer := http.FileServer(http.FS(ui))
 		spaHandler := echo.WrapHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			path := r.URL.Path
-			if path == "/" {
-				path = "index.html"
-			} else if len(path) > 0 && path[0] == '/' {
-				path = path[1:]
+			// Strip prefix so the file server sees paths relative to the FS root.
+			// /player/assets/index.js -> /assets/index.js
+			r2 := *r
+			r2.URL = &url.URL{}
+			*r2.URL = *r.URL
+			p := strings.TrimPrefix(r.URL.Path, prefix)
+			if p == "" {
+				p = "/"
 			}
+			r2.URL.Path = p
 
-			if f, err := svc.WebUI.Open(path); err == nil {
+			// fall back to index.html for SPA client-side routing.
+			fsPath := strings.TrimPrefix(p, "/")
+			if fsPath == "" {
+				fsPath = "index.html"
+			}
+			if f, err := ui.Open(fsPath); err == nil {
 				f.Close()
-				fileServer.ServeHTTP(w, r)
+				fileServer.ServeHTTP(w, &r2)
 				return
 			}
 
-			// trigger error if route other than / is not found
-			if r.URL.Path != "/" {
-				http.Error(w, "Not Found", http.StatusNotFound)
-				return
-			}
+			r2.URL.Path = "/index.html"
+			fileServer.ServeHTTP(w, &r2)
 		}))
-		e.GET("/", spaHandler)
-		e.GET("/*", spaHandler)
+
+		e.GET(prefix, spaHandler)
+		e.GET(prefix+"/*", spaHandler)
 	}
+
+	serveSPA("/dashboard", svc.WebUI)
+	serveSPA("/player", svc.WebPlayerUI)
 
 	return e
 }

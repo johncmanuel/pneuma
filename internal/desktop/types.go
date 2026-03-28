@@ -22,13 +22,6 @@ func init() {
 	}
 }
 
-// audioExts is the set of file extensions the local file dialog will accept.
-var audioExts = map[string]bool{
-	".mp3": true, ".flac": true, ".ogg": true, ".opus": true,
-	".m4a": true, ".aac": true, ".wav": true, ".aiff": true,
-	".wma": true, ".alac": true, ".ape": true, ".wv": true,
-}
-
 // thumbMaxDim is the maximum width/height for cached artwork thumbnails.
 const thumbMaxDim = 400
 

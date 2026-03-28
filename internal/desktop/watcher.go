@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"pneuma/internal/media"
 	"strings"
 	"time"
 
@@ -146,7 +147,7 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 			}
 		} else {
 			ext := strings.ToLower(filepath.Ext(path))
-			if !audioExts[ext] {
+			if !media.IsSupportedAudio(ext) {
 				return
 			}
 			a.mu.Lock()
@@ -185,7 +186,7 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 	// handle events where a file or directory is removed or renamed
 	case event.Has(fsnotify.Remove), event.Has(fsnotify.Rename):
 		ext := strings.ToLower(filepath.Ext(path))
-		if audioExts[ext] {
+		if media.IsSupportedAudio(ext) {
 			if err := a.deleteLocalTrackByPath(path); err != nil {
 				slog.Warn("watcher: failed to delete track from DB", "path", path, "err", err)
 			}

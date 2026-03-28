@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { currentUser, logout } from "../api";
 </script>
 
 <nav class="sidebar">
@@ -7,19 +6,15 @@
     <span class="brand-text">pneuma</span>
   </div>
 
-  <div class="sidebar-footer">
-    {#if $currentUser}
-      <div class="user-info truncate">
-        <span class="text-2">{$currentUser.username}</span>
-        {#if $currentUser.is_admin}
-          <span class="badge">admin</span>
-        {/if}
-      </div>
-    {/if}
-    <button class="nav-btn logout-btn" on:click={logout}>
-      <span class="nav-label">Sign Out</span>
-    </button>
-  </div>
+  <ul class="nav-list">
+    <li>
+      <button class="active" on:click={() => (window.location.href = "/player")}
+        >Player</button
+      >
+    </li>
+  </ul>
+
+  <div class="spacer"></div>
 </nav>
 
 <style>
@@ -38,63 +33,44 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 20px 20px;
+    padding: 0 16px 20px;
     font-weight: 700;
     font-size: 18px;
   }
 
-  .nav-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border-radius: var(--r-md);
-    font-size: 14px;
-    color: var(--text-2);
-    text-align: left;
-    width: 100%;
-    transition:
-      background 0.12s,
-      color 0.12s;
+  .brand-text {
+    color: var(--accent);
+    letter-spacing: 2px;
   }
-  .nav-btn:hover {
+
+  .nav-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .nav-list li button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--text-2);
+    border-radius: 0;
+    transition:
+      background 0.1s,
+      color 0.1s;
+  }
+  .nav-list li button:hover {
     background: var(--surface-hover);
     color: var(--text-1);
   }
-
-  .nav-label {
-    flex: 1;
-  }
-
-  .sidebar-footer {
-    padding: 12px 8px 0;
-    border-top: 1px solid var(--border);
-    margin-top: auto;
-  }
-
-  .user-info {
-    padding: 0 12px 8px;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .badge {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background: var(--accent-dim);
-    color: #000;
-    padding: 1px 6px;
-    border-radius: 999px;
+  .nav-list li button.active {
+    color: var(--text-1);
     font-weight: 600;
   }
 
-  .logout-btn {
-    color: var(--text-3);
-  }
-  .logout-btn:hover {
-    color: var(--danger);
+  .spacer {
+    flex: 1;
   }
 </style>

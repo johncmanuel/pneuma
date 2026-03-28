@@ -1,24 +1,31 @@
 package handlers
 
 import (
+	"bytes"
+	"io"
+	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/labstack/echo/v4"
 
 	"pneuma/internal/api/http/middleware"
+	"pneuma/internal/artwork"
 	"pneuma/internal/models"
 	"pneuma/internal/playlist"
 )
 
 // PlaylistHandler handles /api/playlists/* routes.
 type PlaylistHandler struct {
-	svc *playlist.Service
-	hub eventPublisher
+	svc        *playlist.Service
+	hub        eventPublisher
+	artworkDir string
 }
 
 // NewPlaylistHandler creates a PlaylistHandler.
-func NewPlaylistHandler(svc *playlist.Service, hub eventPublisher) *PlaylistHandler {
-	return &PlaylistHandler{svc: svc, hub: hub}
+func NewPlaylistHandler(svc *playlist.Service, hub eventPublisher, artworkDir string) *PlaylistHandler {
+	return &PlaylistHandler{svc: svc, hub: hub, artworkDir: artworkDir}
 }
 
 // getPlaylistIfOwner retrieves a playlist by ID and verifies the authenticated user owns it.
@@ -95,14 +102,15 @@ func (h *PlaylistHandler) CreatePlaylist(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	h.hub.Publish(string(models.EventPlaylistCreated), pl)
+	h.hub.PublishToUser(claims.UserID, string(models.EventPlaylistCreated), pl)
 	return c.JSON(http.StatusCreated, pl)
 }
 
 // UpdatePlaylist updates a playlist by ID.
 func (h *PlaylistHandler) UpdatePlaylist(c echo.Context) error {
 	id := c.Param("id")
-	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+	pl, err := h.getPlaylistIfOwner(c, id)
+	if err != nil {
 		return err
 	}
 
@@ -120,14 +128,16 @@ func (h *PlaylistHandler) UpdatePlaylist(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	h.hub.Publish(string(models.EventPlaylistUpdated), map[string]string{"id": id})
+	updated, _ := h.svc.GetByID(c.Request().Context(), id)
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // DeletePlaylist deletes a playlist by ID.
 func (h *PlaylistHandler) DeletePlaylist(c echo.Context) error {
 	id := c.Param("id")
-	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+	pl, err := h.getPlaylistIfOwner(c, id)
+	if err != nil {
 		return err
 	}
 
@@ -135,7 +145,7 @@ func (h *PlaylistHandler) DeletePlaylist(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	h.hub.Publish(string(models.EventPlaylistDeleted), map[string]string{"id": id})
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistDeleted), map[string]string{"id": id})
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -157,7 +167,8 @@ func (h *PlaylistHandler) GetPlaylistItems(c echo.Context) error {
 // SetPlaylistItems replaces all items in a playlist with the given items.
 func (h *PlaylistHandler) SetPlaylistItems(c echo.Context) error {
 	id := c.Param("id")
-	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+	pl, err := h.getPlaylistIfOwner(c, id)
+	if err != nil {
 		return err
 	}
 
@@ -171,14 +182,17 @@ func (h *PlaylistHandler) SetPlaylistItems(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	h.hub.Publish(string(models.EventPlaylistUpdated), map[string]string{"id": id})
+	updated, _ := h.svc.GetByID(c.Request().Context(), id)
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
+
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // AddPlaylistItem adds an item to a playlist by ID.
 func (h *PlaylistHandler) AddPlaylistItem(c echo.Context) error {
 	id := c.Param("id")
-	if _, err := h.getPlaylistIfOwner(c, id); err != nil {
+	pl, err := h.getPlaylistIfOwner(c, id)
+	if err != nil {
 		return err
 	}
 
@@ -192,6 +206,93 @@ func (h *PlaylistHandler) AddPlaylistItem(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	h.hub.Publish(string(models.EventPlaylistUpdated), map[string]string{"id": id})
+	updated, _ := h.svc.GetByID(c.Request().Context(), id)
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+const (
+	// TODO: thinking of making them configurable through the server
+	maxArtworkBytes = 5 << 20 // 5 MB
+	maxArtworkDim   = 400
+)
+
+// UploadPlaylistArt handles multipart artwork upload for a playlist.
+func (h *PlaylistHandler) UploadPlaylistArt(c echo.Context) error {
+	id := c.Param("id")
+	pl, err := h.getPlaylistIfOwner(c, id)
+	if err != nil {
+		return err
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "file field required")
+	}
+
+	if file.Size > maxArtworkBytes {
+		return echo.NewHTTPError(http.StatusBadRequest, "file too large (max 5 MB)")
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer src.Close()
+
+	slog.Info("processing playlist artwork upload", "playlist_id", pl.ID, "file_name", file.Filename, "file_size", file.Size)
+
+	buf := bytes.NewBuffer(nil)
+	if _, err := io.Copy(buf, src); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	raw := buf.Bytes()
+
+	thumbData, err := artwork.ResizeToThumbnail(raw, maxArtworkDim)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid image: "+err.Error())
+	}
+
+	if err := os.MkdirAll(h.artworkDir, 0o755); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	fileName := pl.ID + ".jpg"
+	if err := artwork.WriteThumbnail(h.artworkDir, fileName, thumbData); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	ctx := c.Request().Context()
+	if err := h.svc.Update(ctx, pl.ID, pl.Name, pl.Description, fileName); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	updated, _ := h.svc.GetByID(ctx, pl.ID)
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
+
+	return c.JSON(http.StatusOK, map[string]string{"artwork_path": fileName})
+}
+
+// ServePlaylistArt serves a playlist's artwork image.
+func (h *PlaylistHandler) ServePlaylistArt(c echo.Context) error {
+	id := c.Param("id")
+
+	pl, err := h.svc.GetByID(c.Request().Context(), id)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "playlist not found")
+	}
+
+	if pl.ArtworkPath == "" {
+		return echo.NewHTTPError(http.StatusNotFound, "no artwork")
+	}
+
+	// Path traversal protection
+	cleanName := filepath.Base(pl.ArtworkPath)
+	artPath := filepath.Join(h.artworkDir, cleanName)
+
+	if _, err := os.Stat(artPath); os.IsNotExist(err) {
+		return echo.NewHTTPError(http.StatusNotFound, "artwork file not found")
+	}
+
+	return c.File(artPath)
 }

@@ -43,8 +43,6 @@ type Track struct {
 	FileSizeBytes    int64      `json:"file_size_bytes"`
 	LastModified     time.Time  `json:"last_modified"`
 	Fingerprint      string     `json:"fingerprint,omitempty"`
-	ReplayGainTrack  float64    `json:"replay_gain_track,omitempty"`
-	ReplayGainAlbum  float64    `json:"replay_gain_album,omitempty"`
 	UploadedByUserID string     `json:"uploaded_by_user_id,omitempty"`
 	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
@@ -113,6 +111,10 @@ type PlaybackSession struct {
 	TrackID    string    `json:"track_id"`
 	PositionMS int64     `json:"position_ms"`
 	Queue      []string  `json:"queue"`
+	QueueIndex int       `json:"queue_index"`
+	RepeatMode int       `json:"repeat"`
+	Shuffle    bool      `json:"shuffle"`
+	Playing    bool      `json:"playing"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
@@ -124,6 +126,20 @@ type AuditEntry struct {
 	TargetID   string    `json:"target_id"`
 	Detail     string    `json:"detail,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
+}
+
+type RecentAlbum struct {
+	AlbumName    string `json:"album_name"`
+	AlbumArtist  string `json:"album_artist"`
+	FirstTrackID string `json:"first_track_id"`
+	PlayedAt     string `json:"played_at"`
+}
+
+type RecentPlaylist struct {
+	PlaylistID  string `json:"playlist_id"`
+	Name        string `json:"name"`
+	ArtworkPath string `json:"artwork_path,omitempty"`
+	PlayedAt    string `json:"played_at"`
 }
 
 type EventType string

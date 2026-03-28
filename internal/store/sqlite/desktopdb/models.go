@@ -46,6 +46,18 @@ type LocalTrack struct {
 	HasArtwork  int64
 }
 
+type PlaybackSession struct {
+	ID         string
+	TrackID    sql.NullString
+	PositionMs sql.NullInt64
+	QueueJson  sql.NullString
+	QueueIndex sql.NullInt64
+	RepeatMode sql.NullInt64
+	Shuffle    sql.NullInt64
+	Playing    sql.NullInt64
+	UpdatedAt  string
+}
+
 type RecentAlbum struct {
 	Key            string
 	Name           string

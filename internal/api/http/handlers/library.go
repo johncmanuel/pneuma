@@ -18,6 +18,7 @@ import (
 
 	"pneuma/internal/api/http/middleware"
 	"pneuma/internal/library"
+	"pneuma/internal/media"
 	"pneuma/internal/models"
 	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/serverdb"
@@ -32,6 +33,7 @@ type scanTrigger interface {
 // eventPublisher is satisfied by *ws.Hub.
 type eventPublisher interface {
 	Publish(eventType string, payload any)
+	PublishToUser(userID string, eventType string, payload any)
 }
 
 // LibraryHandler serves library-related API routes.
@@ -143,8 +145,11 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	c.Response().Header().Set("Content-Type", mimeFromExt(track.Path))
+	ext := strings.ToLower(filepath.Ext(track.Path))
+
+	c.Response().Header().Set("Content-Type", media.MimeFromExt(ext))
 	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
+
 	return nil
 }
 
@@ -313,7 +318,7 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	}
 
 	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if !isAudioExt(ext) {
+	if !media.IsSupportedAudio(ext) {
 		return echo.NewHTTPError(http.StatusBadRequest, "unsupported audio format: "+ext)
 	}
 
@@ -478,38 +483,4 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 
 	h.hub.Publish(string(models.EventTrackRemoved), track)
 	return c.NoContent(http.StatusNoContent)
-}
-
-func mimeFromExt(path string) string {
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".mp3":
-		return "audio/mpeg"
-	case ".flac":
-		return "audio/flac"
-	case ".ogg":
-		return "audio/ogg"
-	case ".opus":
-		return "audio/opus"
-	case ".m4a", ".aac":
-		return "audio/mp4"
-	case ".wav":
-		return "audio/wav"
-	case ".aiff":
-		return "audio/aiff"
-	default:
-		return "application/octet-stream"
-	}
-}
-
-// TODO: move this to the config file or something similar; would want a
-// shared, single source of truth that other parts of the application can use.
-var allowedAudioExts = map[string]bool{
-	".mp3": true, ".flac": true, ".ogg": true, ".opus": true,
-	".m4a": true, ".aac": true, ".wav": true, ".aiff": true,
-	".wma": true, ".alac": true, ".ape": true, ".wv": true,
-}
-
-func isAudioExt(ext string) bool {
-	return allowedAudioExts[ext]
 }
