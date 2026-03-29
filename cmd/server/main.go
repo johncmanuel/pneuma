@@ -28,12 +28,9 @@ import (
 	"pneuma/web"
 )
 
-// TODO: consider moving this to a config file or env var
-const artworkSubdir = "playlist-artwork"
-
 func main() {
 	dataDir := flag.String("data", "", "path to data directory (default: $PNEUMA_DATA_DIR or ~/.pneuma)")
-	cfgPath := flag.String("config", "", "path to config.toml (default: <data-dir>/config.toml)")
+	cfgPath := flag.String("config", "", "path to config file (default: <data-dir>/config.toml)")
 	flag.Parse()
 
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
@@ -45,7 +42,7 @@ func main() {
 
 	cPath := *cfgPath
 	if cPath == "" {
-		cPath = filepath.Join(dir, "config.toml")
+		cPath = filepath.Join(dir, config.ConfigFileName)
 	}
 
 	cfg, err := config.Load(cPath, dir)
@@ -93,7 +90,7 @@ func main() {
 		Scanner:     sched,
 		JWTSecret:   cfg.Auth.SecretKey,
 		UploadsDir:  cfg.Upload.Dir,
-		ArtworkDir:  filepath.Join(dir, artworkSubdir),
+		ArtworkDir:  filepath.Join(dir, config.ConfigCachePlaylistArtDir),
 		UploadMaxMB: cfg.Upload.MaxSizeMB,
 		WebUI:       dashboard.FS(),
 		WebPlayerUI: web.FS(),

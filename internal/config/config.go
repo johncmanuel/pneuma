@@ -69,18 +69,22 @@ type Config struct {
 
 const (
 	// Server defaults
+
 	ServerHostDefault = "127.0.0.1" // NOTE: will need to use 0.0.0.0 if using this in docker
 	ServerPortDefault = 8989
 
 	// Config file names
-	ConfigFileName           = "config.toml"
-	ConfigDatabaseName       = "pneuma.db"
-	ConfigMusicDirName       = "music"
-	ConfigArtworkDirName     = "artwork"
-	ConfigUploadDirName      = "uploads"
-	ConfigDefaultDataDirName = ".pneuma"
+
+	ConfigFileName            = "config.toml"
+	ConfigDatabaseName        = "pneuma.db"
+	ConfigMusicDirName        = "music"
+	ConfigArtworkDirName      = "artwork"
+	ConfigCachePlaylistArtDir = "playlist-artwork"
+	ConfigUploadDirName       = "uploads"
+	ConfigDefaultDataDirName  = ".pneuma"
 
 	// Environment variable names
+
 	EnvDataDir               = "PNEUMA_DATA_DIR"
 	EnvServerHost            = "PNEUMA_SERVER_HOST"
 	EnvServerPort            = "PNEUMA_SERVER_PORT"
@@ -93,10 +97,16 @@ const (
 	EnvUploadMaxSizeMB       = "PNEUMA_UPLOAD_MAX_SIZE_MB"
 	EnvTranscodingFFmpegPath = "PNEUMA_TRANSCODING_FFMPEG_PATH"
 	EnvTranscodingFpcalcPath = "PNEUMA_TRANSCODING_FPCALC_PATH"
+
+	// Playlist artwork caching
+
+	// 5 MB
+	PlaylistMaxArtSizeBytes = 5 << 20
+	PlaylistMaxArtDim       = 400
 )
 
 // DefaultDataDir returns the canonical base directory for app data.
-// It checks PNEUMA_DATA_DIR, then falls back to ~/.pneuma
+// It checks PNEUMA_DATA_DIR, then falls back to ~/.pneuma (Unix) or %USERPROFILE%/.pneuma (Windows).
 func DefaultDataDir() string {
 	if dir := os.Getenv(EnvDataDir); dir != "" {
 		return dir

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 	"pneuma/internal/api/http/middleware"
 	"pneuma/internal/artwork"
+	"pneuma/internal/config"
 	"pneuma/internal/models"
 	"pneuma/internal/playlist"
 )
@@ -211,12 +213,6 @@ func (h *PlaylistHandler) AddPlaylistItem(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-const (
-	// TODO: thinking of making them configurable through the server
-	maxArtworkBytes = 5 << 20 // 5 MB
-	maxArtworkDim   = 400
-)
-
 // UploadPlaylistArt handles multipart artwork upload for a playlist.
 func (h *PlaylistHandler) UploadPlaylistArt(c echo.Context) error {
 	id := c.Param("id")
@@ -230,8 +226,9 @@ func (h *PlaylistHandler) UploadPlaylistArt(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "file field required")
 	}
 
-	if file.Size > maxArtworkBytes {
-		return echo.NewHTTPError(http.StatusBadRequest, "file too large (max 5 MB)")
+	if file.Size > config.PlaylistMaxArtSizeBytes {
+		msg := fmt.Sprintf("file too large (max %d MB)", config.PlaylistMaxArtSizeBytes>>20)
+		return echo.NewHTTPError(http.StatusBadRequest, msg)
 	}
 
 	src, err := file.Open()
@@ -248,7 +245,7 @@ func (h *PlaylistHandler) UploadPlaylistArt(c echo.Context) error {
 	}
 	raw := buf.Bytes()
 
-	thumbData, err := artwork.ResizeToThumbnail(raw, maxArtworkDim)
+	thumbData, err := artwork.ResizeToThumbnail(raw, config.PlaylistMaxArtDim)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid image: "+err.Error())
 	}
