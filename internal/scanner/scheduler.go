@@ -92,6 +92,13 @@ func (sc *Scheduler) ScanPath(path string) {
 		if track.Fingerprint == "" && existing.Fingerprint != "" {
 			track.Fingerprint = existing.Fingerprint
 		}
+
+		// preserve existing title if the parser fell back to the filename
+		// (e.g. hash filename for uploads)
+		baseName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		if track.Title == baseName && existing.Title != "" {
+			track.Title = existing.Title
+		}
 	}
 
 	if err := sc.lib.UpsertTrack(ctx, track); err != nil {
@@ -154,6 +161,12 @@ func (sc *Scheduler) scan(ctx context.Context) {
 			if existing != nil {
 				track.ID = existing.ID
 				track.CreatedAt = existing.CreatedAt
+				track.UploadedByUserID = existing.UploadedByUserID
+
+				baseName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+				if track.Title == baseName && existing.Title != "" {
+					track.Title = existing.Title
+				}
 			}
 
 			if dup, _ := sc.lib.DuplicateByMeta(ctx, track.Title, track.AlbumArtist, track.AlbumName, track.DurationMS, path); dup != nil {
