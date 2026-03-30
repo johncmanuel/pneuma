@@ -1,6 +1,9 @@
 {
   "scripts": {
-    "fmt": "prettier --write ."
+    "fmt": "prettier --write .",
+    "build:web": "cd web && npm run build",
+    "build:dash": "cd dashboard && npm run build",
+    "build": "npm run build:web && npm run build:dash"
   },
   "devDependencies": {
     "prettier": "3.8.1",
