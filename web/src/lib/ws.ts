@@ -1,5 +1,5 @@
 import { writable, get } from "svelte/store";
-import { authToken, wsBase } from "./api";
+import { authToken, wsBase, deviceId } from "./api";
 import { handlePlaybackChanged } from "./stores/playback";
 import { loadPlaylists, selectedPlaylist } from "./stores/playlists";
 
@@ -37,7 +37,7 @@ export function connectWS() {
   }
 
   const base = wsBase();
-  const url = `${base}/ws?token=${encodeURIComponent(token)}`;
+  const url = `${base}/ws?token=${encodeURIComponent(token)}&device_id=${encodeURIComponent(deviceId)}`;
 
   const ws = new WebSocket(url);
   socket = ws;

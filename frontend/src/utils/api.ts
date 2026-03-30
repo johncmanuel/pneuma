@@ -21,6 +21,23 @@ export const localPort = writable(0);
 
 export const isReconnecting = writable(false);
 
+const DEVICE_KEY = "pneuma_device_id";
+
+function getDeviceId(): string {
+  if (typeof localStorage === "undefined") return "unknown";
+
+  const existingId = localStorage.getItem(DEVICE_KEY);
+  if (existingId) return existingId;
+
+  const newId =
+    crypto.randomUUID?.() ?? Math.random().toString(36).substring(2);
+
+  localStorage.setItem(DEVICE_KEY, newId);
+  return newId;
+}
+
+export const deviceId = getDeviceId();
+
 // Only the server URL and JWT token are persisted.
 // The token is short-lived (24 h), rotated automatically, and can be
 // revoked server-side
@@ -214,6 +231,7 @@ export async function serverFetch(
   const headers = new Headers(init.headers);
 
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  headers.set("X-Device-ID", deviceId);
 
   if (!headers.has("Content-Type") && init.body) {
     headers.set("Content-Type", "application/json");

@@ -77,7 +77,8 @@ func NewRouter(svc Services) *echo.Echo {
 				userID = claims.UserID
 			}
 		}
-		svc.Hub.ServeWS(c.Response(), c.Request(), userID)
+		deviceID := c.QueryParam("device_id")
+		svc.Hub.ServeWS(c.Response(), c.Request(), userID, deviceID)
 		return nil
 	})
 
@@ -206,7 +207,7 @@ func NewRouter(svc Services) *echo.Echo {
 // messages to the playback engine.
 func playbackWSDispatch(engine *playback.Engine) apws.InboundHandler {
 	log := slog.Default().With("component", "ws-dispatch")
-	return func(userID string, msg apws.InboundMessage) {
+	return func(userID, deviceID string, msg apws.InboundMessage) {
 		ctx := context.Background()
 		switch msg.Type {
 		case "playback.play":
@@ -215,7 +216,7 @@ func playbackWSDispatch(engine *playback.Engine) apws.InboundHandler {
 				PositionMS int64  `json:"position_ms"`
 			}
 			if json.Unmarshal(msg.Payload, &p) == nil {
-				engine.Play(ctx, userID, p.TrackID, p.PositionMS)
+				engine.Play(ctx, userID, deviceID, p.TrackID, p.PositionMS)
 			}
 		case "playback.pause":
 			var p struct {
@@ -223,40 +224,40 @@ func playbackWSDispatch(engine *playback.Engine) apws.InboundHandler {
 				PositionMS int64 `json:"position_ms"`
 			}
 			if json.Unmarshal(msg.Payload, &p) == nil {
-				engine.Pause(ctx, userID, p.Paused, p.PositionMS)
+				engine.Pause(ctx, userID, deviceID, p.Paused, p.PositionMS)
 			}
 		case "playback.seek":
 			var p struct {
 				PositionMS int64 `json:"position_ms"`
 			}
 			if json.Unmarshal(msg.Payload, &p) == nil {
-				engine.Seek(ctx, userID, p.PositionMS)
+				engine.Seek(ctx, userID, deviceID, p.PositionMS)
 			}
 		case "playback.next":
-			engine.Next(ctx, userID)
+			engine.Next(ctx, userID, deviceID)
 		case "playback.prev":
-			engine.Prev(ctx, userID)
+			engine.Prev(ctx, userID, deviceID)
 		case "playback.queue":
 			var p struct {
 				TrackIDs   []string `json:"track_ids"`
 				StartIndex int      `json:"start_index"`
 			}
 			if json.Unmarshal(msg.Payload, &p) == nil {
-				engine.SetQueue(ctx, userID, p.TrackIDs, p.StartIndex)
+				engine.SetQueue(ctx, userID, deviceID, p.TrackIDs, p.StartIndex)
 			}
 		case "playback.repeat":
 			var p struct {
 				Mode playback.RepeatMode `json:"mode"`
 			}
 			if json.Unmarshal(msg.Payload, &p) == nil {
-				engine.SetRepeat(ctx, userID, p.Mode)
+				engine.SetRepeat(ctx, userID, deviceID, p.Mode)
 			}
 		case "playback.shuffle":
 			var p struct {
 				Enabled bool `json:"enabled"`
 			}
 			if json.Unmarshal(msg.Payload, &p) == nil {
-				engine.SetShuffle(ctx, userID, p.Enabled)
+				engine.SetShuffle(ctx, userID, deviceID, p.Enabled)
 			}
 		default:
 			log.Debug("unknown ws message type", "type", msg.Type)

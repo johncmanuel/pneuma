@@ -18,17 +18,26 @@ type AuditLog struct {
 	CreatedAt  string
 }
 
+type Device struct {
+	ID         string
+	UserID     string
+	Name       string
+	CreatedAt  string
+	LastActive string
+}
+
 type PlaybackSession struct {
 	ID         string
+	DeviceID   string
 	UserID     string
 	TrackID    sql.NullString
 	PositionMs sql.NullInt64
 	QueueJson  sql.NullString
-	UpdatedAt  string
 	QueueIndex sql.NullInt64
 	RepeatMode sql.NullInt64
 	Shuffle    sql.NullInt64
 	Playing    sql.NullInt64
+	UpdatedAt  string
 }
 
 type Playlist struct {

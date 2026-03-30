@@ -29,7 +29,8 @@ func NewPlaybackHandler(engine *playback.Engine) *PlaybackHandler {
 
 // GetState GET /api/playback
 func (h *PlaybackHandler) GetState(c echo.Context) error {
-	s, err := h.engine.GetState(claimsUserID(c))
+	deviceID := c.Request().Header.Get("X-Device-ID")
+	s, err := h.engine.GetState(claimsUserID(c), deviceID)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
@@ -49,7 +50,8 @@ func (h *PlaybackHandler) Play(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	return h.engine.Play(c.Request().Context(), claimsUserID(c), body.TrackID, body.PositionMS)
+	deviceID := c.Request().Header.Get("X-Device-ID")
+	return h.engine.Play(c.Request().Context(), claimsUserID(c), deviceID, body.TrackID, body.PositionMS)
 }
 
 // Pause POST /api/playback/pause  body: {paused, position_ms?}
@@ -63,7 +65,8 @@ func (h *PlaybackHandler) Pause(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	return h.engine.Pause(c.Request().Context(), claimsUserID(c), body.Paused, body.PositionMS)
+	deviceID := c.Request().Header.Get("X-Device-ID")
+	return h.engine.Pause(c.Request().Context(), claimsUserID(c), deviceID, body.Paused, body.PositionMS)
 }
 
 // Seek POST /api/playback/seek  body: {position_ms}
@@ -76,12 +79,14 @@ func (h *PlaybackHandler) Seek(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	return h.engine.Seek(c.Request().Context(), claimsUserID(c), body.PositionMS)
+	deviceID := c.Request().Header.Get("X-Device-ID")
+	return h.engine.Seek(c.Request().Context(), claimsUserID(c), deviceID, body.PositionMS)
 }
 
 // Next POST /api/playback/next
 func (h *PlaybackHandler) Next(c echo.Context) error {
-	nextID, queueIdx, err := h.engine.Next(c.Request().Context(), claimsUserID(c))
+	deviceID := c.Request().Header.Get("X-Device-ID")
+	nextID, queueIdx, err := h.engine.Next(c.Request().Context(), claimsUserID(c), deviceID)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -92,7 +97,8 @@ func (h *PlaybackHandler) Next(c echo.Context) error {
 
 // Prev POST /api/playback/prev
 func (h *PlaybackHandler) Prev(c echo.Context) error {
-	prevID, queueIdx, err := h.engine.Prev(c.Request().Context(), claimsUserID(c))
+	deviceID := c.Request().Header.Get("X-Device-ID")
+	prevID, queueIdx, err := h.engine.Prev(c.Request().Context(), claimsUserID(c), deviceID)
 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -112,7 +118,8 @@ func (h *PlaybackHandler) SetQueue(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	return h.engine.SetQueue(c.Request().Context(), claimsUserID(c), body.TrackIDs, body.StartIndex)
+	deviceID := c.Request().Header.Get("X-Device-ID")
+	return h.engine.SetQueue(c.Request().Context(), claimsUserID(c), deviceID, body.TrackIDs, body.StartIndex)
 }
 
 // SetRepeat POST /api/playback/repeat  body: {mode}
@@ -125,7 +132,8 @@ func (h *PlaybackHandler) SetRepeat(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	return h.engine.SetRepeat(c.Request().Context(), claimsUserID(c), body.Mode)
+	deviceID := c.Request().Header.Get("X-Device-ID")
+	return h.engine.SetRepeat(c.Request().Context(), claimsUserID(c), deviceID, body.Mode)
 }
 
 // SetShuffle POST /api/playback/shuffle  body: {enabled}
@@ -138,5 +146,6 @@ func (h *PlaybackHandler) SetShuffle(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	return h.engine.SetShuffle(c.Request().Context(), claimsUserID(c), body.Enabled)
+	deviceID := c.Request().Header.Get("X-Device-ID")
+	return h.engine.SetShuffle(c.Request().Context(), claimsUserID(c), deviceID, body.Enabled)
 }

@@ -12,9 +12,6 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TEXT NOT NULL
 );
 
--- TODO: there are a lot of other fields that aren't used while looking at the
--- current database (at version 004):
--- replay_gain_track, replay_gain_album
 CREATE TABLE IF NOT EXISTS tracks (
     id TEXT PRIMARY KEY,
     path TEXT NOT NULL UNIQUE,

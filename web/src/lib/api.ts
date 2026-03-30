@@ -10,6 +10,23 @@ export const authToken = writable(stored ?? "");
 
 export const loggedIn = derived(authToken, ($t) => $t.length > 0);
 
+const DEVICE_KEY = "pneuma_device_id";
+
+function getDeviceId(): string {
+  if (typeof localStorage === "undefined") return "unknown";
+
+  const existingId = localStorage.getItem(DEVICE_KEY);
+  if (existingId) return existingId;
+
+  const newId =
+    crypto.randomUUID?.() ?? Math.random().toString(36).substring(2);
+
+  localStorage.setItem(DEVICE_KEY, newId);
+  return newId;
+}
+
+export const deviceId = getDeviceId();
+
 // Persist token changes to localStorage
 authToken.subscribe((v) => {
   if (typeof localStorage !== "undefined") {
@@ -75,6 +92,7 @@ export async function apiFetch(
   const headers = new Headers(init.headers);
 
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  headers.set("X-Device-ID", deviceId);
 
   // Don't set Content-Type for FormData, the browser adds the multipart boundary
   if (

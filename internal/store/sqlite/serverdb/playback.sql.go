@@ -10,9 +10,10 @@ import (
 	"database/sql"
 )
 
-const playbackSessionByUser = `-- name: PlaybackSessionByUser :one
+const playbackSessionByDevice = `-- name: PlaybackSessionByDevice :one
 SELECT
     id,
+    device_id,
     user_id,
     COALESCE(track_id, '') AS track_id,
     position_ms,
@@ -23,11 +24,12 @@ SELECT
     playing,
     updated_at
 FROM playback_sessions
-WHERE user_id = ? LIMIT 1
+WHERE device_id = ? LIMIT 1
 `
 
-type PlaybackSessionByUserRow struct {
+type PlaybackSessionByDeviceRow struct {
 	ID         string
+	DeviceID   string
 	UserID     string
 	TrackID    string
 	PositionMs sql.NullInt64
@@ -39,11 +41,12 @@ type PlaybackSessionByUserRow struct {
 	UpdatedAt  string
 }
 
-func (q *Queries) PlaybackSessionByUser(ctx context.Context, userID string) (PlaybackSessionByUserRow, error) {
-	row := q.db.QueryRowContext(ctx, playbackSessionByUser, userID)
-	var i PlaybackSessionByUserRow
+func (q *Queries) PlaybackSessionByDevice(ctx context.Context, deviceID string) (PlaybackSessionByDeviceRow, error) {
+	row := q.db.QueryRowContext(ctx, playbackSessionByDevice, deviceID)
+	var i PlaybackSessionByDeviceRow
 	err := row.Scan(
 		&i.ID,
+		&i.DeviceID,
 		&i.UserID,
 		&i.TrackID,
 		&i.PositionMs,
@@ -59,10 +62,10 @@ func (q *Queries) PlaybackSessionByUser(ctx context.Context, userID string) (Pla
 
 const upsertPlaybackSession = `-- name: UpsertPlaybackSession :exec
 INSERT INTO playback_sessions (
-    id, user_id, track_id, position_ms, queue_json, queue_index, repeat_mode, shuffle, playing, updated_at
+    id, device_id, user_id, track_id, position_ms, queue_json, queue_index, repeat_mode, shuffle, playing, updated_at
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (user_id) DO UPDATE SET
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (device_id) DO UPDATE SET
     track_id = excluded.track_id, position_ms = excluded.position_ms,
     queue_json = excluded.queue_json, queue_index = excluded.queue_index,
     repeat_mode = excluded.repeat_mode, shuffle = excluded.shuffle,
@@ -71,6 +74,7 @@ ON CONFLICT (user_id) DO UPDATE SET
 
 type UpsertPlaybackSessionParams struct {
 	ID         string
+	DeviceID   string
 	UserID     string
 	TrackID    sql.NullString
 	PositionMs sql.NullInt64
@@ -85,6 +89,7 @@ type UpsertPlaybackSessionParams struct {
 func (q *Queries) UpsertPlaybackSession(ctx context.Context, arg UpsertPlaybackSessionParams) error {
 	_, err := q.db.ExecContext(ctx, upsertPlaybackSession,
 		arg.ID,
+		arg.DeviceID,
 		arg.UserID,
 		arg.TrackID,
 		arg.PositionMs,

@@ -8,7 +8,8 @@ import {
   authToken,
   connected,
   serverFetch,
-  autoReconnect
+  autoReconnect,
+  deviceId
 } from "../utils/api";
 import { addToast } from "./toasts";
 import { isLocalId } from "./localLibrary";
@@ -30,10 +31,12 @@ export function connectWS() {
   intentionalClose = false;
   const token = get(authToken);
   const url = token
-    ? `${base}/ws?token=${encodeURIComponent(token)}`
-    : `${base}/ws`;
+    ? `${base}/ws?token=${encodeURIComponent(token)}&device_id=${encodeURIComponent(deviceId)}`
+    : `${base}/ws?device_id=${encodeURIComponent(deviceId)}`;
 
-  const maskedUrl = token ? `${base}/ws?token=***` : url;
+  const maskedUrl = token
+    ? `${base}/ws?token=***&device_id=${encodeURIComponent(deviceId)}`
+    : url;
   console.info(`[WS] Connecting to ${maskedUrl}`);
 
   socket = new WebSocket(url);

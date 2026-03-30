@@ -85,8 +85,8 @@ func NullFloat(f float64) sql.NullFloat64 {
 	return sql.NullFloat64{Float64: f, Valid: true}
 }
 
-// SessionByUserToModel converts a PlaybackSessionByUserRow to a domain model.
-func SessionByUserToModel(r serverdb.PlaybackSessionByUserRow) *models.PlaybackSession {
+// SessionByDeviceToModel converts a PlaybackSessionByDeviceRow to a domain model.
+func SessionByDeviceToModel(r serverdb.PlaybackSessionByDeviceRow) *models.PlaybackSession {
 	ps := &models.PlaybackSession{
 		ID:         r.ID,
 		UserID:     r.UserID,

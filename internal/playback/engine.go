@@ -30,11 +30,13 @@ const (
 type EventBus interface {
 	Publish(eventType string, payload any)
 	PublishToUser(userID string, eventType string, payload any)
+	PublishToDevice(userID string, deviceID string, eventType string, payload any)
 }
 
 // State represents the current playback state of a user.
 type State struct {
 	UserID     string     `json:"-"`
+	DeviceID   string     `json:"-"`
 	Playing    bool       `json:"playing"`
 	TrackID    string     `json:"track_id"`
 	PositionMS int64      `json:"position_ms"`
@@ -47,7 +49,7 @@ type State struct {
 // Engine tracks live playback state for every active user.
 type Engine struct {
 	mu       sync.Mutex
-	sessions map[string]*State // keyed by user ID
+	sessions map[string]*State // keyed by device ID
 	q        *serverdb.Queries
 	lib      *library.Service
 	bus      EventBus
@@ -65,22 +67,22 @@ func New(q *serverdb.Queries, bus EventBus, lib *library.Service) *Engine {
 	}
 }
 
-// GetState returns the current playback state for a user.
-func (e *Engine) GetState(userID string) (State, error) {
+// GetState returns the current playback state for a user/device.
+func (e *Engine) GetState(userID, deviceID string) (State, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if s, ok := e.sessions[userID]; ok {
+	if s, ok := e.sessions[deviceID]; ok && s.UserID == userID {
 		return *s, nil
 	}
-	return State{}, fmt.Errorf("no active session for user %q", userID)
+	return State{}, fmt.Errorf("no active session for device %q", deviceID)
 }
 
 // Play starts or resumes playback for a track.
-func (e *Engine) Play(ctx context.Context, userID, trackID string, positionMS int64) error {
+func (e *Engine) Play(ctx context.Context, userID, deviceID, trackID string, positionMS int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	s := e.getOrCreate(userID)
+	s := e.getOrCreate(userID, deviceID)
 	s.Playing = true
 
 	if trackID != "" && trackID != s.TrackID {
@@ -101,40 +103,40 @@ func (e *Engine) Play(ctx context.Context, userID, trackID string, positionMS in
 	if positionMS > 0 {
 		s.PositionMS = positionMS
 	}
-	return e.persist(ctx, userID, s)
+	return e.persist(ctx, userID, deviceID, s)
 }
 
 // Pause sets paused state. If positionMS > 0 the stored position is updated
 // to the caller's current playhead so the echoed state is accurate.
-func (e *Engine) Pause(ctx context.Context, userID string, paused bool, positionMS int64) error {
+func (e *Engine) Pause(ctx context.Context, userID, deviceID string, paused bool, positionMS int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	s := e.getOrCreate(userID)
+	s := e.getOrCreate(userID, deviceID)
 	s.Playing = !paused
 
 	if positionMS > 0 {
 		s.PositionMS = positionMS
 	}
-	return e.persist(ctx, userID, s)
+	return e.persist(ctx, userID, deviceID, s)
 }
 
 // Seek sets the playback position (in milliseconds).
-func (e *Engine) Seek(ctx context.Context, userID string, positionMS int64) error {
+func (e *Engine) Seek(ctx context.Context, userID, deviceID string, positionMS int64) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	s := e.getOrCreate(userID)
+	s := e.getOrCreate(userID, deviceID)
 	s.PositionMS = positionMS
-	return e.persist(ctx, userID, s)
+	return e.persist(ctx, userID, deviceID, s)
 }
 
 // SetQueue replaces the current playback queue.
-func (e *Engine) SetQueue(ctx context.Context, userID string, trackIDs []string, startIndex int) error {
+func (e *Engine) SetQueue(ctx context.Context, userID, deviceID string, trackIDs []string, startIndex int) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	s := e.getOrCreate(userID)
+	s := e.getOrCreate(userID, deviceID)
 	s.Queue = trackIDs
 	s.QueueIndex = startIndex
 
@@ -142,15 +144,15 @@ func (e *Engine) SetQueue(ctx context.Context, userID string, trackIDs []string,
 		s.TrackID = trackIDs[startIndex]
 		s.PositionMS = 0
 	}
-	return e.persist(ctx, userID, s)
+	return e.persist(ctx, userID, deviceID, s)
 }
 
 // Next advances to the next track; returns the new track ID and queue index.
-func (e *Engine) Next(ctx context.Context, userID string) (string, int, error) {
+func (e *Engine) Next(ctx context.Context, userID, deviceID string) (string, int, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	s := e.getOrCreate(userID)
+	s := e.getOrCreate(userID, deviceID)
 
 	if len(s.Queue) == 0 {
 		return s.TrackID, s.QueueIndex, nil
@@ -172,16 +174,16 @@ func (e *Engine) Next(ctx context.Context, userID string) (string, int, error) {
 			s.Playing = false
 		}
 	}
-	err := e.persist(ctx, userID, s)
+	err := e.persist(ctx, userID, deviceID, s)
 	return s.TrackID, s.QueueIndex, err
 }
 
 // Prev goes back to the previous track; returns the new track ID and queue index.
-func (e *Engine) Prev(ctx context.Context, userID string) (string, int, error) {
+func (e *Engine) Prev(ctx context.Context, userID, deviceID string) (string, int, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	s := e.getOrCreate(userID)
+	s := e.getOrCreate(userID, deviceID)
 
 	if len(s.Queue) == 0 {
 		return s.TrackID, s.QueueIndex, nil
@@ -195,31 +197,31 @@ func (e *Engine) Prev(ctx context.Context, userID string) (string, int, error) {
 
 	s.TrackID = s.Queue[s.QueueIndex]
 	s.PositionMS = 0
-	err := e.persist(ctx, userID, s)
+	err := e.persist(ctx, userID, deviceID, s)
 	return s.TrackID, s.QueueIndex, err
 }
 
-// SetRepeat sets the repeat mode for a user.
-func (e *Engine) SetRepeat(ctx context.Context, userID string, mode RepeatMode) error {
+// SetRepeat sets the repeat mode for a user/device.
+func (e *Engine) SetRepeat(ctx context.Context, userID, deviceID string, mode RepeatMode) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	s := e.getOrCreate(userID)
+	s := e.getOrCreate(userID, deviceID)
 	s.Repeat = mode
-	return e.persist(ctx, userID, s)
+	return e.persist(ctx, userID, deviceID, s)
 }
 
-// SetShuffle toggles shuffle for a user. When enabled, the queue is
+// SetShuffle toggles shuffle for a user/device. When enabled, the queue is
 // randomised with the current track pinned to index 0. When disabled, the
 // queue is re-sorted in this order:
 // 1. album name
 // 2. disc number
 // 3. track number.
-func (e *Engine) SetShuffle(ctx context.Context, userID string, enabled bool) error {
+func (e *Engine) SetShuffle(ctx context.Context, userID, deviceID string, enabled bool) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	s := e.getOrCreate(userID)
+	s := e.getOrCreate(userID, deviceID)
 	s.Shuffle = enabled
 
 	// Build a new queue with the current track first, then the rest shuffled.
@@ -269,23 +271,30 @@ func (e *Engine) SetShuffle(ctx context.Context, userID string, enabled bool) er
 			}
 		}
 	}
-	return e.persist(ctx, userID, s)
+	return e.persist(ctx, userID, deviceID, s)
 }
 
 // LoadSession restores a session from the database into memory.
-func (e *Engine) LoadSession(ctx context.Context, userID string) (State, error) {
-	row, err := e.q.PlaybackSessionByUser(ctx, userID)
+func (e *Engine) LoadSession(ctx context.Context, userID, deviceID string) (State, error) {
+	row, err := e.q.PlaybackSessionByDevice(ctx, deviceID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return State{}, nil
 		}
 		return State{}, err
 	}
-	sess := dbconv.SessionByUserToModel(row)
+
+	sess := dbconv.SessionByDeviceToModel(row)
+	if sess.UserID != userID {
+		return State{}, fmt.Errorf("session belongs to different user")
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	s := &State{
 		UserID:     sess.UserID,
+		DeviceID:   deviceID,
 		TrackID:    sess.TrackID,
 		PositionMS: sess.PositionMS,
 		Queue:      sess.Queue,
@@ -294,19 +303,20 @@ func (e *Engine) LoadSession(ctx context.Context, userID string) (State, error) 
 		Shuffle:    sess.Shuffle,
 		Playing:    sess.Playing,
 	}
-	e.sessions[userID] = s
+	e.sessions[deviceID] = s
 	return *s, nil
 }
 
 // loadFromDB loads a session from the database without taking a lock.
-func (e *Engine) loadFromDB(userID string) (State, error) {
-	row, err := e.q.PlaybackSessionByUser(context.Background(), userID)
+func (e *Engine) loadFromDB(deviceID string) (State, error) {
+	row, err := e.q.PlaybackSessionByDevice(context.Background(), deviceID)
 	if err != nil {
 		return State{}, err
 	}
-	sess := dbconv.SessionByUserToModel(row)
+	sess := dbconv.SessionByDeviceToModel(row)
 	return State{
 		UserID:     sess.UserID,
+		DeviceID:   deviceID,
 		TrackID:    sess.TrackID,
 		PositionMS: sess.PositionMS,
 		Queue:      sess.Queue,
@@ -317,31 +327,31 @@ func (e *Engine) loadFromDB(userID string) (State, error) {
 	}, nil
 }
 
-// getOrCreate returns the session for a user, creating a new one if needed.
+// getOrCreate returns the session for a user/device, creating a new one if needed.
 // On first access, attempt to restore the session from the database.
-func (e *Engine) getOrCreate(userID string) *State {
-	if s, ok := e.sessions[userID]; ok {
+func (e *Engine) getOrCreate(userID, deviceID string) *State {
+	if s, ok := e.sessions[deviceID]; ok {
 		if userID != "" {
 			s.UserID = userID
 		}
 		return s
 	}
 
-	if userID != "" {
-		if s, err := e.loadFromDB(userID); err == nil && s.TrackID != "" {
-			e.sessions[userID] = &s
+	if deviceID != "" {
+		if s, err := e.loadFromDB(deviceID); err == nil && s.TrackID != "" {
+			e.sessions[deviceID] = &s
 			return &s
 		}
 	}
 
-	s := &State{UserID: userID}
-	e.sessions[userID] = s
+	s := &State{UserID: userID, DeviceID: deviceID}
+	e.sessions[deviceID] = s
 	return s
 }
 
 // persist saves the session to the database and publishes state to WS clients.
-func (e *Engine) persist(ctx context.Context, userID string, s *State) error {
-	e.bus.PublishToUser(userID, "playback.changed", map[string]any{
+func (e *Engine) persist(ctx context.Context, userID, deviceID string, s *State) error {
+	e.bus.PublishToDevice(userID, deviceID, "playback.changed", map[string]any{
 		"track_id":    s.TrackID,
 		"playing":     s.Playing,
 		"position_ms": s.PositionMS,
@@ -352,7 +362,7 @@ func (e *Engine) persist(ctx context.Context, userID string, s *State) error {
 	})
 
 	// require valid users to persist sessions;
-	if userID == "" {
+	if userID == "" || deviceID == "" {
 		return nil
 	}
 
@@ -361,8 +371,23 @@ func (e *Engine) persist(ctx context.Context, userID string, s *State) error {
 		return fmt.Errorf("persist session: marshal queue: %w", err)
 	}
 
+	now := time.Now()
+	nowStr := dbconv.FormatTime(now)
+
+	// Ensure the device exists before writing the session tying to it (this addresses the FK constraint error)
+	if err := e.q.UpsertDevice(ctx, serverdb.UpsertDeviceParams{
+		ID:         deviceID,
+		UserID:     userID,
+		Name:       "some client", // random fallback name
+		CreatedAt:  nowStr,
+		LastActive: nowStr,
+	}); err != nil {
+		e.log.Error("upsert device", "device", deviceID, "err", err)
+	}
+
 	if err := e.q.UpsertPlaybackSession(ctx, serverdb.UpsertPlaybackSessionParams{
-		ID:         userID,
+		ID:         deviceID,
+		DeviceID:   deviceID,
 		UserID:     userID,
 		TrackID:    dbconv.NullStr(s.TrackID),
 		PositionMs: sql.NullInt64{Int64: s.PositionMS, Valid: true},
@@ -371,9 +396,9 @@ func (e *Engine) persist(ctx context.Context, userID string, s *State) error {
 		RepeatMode: sql.NullInt64{Int64: int64(s.Repeat), Valid: true},
 		Shuffle:    sql.NullInt64{Int64: dbconv.BoolInt(s.Shuffle), Valid: true},
 		Playing:    sql.NullInt64{Int64: dbconv.BoolInt(s.Playing), Valid: true},
-		UpdatedAt:  dbconv.FormatTime(time.Now()),
+		UpdatedAt:  nowStr,
 	}); err != nil {
-		e.log.Error("persist session", "user", userID, "err", err)
+		e.log.Error("persist session", "device", deviceID, "err", err)
 		return err
 	}
 
