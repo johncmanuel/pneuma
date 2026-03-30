@@ -122,6 +122,47 @@ docker build -t pneuma:latest --build-arg EMBED_UI=false .
 docker run -p 8989:8989 pneuma
 ```
 
+Docker Compose (for the server and web player)
+
+```yaml
+version: "3.8"
+
+services:
+  server:
+    image: ghcr.io/johncmanuel/pneuma/server:latest
+    container_name: pneuma-server
+    restart: unless-stopped
+    ports:
+      - "8989:8989"
+    volumes:
+      # Persistent application data (database, cached artwork, uploads, etc.)
+      - pneuma_data:/data
+
+      # Mount your music directory (read-only recommended)
+      # Replace `./music` with the actual path to your local music directory
+      - ./music:/music:ro
+
+    environment:
+      # Core configuration
+      - PNEUMA_SERVER_HOST=0.0.0.0
+      - PNEUMA_DATA_DIR=/data
+
+      # Point the music scanner to the mounted volume
+      - PNEUMA_LIBRARY_WATCH_FOLDERS=/music
+
+      # Security
+      # - PNEUMA_AUTH_SECRET_KEY=change-this-to-a-secure-random-string
+
+      # Rate limiting (defaults to true)
+      # - PNEUMA_RATE_LIMITING_ENABLED=true
+
+      # Increase upload limit if needed (500 MB is default)
+      # - PNEUMA_UPLOAD_MAX_SIZE_MB=500
+
+volumes:
+  pneuma_data:
+```
+
 ### Formatting
 
 Run `go fmt ./...` to format Go code.
