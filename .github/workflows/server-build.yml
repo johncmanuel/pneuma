@@ -59,7 +59,6 @@ jobs:
             goarch: amd64
           - goos: linux
             goarch: arm64
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -82,7 +81,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: "0"
         run: |
-          ARTIFACT="pneuma-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}"
+          ARTIFACT="pneuma-server-${{ matrix.goos }}-${{ matrix.goarch }}"
           go build \
             -trimpath \
             -ldflags="-s -w -X main.version=${{ github.ref_name }}" \
@@ -93,7 +92,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pneuma-server-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: pneuma-server-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+          path: pneuma-server-${{ matrix.goos }}-${{ matrix.goarch }}
           retention-days: 1
 
   release:
