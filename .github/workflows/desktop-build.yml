@@ -41,9 +41,38 @@ jobs:
         with:
           build-name: ${{ env.APP_NAME }}
           build-platform: ${{ matrix.build.platform }}
-          package: true
+          package: false
           go-version: "1.23"
           # need to keep node at 22.x rather than latest to avoid build issues with
           # libwebkit2gtk-4.0-dev (AFAIK, ubuntu 24 drops this specific package) as well
           # as get Vite to work properly. This version is needed to work with wails
           node-version: "22.x"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pneuma-desktop-${{ matrix.build.os }}
+          path: build/bin/*
+          retention-days: 1
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+          pattern: pneuma-desktop-*
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**
+          generate_release_notes: true
