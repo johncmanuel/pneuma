@@ -369,7 +369,13 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 			if existing.AlbumArtist == "" {
 				existing.AlbumArtist = m.Artist()
 			}
+			if existing.AlbumArtist == "" {
+				existing.AlbumArtist = "__unorganized__"
+			}
 			existing.AlbumName = m.Album()
+			if existing.AlbumName == "" {
+				existing.AlbumName = "__unorganized__"
+			}
 			existing.Genre = m.Genre()
 			existing.Year = m.Year()
 			existing.TrackNumber, _ = m.Track()
@@ -402,6 +408,13 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		year = m.Year()
 		trackNumber, _ = m.Track()
 		discNumber, _ = m.Disc()
+	}
+
+	if albumName == "" {
+		albumName = "__unorganized__"
+	}
+	if albumArtist == "" {
+		albumArtist = "__unorganized__"
 	}
 
 	t := &models.Track{

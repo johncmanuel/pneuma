@@ -71,25 +71,30 @@ func (p *Parser) ParseFile(_ context.Context, path string) (*models.Track, error
 	}
 
 	m, err := tag.ReadFrom(f)
-	if err != nil {
-		return t, nil
+	if err == nil {
+		if m.Title() != "" {
+			t.Title = m.Title()
+		}
+		t.AlbumArtist = m.AlbumArtist()
+		t.AlbumName = m.Album()
+		t.Genre = m.Genre()
+		t.Year = m.Year()
+		tn, _ := m.Track()
+		dn, _ := m.Disc()
+		t.TrackNumber = tn
+		t.DiscNumber = dn
+
+		// Store raw artist/album names; the library service resolves IDs.
+		if m.AlbumArtist() == "" && m.Artist() != "" {
+			t.AlbumArtist = m.Artist()
+		}
 	}
 
-	if m.Title() != "" {
-		t.Title = m.Title()
+	if t.AlbumName == "" {
+		t.AlbumName = "__unorganized__"
 	}
-	t.AlbumArtist = m.AlbumArtist()
-	t.AlbumName = m.Album()
-	t.Genre = m.Genre()
-	t.Year = m.Year()
-	tn, _ := m.Track()
-	dn, _ := m.Disc()
-	t.TrackNumber = tn
-	t.DiscNumber = dn
-
-	// Store raw artist/album names; the library service resolves IDs.
-	if m.AlbumArtist() == "" && m.Artist() != "" {
-		t.AlbumArtist = m.Artist()
+	if t.AlbumArtist == "" {
+		t.AlbumArtist = "__unorganized__"
 	}
 
 	// Enrich with ffprobe (duration, bitrate, sample rate).
@@ -151,6 +156,15 @@ func (p *Parser) ParseFileWithMeta(ctx context.Context, path string) (*models.Tr
 		dn, _ := m.Disc()
 		t.TrackNumber = tn
 		t.DiscNumber = dn
+	}
+
+	if t.AlbumName == "" {
+		t.AlbumName = "__unorganized__"
+	}
+	if t.AlbumArtist == "" && meta.ArtistName == "" {
+		t.AlbumArtist = "__unorganized__"
+	} else if t.AlbumArtist == "" && meta.ArtistName != "" {
+		t.AlbumArtist = meta.ArtistName
 	}
 
 	// use ffprobe to fill in duration, bitrate, sample rate, and channels if available.
