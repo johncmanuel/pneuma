@@ -150,7 +150,7 @@ services:
       # Point the music scanner to the mounted volume
       - PNEUMA_LIBRARY_WATCH_FOLDERS=/music
 
-      # Security
+      # Security (this'll be auto generated if not provided and placed in the config file)
       # - PNEUMA_AUTH_SECRET_KEY=change-this-to-a-secure-random-string
 
       # Rate limiting (defaults to true)
