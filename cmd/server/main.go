@@ -81,19 +81,20 @@ func main() {
 	sched := scanner.NewScheduler(libSvc, metaParser, hub, cfg.Library.WatchFolders, 15*time.Minute)
 
 	router := api.NewRouter(api.Services{
-		Library:     libSvc,
-		User:        userSvc,
-		Playback:    playEngine,
-		Playlist:    playlistSvc,
-		Hub:         hub,
-		Queries:     queries,
-		Scanner:     sched,
-		JWTSecret:   cfg.Auth.SecretKey,
-		UploadsDir:  cfg.Upload.Dir,
-		ArtworkDir:  filepath.Join(dir, config.ConfigCachePlaylistArtDir),
-		UploadMaxMB: cfg.Upload.MaxSizeMB,
-		WebUI:       dashboard.FS(),
-		WebPlayerUI: web.FS(),
+		Library:             libSvc,
+		User:                userSvc,
+		Playback:            playEngine,
+		Playlist:            playlistSvc,
+		Hub:                 hub,
+		Queries:             queries,
+		Scanner:             sched,
+		JWTSecret:           cfg.Auth.SecretKey,
+		UploadsDir:          cfg.Upload.Dir,
+		ArtworkDir:          filepath.Join(dir, config.ConfigCachePlaylistArtDir),
+		UploadMaxMB:         cfg.Upload.MaxSizeMB,
+		WebUI:               dashboard.FS(),
+		WebPlayerUI:         web.FS(),
+		RateLimitingEnabled: cfg.RateLimiting.Enabled,
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

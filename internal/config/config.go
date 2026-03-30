@@ -56,15 +56,25 @@ type UploadConfig struct {
 	MaxSizeMB int `toml:"max_size_mb"`
 }
 
+// RateLimitingConfig controls the application-layer rate limiter.
+// Self-hosters who use a reverse proxy (e.g. Nginx, Caddy) can disable
+// this and rely on the proxy's built-in rate limiting instead.
+type RateLimitingConfig struct {
+	// Enabled toggles the application-layer rate limiter on/off.
+	// Default: true.
+	Enabled bool `toml:"enabled"`
+}
+
 // Config is the root application configuration.
 type Config struct {
-	Server      ServerConfig      `toml:"server"`
-	Database    DatabaseConfig    `toml:"database"`
-	Library     LibraryConfig     `toml:"library"`
-	Artwork     ArtworkConfig     `toml:"artwork"`
-	Auth        AuthConfig        `toml:"auth"`
-	Upload      UploadConfig      `toml:"upload"`
-	Transcoding TranscodingConfig `toml:"transcoding"`
+	Server       ServerConfig       `toml:"server"`
+	Database     DatabaseConfig     `toml:"database"`
+	Library      LibraryConfig      `toml:"library"`
+	Artwork      ArtworkConfig      `toml:"artwork"`
+	Auth         AuthConfig         `toml:"auth"`
+	Upload       UploadConfig       `toml:"upload"`
+	Transcoding  TranscodingConfig  `toml:"transcoding"`
+	RateLimiting RateLimitingConfig `toml:"rate_limiting"`
 }
 
 const (
@@ -97,6 +107,7 @@ const (
 	EnvUploadMaxSizeMB       = "PNEUMA_UPLOAD_MAX_SIZE_MB"
 	EnvTranscodingFFmpegPath = "PNEUMA_TRANSCODING_FFMPEG_PATH"
 	EnvTranscodingFpcalcPath = "PNEUMA_TRANSCODING_FPCALC_PATH"
+	EnvRateLimitingEnabled   = "PNEUMA_RATE_LIMITING_ENABLED"
 
 	// Playlist artwork caching
 
@@ -149,6 +160,9 @@ func DefaultConfig(dataDir string) *Config {
 			FFmpegPath: "ffmpeg",
 			FpcalcPath: "fpcalc",
 		},
+		RateLimiting: RateLimitingConfig{
+			Enabled: true,
+		},
 	}
 }
 
@@ -192,6 +206,11 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv(EnvTranscodingFpcalcPath); v != "" {
 		cfg.Transcoding.FpcalcPath = v
+	}
+	if v := os.Getenv(EnvRateLimitingEnabled); v != "" {
+		// Accept "false", "0", "no" as falsy; anything else (including "true", "1") keeps it enabled.
+		v = strings.ToLower(strings.TrimSpace(v))
+		cfg.RateLimiting.Enabled = v != "false" && v != "0" && v != "no"
 	}
 }
 

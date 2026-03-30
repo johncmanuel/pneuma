@@ -6,12 +6,16 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
+	"golang.org/x/time/rate"
 
 	"pneuma/internal/api/http/handlers"
 	"pneuma/internal/api/http/middleware"
@@ -41,6 +45,10 @@ type Services struct {
 	UploadMaxMB int    // max upload body size in MB (0 = default 500 MB)
 	WebUI       fs.FS  // embedded dashboard assets (nil = disabled)
 	WebPlayerUI fs.FS  // embedded web player assets (nil = disabled)
+
+	// RateLimitingEnabled toggles the application-layer rate limiter.
+	// Set to false if using a reverse proxy with its own rate limiting.
+	RateLimitingEnabled bool
 }
 
 // NewRouter builds and returns the configured Echo router.
@@ -84,20 +92,37 @@ func NewRouter(svc Services) *echo.Echo {
 
 	// Auth (public)
 	auth := e.Group("/api/auth")
-	auth.POST("/register", uh.Register)
-	auth.POST("/login", uh.Login)
-	auth.POST("/password", uh.ChangePassword, authMW)
+
+	// disable rate limiting by default
+	noop := func(next echo.HandlerFunc) echo.HandlerFunc { return next }
+	registerRL := noop
+	loginRL := noop
+	passwordRL := noop
+
+	// think these are good rates, though self-hosters need to rely more on reverse proxy rate limiting
+	// than application layer rate limiting. having this added in will be useful for servers not using
+	// reverse proxies
+	if svc.RateLimitingEnabled {
+		registerRL = newRateLimiter(10.0/3600.0, 10, 2*time.Hour) // 10 per hour
+		loginRL = newRateLimiter(30.0/60.0, 15, 5*time.Minute)    // 30 per minute
+		passwordRL = newRateLimiter(20.0/60.0, 10, 5*time.Minute) // 20 per minute
+	}
+
+	auth.POST("/register", uh.Register, registerRL)
+	auth.POST("/login", uh.Login, loginRL)
+
+	auth.POST("/password", uh.ChangePassword, authMW, passwordRL)
 	auth.POST("/refresh", uh.Refresh, authMW)
 	auth.GET("/stream-token", uh.StreamToken, authMW)
 
-	// Admin (admin-only)
+	// Admin
 	admin := e.Group("/api/admin", adminMW)
 	admin.GET("/users", ah.ListUsers)
 	admin.PUT("/users/:id/permissions", ah.UpdatePermissions)
 	admin.DELETE("/users/:id", ah.DeleteUser)
 	admin.GET("/audit", ah.ListAudit)
 
-	// Library (authenticated, some with permission guards)
+	// Library
 	lib := e.Group("/api/library", authMW)
 	lib.GET("/tracks", lh.ListTracks)
 	lib.GET("/tracks/:id", lh.GetTrack)
@@ -118,7 +143,7 @@ func NewRouter(svc Services) *echo.Echo {
 	lib.GET("/search", lh.Search)
 	lib.POST("/scan", lh.TriggerScan, adminMW)
 
-	// Playlists (authenticated)
+	// Playlists
 	pl := e.Group("/api/playlists", authMW)
 	pl.GET("", plh.ListPlaylists)
 	pl.POST("", plh.CreatePlaylist)
@@ -136,7 +161,7 @@ func NewRouter(svc Services) *echo.Echo {
 	// that cannot set Authorization headers (e.g., <audio src="">).
 	e.GET("/api/stream/tracks/:id", lh.StreamTrack, middleware.RequireAuth(secret))
 
-	// Playback (authenticated)
+	// Playback
 	play := e.Group("/api/playback", authMW)
 	play.GET("", ph.GetState)
 	play.POST("/play", ph.Play)
@@ -148,7 +173,7 @@ func NewRouter(svc Services) *echo.Echo {
 	play.POST("/repeat", ph.SetRepeat)
 	play.POST("/shuffle", ph.SetShuffle)
 
-	// Recently played (authenticated)
+	// Recently played
 	recent := e.Group("/api/recent", authMW)
 	recent.GET("", rh.GetRecent)
 	recent.POST("/albums", rh.RecordAlbum)
@@ -263,4 +288,38 @@ func playbackWSDispatch(engine *playback.Engine) apws.InboundHandler {
 			log.Debug("unknown ws message type", "type", msg.Type)
 		}
 	}
+}
+
+// newRateLimiter returns an IP-based rate limiter Echo middleware.
+// r is the sustained rate (requests/second), burst is the max burst size,
+// and expiresIn controls how long an idle IP is kept in memory.
+func newRateLimiter(r rate.Limit, burst int, expiresIn time.Duration) echo.MiddlewareFunc {
+	retryAfterSecs := strconv.Itoa(int(math.Ceil(float64(burst) / float64(r))))
+	return echomw.RateLimiterWithConfig(echomw.RateLimiterConfig{
+		Skipper: echomw.DefaultSkipper,
+		Store: echomw.NewRateLimiterMemoryStoreWithConfig(
+			echomw.RateLimiterMemoryStoreConfig{
+				Rate:      r,
+				Burst:     burst,
+				ExpiresIn: expiresIn,
+			},
+		),
+		IdentifierExtractor: func(ctx echo.Context) (string, error) {
+			id := ctx.RealIP()
+			return id, nil
+		},
+		ErrorHandler: func(ctx echo.Context, err error) error {
+			slog.Error("Rate limiter store error", "ip", ctx.RealIP(), "error", err)
+			return ctx.JSON(http.StatusInternalServerError, map[string]string{
+				"message": "An internal error occurred. Please try again later.",
+			})
+		},
+		DenyHandler: func(ctx echo.Context, identifier string, err error) error {
+			slog.Warn("Rate limit exceeded", "ip", ctx.RealIP(), "identifier", identifier, "error", err)
+			ctx.Response().Header().Set("Retry-After", retryAfterSecs)
+			return ctx.JSON(http.StatusTooManyRequests, map[string]string{
+				"message": "Too many requests. Please try again later.",
+			})
+		},
+	})
 }
