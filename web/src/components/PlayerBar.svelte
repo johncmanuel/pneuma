@@ -224,10 +224,14 @@
     const idx = currentRemoteIndex();
     if (idx < 0) return;
 
-    const nextIdx = idx + 1;
+    let nextIdx = idx + 1;
     if (nextIdx >= rq.length) {
-      playerState.update((s) => ({ ...s, paused: true }));
-      return;
+      if ($playerState.repeat === 1) {
+        nextIdx = 0;
+      } else {
+        playerState.update((s) => ({ ...s, paused: true }));
+        return;
+      }
     }
 
     playerState.update((s) => ({
@@ -262,14 +266,18 @@
       return;
     }
 
-    const prevIdx = idx - 1;
+    let prevIdx = idx - 1;
     if (prevIdx < 0) {
-      playerState.update((s) => ({ ...s, positionMs: 0 }));
-      wsSend("playback.play", {
-        track_id: $playerState.trackId,
-        position_ms: 0
-      });
-      return;
+      if ($playerState.repeat === 1) {
+        prevIdx = rq.length - 1;
+      } else {
+        playerState.update((s) => ({ ...s, positionMs: 0 }));
+        wsSend("playback.play", {
+          track_id: $playerState.trackId,
+          position_ms: 0
+        });
+        return;
+      }
     }
 
     playerState.update((s) => ({
@@ -288,20 +296,8 @@
 
   function toggleShuffle() {
     const newState = !$playerState.shuffle;
-    playerState.update((s) => {
-      if (newState && s.queue.length > 1) {
-        const current = s.queue[s.queueIndex];
-        const rest = s.queue.filter((_, i) => i !== s.queueIndex);
-        shuffle(rest);
-        return {
-          ...s,
-          shuffle: true,
-          queue: [current, ...rest],
-          queueIndex: 0
-        };
-      }
-      return { ...s, shuffle: newState };
-    });
+    playerState.update((s) => ({ ...s, shuffle: newState }));
+    wsSend("playback.shuffle", { enabled: newState });
   }
 
   function toggleRepeat() {
