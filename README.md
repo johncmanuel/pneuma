@@ -4,6 +4,10 @@ pneuma is an open-source, self-hostable, and local-first music project, designed
 
 <!-- TODO: add demo as mp4 -->
 
+Public demo: https://pneuma.johncarlomanuel.com/
+
+Register an account, and play a couple of songs from the [Library of Congress](https://www.loc.gov/) in the web! The songs can also be streamed on the desktop application.
+
 ## Screenshots
 
 ### Desktop application
