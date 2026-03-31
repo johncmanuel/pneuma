@@ -1,12 +1,29 @@
 {
+  "private": true,
+  "workspaces": [
+    "web",
+    "dashboard",
+    "frontend"
+  ],
   "scripts": {
     "fmt": "prettier --write .",
-    "build:web": "cd web && npm run build",
-    "build:dash": "cd dashboard && npm run build",
-    "build": "npm run build:web && npm run build:dash"
+    "build:web": "cd web && bun run build",
+    "build:dash": "cd dashboard && bun run build",
+    "build": "bun run build:web && bun run build:dash"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^0.577.0",
+    "@tanstack/svelte-virtual": "^3.13.0"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@tsconfig/svelte": "^5.0.0",
     "prettier": "3.8.1",
-    "prettier-plugin-svelte": "^3.5.1"
+    "prettier-plugin-svelte": "^3.5.1",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "tslib": "^2.4.0",
+    "typescript": "^5.5.0",
+    "vite": "^8.0.1"
   }
 }

@@ -17,26 +17,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: "20"
-          cache: "npm"
-          cache-dependency-path: |
-            dashboard/package-lock.json
-            web/package-lock.json
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Build Admin Dashboard
         working-directory: ./dashboard
-        run: |
-          npm ci
-          npm run build
+        run: bun run build
 
       - name: Build Web Player
         working-directory: ./web
-        run: |
-          npm ci
-          npm run build
+        run: bun run build
 
       - name: Upload UI artifacts
         uses: actions/upload-artifact@v4
