@@ -1,9 +1,14 @@
 {
+  "workspaces": [
+    "web",
+    "dashboard",
+    "frontend"
+  ],
   "scripts": {
     "fmt": "prettier --write .",
-    "build:web": "cd web && npm run build",
-    "build:dash": "cd dashboard && npm run build",
-    "build": "npm run build:web && npm run build:dash"
+    "build:web": "cd web && bun run build",
+    "build:dash": "cd dashboard && bun run build",
+    "build": "bun run build:web && bun run build:dash"
   },
   "devDependencies": {
     "prettier": "3.8.1",

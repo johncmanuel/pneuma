@@ -1,23 +1,24 @@
 # this is for building the server (cmd/server/)
 
-FROM --platform=$BUILDPLATFORM node:20-alpine AS ui-builder
+FROM oven/bun:alpine AS ui-builder
 
 WORKDIR /src
 
-COPY dashboard/package*.json ./dashboard/
-RUN cd dashboard && npm ci
+COPY package.json bun.lock ./
+COPY dashboard/package.json ./dashboard/
+COPY web/package.json ./web/
+COPY frontend/package.json ./frontend/
 
-COPY web/package*.json ./web/
-RUN cd web && npm ci
+RUN bun install --filter "!frontend" --frozen-lockfile
 
 COPY dashboard/ ./dashboard/
-RUN cd dashboard && npm run build
+RUN cd dashboard && bun run build
 
 COPY web/ ./web/
-RUN cd web && npm run build
+RUN cd web && bun run build
 
 # Native Cross Compilation
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 ARG TARGETOS
 ARG TARGETARCH

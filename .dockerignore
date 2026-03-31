@@ -11,9 +11,8 @@
 
 # Desktop app's frontend
 frontend/
+!frontend/package.json
 node_modules/
-package.json
-package-lock.json
 .prettierrc
 .prettierignore
 
