@@ -34,19 +34,27 @@ jobs:
         with:
           submodules: recursive
 
-      # https://github.com/dAppServer/wails-build-action/tree/dev/actions/build/wails2#wails-v2-full-pipeline
-      - name: Build wails
-        uses: dAppCore/build/actions/build/wails2@v4.0.0
-        id: build
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          build-name: ${{ env.APP_NAME }}
-          build-platform: ${{ matrix.build.platform }}
-          package: false
+          bun-version: latest
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
           go-version: "1.23"
-          # need to keep node at 22.x rather than latest to avoid build issues with
-          # libwebkit2gtk-4.0-dev (AFAIK, ubuntu 24 drops this specific package) as well
-          # as get Vite to work properly. This version is needed to work with wails
-          node-version: "22.x"
+
+      - name: Install Wails Linux Dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev build-essential || sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Build wails
+        run: wails build -platform ${{ matrix.build.platform }}
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
