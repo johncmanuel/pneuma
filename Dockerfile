@@ -4,7 +4,7 @@ FROM oven/bun:alpine AS ui-builder
 
 WORKDIR /src
 
-COPY package.json bun.lock ./
+COPY package.json bun.lock tsconfig*.json ./
 COPY dashboard/package.json ./dashboard/
 COPY web/package.json ./web/
 COPY frontend/package.json ./frontend/

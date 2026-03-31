@@ -11,13 +11,6 @@ export default defineConfig(({ command }) => ({
     }
   },
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ["svelte"]
-        }
-      }
-    },
     minify: "esbuild"
   },
   esbuild: {

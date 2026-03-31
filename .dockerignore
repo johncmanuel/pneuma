@@ -12,16 +12,17 @@
 # Desktop app's frontend
 frontend/
 !frontend/package.json
-node_modules/
+**/node_modules
 .prettierrc
 .prettierignore
 
 # Build outputs
-build/
-dist/
-bin/
-tmp/
-out/
+**/build
+**/dist
+**/bin
+**/tmp
+**/out
+**/.svelte-kit
 
 # Wails specific 
 wails.json
