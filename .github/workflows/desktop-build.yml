@@ -51,11 +51,24 @@ jobs:
       - name: Build wails
         run: wails build -platform ${{ matrix.build.platform }}
 
+      - name: Package macOS app bundle
+        if: runner.os == 'macOS'
+        run: zip -r build/bin/pneuma-macos-universal.zip build/bin/pneuma.app
+
+      - name: Rename Linux binary
+        if: runner.os == 'Linux'
+        run: mv build/bin/pneuma build/bin/pneuma-linux-amd64
+
+      - name: Rename Windows binary
+        if: runner.os == 'Windows'
+        shell: bash
+        run: mv build/bin/pneuma.exe build/bin/pneuma-windows-amd64.exe
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: pneuma-desktop-${{ matrix.build.os }}
-          path: build/bin/*
+          path: build/bin/pneuma-*
           retention-days: 1
 
   release:
@@ -78,4 +91,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/**
-          generate_release_notes: true
+          generate_release_notes: false
