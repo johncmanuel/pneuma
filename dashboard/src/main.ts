@@ -1,5 +1,4 @@
 import "@pneuma/shared/style.css";
-import "./style.css";
 import App from "./App.svelte";
 import { mount } from "svelte";
 
