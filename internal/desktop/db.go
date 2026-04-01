@@ -84,17 +84,53 @@ func newAppDBMigrator(db *sql.DB) (*migrate.Migrate, error) {
 	return m, nil
 }
 
-// openAppDB opens (or creates) the app-local SQLite database used to persist
-// desktop client state: local folder list, track cache, recent albums, etc.
-// The database is stored in the OS user-cache directory so it survives app
-// updates.
-func openAppDB() (*sql.DB, error) {
-	cacheDir, err := os.UserCacheDir()
+// migrateDBFromCacheToConfig moves the desktop database from the old cache
+// directory to the config directory for existing users. Returns the new path.
+func migrateDBFromCacheToConfig() (string, error) {
+	configDir, err := os.UserConfigDir()
 	if err != nil {
-		return nil, fmt.Errorf("user cache dir: %w", err)
+		return "", fmt.Errorf("user config dir: %w", err)
 	}
 
-	dbPath := filepath.Join(cacheDir, DesktopAppDirName, DesktopDBName)
+	newPath := filepath.Join(configDir, DesktopAppDirName, DesktopDBName)
+
+	if _, err := os.Stat(newPath); err == nil {
+		return newPath, nil
+	}
+
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return newPath, nil
+	}
+
+	oldPath := filepath.Join(cacheDir, DesktopAppDirName, DesktopDBName)
+
+	if _, err := os.Stat(oldPath); err != nil {
+		return newPath, nil
+	}
+
+	if err := os.MkdirAll(filepath.Dir(newPath), 0o700); err != nil {
+		return "", fmt.Errorf("mkdir config dir: %w", err)
+	}
+
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return "", fmt.Errorf("move db to config dir: %w", err)
+	}
+
+	slog.Info("migrated desktop database from cache to config dir", "from", oldPath, "to", newPath)
+
+	return newPath, nil
+}
+
+// openAppDB opens (or creates) the app-local SQLite database used to persist
+// desktop client state: local folder list, track cache, recent albums, etc.
+// The database is stored in the OS user-config directory.
+func openAppDB() (*sql.DB, error) {
+	dbPath, err := migrateDBFromCacheToConfig()
+	if err != nil {
+		return nil, err
+	}
+
 	db, err := openAppDBRaw(dbPath)
 	if err != nil {
 		return nil, err
