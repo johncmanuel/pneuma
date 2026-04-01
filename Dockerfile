@@ -1,6 +1,6 @@
 # this is for building the server (cmd/server/)
 
-FROM oven/bun:alpine AS ui-builder
+FROM --platform=$BUILDPLATFORM oven/bun:alpine AS ui-builder
 
 WORKDIR /src
 
@@ -19,7 +19,7 @@ COPY web/ ./web/
 RUN cd web && bun run build
 
 # Native Cross Compilation
-FROM golang:1.24-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS builder
 
 ARG TARGETOS
 ARG TARGETARCH
