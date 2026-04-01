@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { apiFetch, currentUser } from "../api";
   import { libraryVersion, scanRunning, scanResult } from "../ws";
-  import { formatDuration } from "../utils";
+  import { formatDuration } from "@pneuma/shared";
 
   // TODO: fix reactivity when uploading multiple files (not with uploading a folder)
   // seems like it's blinking (i.e it's always switching between Loading.. and the table views)

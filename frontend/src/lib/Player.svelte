@@ -8,7 +8,7 @@
     currentView,
     pushNav
   } from "../stores/ui";
-  import { formatDuration } from "../utils";
+  import { formatDuration } from "@pneuma/shared";
   import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { onMount } from "svelte";

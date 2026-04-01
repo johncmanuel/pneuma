@@ -3,7 +3,7 @@
   import { fetchTracksByIDs } from "../stores/library";
   import { resolveLocalTracksByPaths, isLocalId } from "../stores/localLibrary";
   import { closePanel } from "../stores/ui";
-  import { formatDuration } from "../utils";
+  import { formatDuration } from "@pneuma/shared";
   import { artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { addToast } from "../stores/toasts";
