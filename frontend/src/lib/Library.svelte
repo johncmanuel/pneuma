@@ -26,7 +26,7 @@
     type LocalAlbumGroup
   } from "../stores/localLibrary";
   import { playerState } from "../stores/player";
-  import { totalDuration } from "../utils";
+  import { totalDuration, shuffle } from "@pneuma/shared";
   import TrackRow from "./TrackRow.svelte";
   import SortButton from "./SortButton.svelte";
   import "../assets/css/track-list.css";
@@ -59,7 +59,7 @@
     ChevronRight,
     Search
   } from "@lucide/svelte";
-  import { portal } from "../utils/dom";
+  import { portal } from "@pneuma/shared";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -356,36 +356,48 @@
     }
 
     if (get(activeTab) === "local") {
-      playerState.update((s) => ({
-        ...s,
-        trackId: track.id,
-        track,
-        queue: queueIds,
-        baseQueue: queueIds,
-        queueIndex: idx >= 0 ? idx : 0,
-        positionMs: 0,
-        paused: false
-      }));
+      playerState.update((s) => {
+        const finalQueue =
+          s.shuffle && queueIds.length > 1
+            ? [track.id, ...shuffle(queueIds.filter((id) => id !== track.id))]
+            : queueIds;
+        return {
+          ...s,
+          trackId: track.id,
+          track,
+          queue: finalQueue,
+          baseQueue: queueIds,
+          queueIndex: 0,
+          positionMs: 0,
+          paused: false
+        };
+      });
       return;
     }
 
     if (!$connected) return;
 
     // Update local state immediately, then sync server state
+    const currentShuffle = get(playerState).shuffle;
+    const finalQueue =
+      currentShuffle && queueIds.length > 1
+        ? [track.id, ...shuffle(queueIds.filter((id) => id !== track.id))]
+        : queueIds;
+
     playerState.update((s) => ({
       ...s,
       trackId: track.id,
       track,
-      queue: queueIds,
+      queue: finalQueue,
       baseQueue: queueIds,
-      queueIndex: idx >= 0 ? idx : 0,
+      queueIndex: 0,
       positionMs: 0,
       paused: false
     }));
 
     wsSend("playback.queue", {
-      track_ids: queueIds,
-      start_index: idx >= 0 ? idx : 0
+      track_ids: finalQueue,
+      start_index: 0
     });
     wsSend("playback.play", {
       track_id: track.id,
@@ -623,6 +635,7 @@
                     isLocal={currentAlbumGroup?.isLocal ?? false}
                     active={$currentTrackId ===
                       filteredAlbumDetailTracks[row.index]?.id}
+                    disableLocal={false}
                     onplay={handlePlay}
                     onselect={() => {}}
                     onaddtoqueue={handleQueue}

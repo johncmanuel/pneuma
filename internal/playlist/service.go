@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -166,4 +168,77 @@ func (s *Service) AddItem(ctx context.Context, playlistID string, item models.Pl
 		UpdatedAt: now,
 		ID:        playlistID,
 	})
+}
+
+// GenerateRandom creates a new playlist filled with randomly selected tracks
+// targeting the given duration in minutes. Only remote tracks are used.
+// TODO: thinking of merging the common logic of GenerateRandomPlaylist in
+// desktop logic and this into a shared helper that can be used by both.
+func (s *Service) GenerateRandom(ctx context.Context, userID, name, description string, durationMinutes int) (*models.Playlist, error) {
+	if strings.TrimSpace(name) == "" {
+		return nil, fmt.Errorf("playlist name is required")
+	}
+	if durationMinutes <= 0 {
+		return nil, fmt.Errorf("duration must be at least 1 minute")
+	}
+
+	tracks, err := s.q.ListTracks(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list tracks: %w", err)
+	}
+
+	var candidates []serverdb.ListTracksRow
+	for _, t := range tracks {
+		if t.DurationMs > 0 {
+			candidates = append(candidates, t)
+		}
+	}
+
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("no tracks available")
+	}
+
+	pl, err := s.Create(ctx, userID, name, description)
+	if err != nil {
+		return nil, fmt.Errorf("create playlist: %w", err)
+	}
+
+	targetMS := int64(durationMinutes) * 60 * 1000
+	var selected []serverdb.ListTracksRow
+	var totalMS int64
+
+	rand.Shuffle(len(candidates), func(i, j int) {
+		candidates[i], candidates[j] = candidates[j], candidates[i]
+	})
+
+	for _, t := range candidates {
+		if totalMS >= targetMS {
+			break
+		}
+		selected = append(selected, t)
+		totalMS += t.DurationMs
+	}
+
+	for i, t := range selected {
+		if err := s.q.InsertPlaylistItem(ctx, serverdb.InsertPlaylistItemParams{
+			PlaylistID:     pl.ID,
+			TrackID:        sql.NullString{String: t.ID, Valid: true},
+			Position:       int64(i),
+			AddedAt:        dbconv.FormatTime(time.Now()),
+			Source:         "remote",
+			RefTitle:       t.Title,
+			RefAlbum:       t.AlbumName,
+			RefAlbumArtist: t.AlbumArtist,
+			RefDurationMs:  t.DurationMs,
+		}); err != nil {
+			return nil, fmt.Errorf("add playlist item: %w", err)
+		}
+	}
+
+	count, err := s.q.CountPlaylistItems(ctx, pl.ID)
+	if err == nil {
+		pl.ItemCount = int(count)
+	}
+
+	return pl, nil
 }

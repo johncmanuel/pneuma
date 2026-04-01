@@ -12,7 +12,7 @@
   import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { onMount } from "svelte";
-  import { shuffle } from "../utils/algos";
+  import { shuffle } from "@pneuma/shared";
   import { addToast } from "../stores/toasts";
   import {
     Play,
@@ -308,13 +308,9 @@
     // Shuffle/unshuffle is applied client-side for both local and remote tracks
     // so the queue reorders immediately.
     //
-    // For remote tracks, don't send playback.shuffle to the server via websockets.
-    // Otherwise, the server would apply its own independent random shuffle and echo back
-    // a different queue order (via playback.changed) which would override the order
-    // we just computed here.
-    //
-    // Individual playback.play messages on each skip keep the server's
-    // current-track pointer accurate without needing the full queue order.
+    // Send playback.queue (not playback.shuffle) to the server with the already-
+    // shuffled queue. playback.shuffle would cause the server to apply its own
+    // independent random shuffle and echo back a different order via playback.changed.
     playerState.update((s) => {
       if (isShuffleEnabled && s.queue.length > 1) {
         // Pin current track at index 0, then shuffle the rest
@@ -322,10 +318,22 @@
         const rest = s.queue.filter((_, i) => i !== s.queueIndex);
         const shuffledRest = shuffle(rest);
 
+        const newQueue = [current, ...shuffledRest];
+
+        // Send the shuffled queue to the server so it has the correct order.
+        // Don't send playback.shuffle since the server would apply its own random
+        // shuffle and echo back a different order via playback.changed.
+        if (!isLocal) {
+          wsSend("playback.queue", {
+            track_ids: newQueue,
+            start_index: 0
+          });
+        }
+
         return {
           ...s,
           shuffle: true,
-          queue: [current, ...shuffledRest],
+          queue: newQueue,
           queueIndex: 0
         };
       }
@@ -333,6 +341,15 @@
       if (!isShuffleEnabled && s.baseQueue.length > 0) {
         const currentId = s.queue[s.queueIndex];
         const restoredIdx = s.baseQueue.indexOf(currentId);
+
+        // Send the restored queue to the server
+        if (!isLocal) {
+          wsSend("playback.queue", {
+            track_ids: s.baseQueue,
+            start_index: restoredIdx >= 0 ? restoredIdx : 0
+          });
+        }
+
         return {
           ...s,
           shuffle: false,

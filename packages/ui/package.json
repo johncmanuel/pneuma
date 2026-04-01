@@ -1,0 +1,11 @@
+{
+  "name": "@pneuma/ui",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    ".": "./src/lib/index.ts"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  }
+}

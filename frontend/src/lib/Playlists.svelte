@@ -379,6 +379,7 @@
                 dateAdded={formatDate(item.added_at)}
                 showRemove={true}
                 isLocal={item.source === "local_ref"}
+                disableLocal={false}
                 onplay={() => handlePlay(item)}
                 onaddtoqueue={(t) => {}}
                 onremove={() => handleRemove(item)}

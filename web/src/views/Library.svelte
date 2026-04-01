@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { createVirtualizer } from "@tanstack/svelte-virtual";
-  import { derived } from "svelte/store";
+  import { derived, get } from "svelte/store";
   import {
     albumGroups,
     albumGroupsTotal,
@@ -19,7 +19,7 @@
   import { artworkUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import { recordRecentAlbum } from "../lib/stores/recent";
-  import { totalDuration } from "../lib/utils";
+  import { totalDuration, shuffle } from "@pneuma/shared";
   import type { Track, AlbumGroup } from "../lib/types";
   import TrackRow from "../components/TrackRow.svelte";
   import { Music, Search, X } from "@lucide/svelte";
@@ -141,19 +141,25 @@
       });
     }
 
+    const currentShuffle = get(playerState).shuffle;
+    const finalQueue =
+      currentShuffle && queueIds.length > 1
+        ? [track.id, ...shuffle(queueIds.filter((id) => id !== track.id))]
+        : queueIds;
+
     playerState.update((s) => ({
       ...s,
       trackId: track.id,
       track,
-      queue: queueIds,
-      queueIndex: idx >= 0 ? idx : 0,
+      queue: finalQueue,
+      queueIndex: 0,
       positionMs: 0,
       paused: false
     }));
 
     wsSend("playback.queue", {
-      track_ids: queueIds,
-      start_index: idx >= 0 ? idx : 0
+      track_ids: finalQueue,
+      start_index: 0
     });
     wsSend("playback.play", {
       track_id: track.id,

@@ -293,3 +293,36 @@ func (h *PlaylistHandler) ServePlaylistArt(c echo.Context) error {
 
 	return c.File(artPath)
 }
+
+// GenerateRandom creates a new playlist filled with randomly selected tracks.
+func (h *PlaylistHandler) GenerateRandom(c echo.Context) error {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "missing token")
+	}
+
+	var body struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Duration    int    `json:"duration"`
+	}
+
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid body")
+	}
+
+	if body.Name == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "name is required")
+	}
+	if body.Duration < 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, "duration must be at least 1 minute")
+	}
+
+	pl, err := h.svc.GenerateRandom(c.Request().Context(), claims.UserID, body.Name, body.Description, body.Duration)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	h.hub.PublishToUser(claims.UserID, string(models.EventPlaylistCreated), pl)
+	return c.JSON(http.StatusCreated, pl)
+}

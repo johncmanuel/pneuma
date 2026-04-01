@@ -105,39 +105,20 @@ export function connectWS() {
           }
 
           // sync state accordingly since queue deals with mixed tracks, or tracks from both local and remote
-          // sources
+          // sources. client's queue is the authoritative source of truth since the server's queue is always stale after shuffle or local-only queue modifications,
+          // only accept the server's queue if the client doesn't have one yet, usually during initial connect / first play
           playerState.update((s) => {
-            // If the client queue contains local file paths the server can't know
-            // about, don't let the server overwrite it. The client is the authority
-            // for mixed local+remote queues!
-            const queueHasLocalTracks = s.queue.some(isLocalId);
-
-            // If the server sent a new queue state and the desktop client currently doesn't
-            // have any local tracks in its queue, let the client accept the server's queue.
             const effectiveQueue =
-              msg.payload.queue != null && !queueHasLocalTracks
-                ? (msg.payload.queue as string[])
-                : s.queue;
+              s.queue.length > 0 ? s.queue : (msg.payload.queue ?? s.queue);
 
-            // Validate the server's queue_index against the track_id it claims is
-            // playing. Seek/pause broadcasts can carry a stale index (e.g. 0) even
-            // after the client has already advanced via skipNext. Recompute from
-            // the queue when the index doesn't match.
+            // Resolve queue index from the track_id against the client's
+            // queue. The server's index is based on the server's stale
+            // queue and would point to the wrong position after shuffle.
             let resolvedIndex = s.queueIndex;
-            if (!queueHasLocalTracks && msg.payload.queue_index != null) {
-              const serverIdx: number = msg.payload.queue_index;
-              const serverTrackId: string = msg.payload.track_id ?? s.trackId;
-
-              // If the server's index is consistent with the track_id it claims
-              // is playing, trust it and update the queue index.
-              // Otherwise, the server's index is stale and requires recalculation
-              // from the track_id.
-              if (effectiveQueue[serverIdx] === serverTrackId) {
-                resolvedIndex = serverIdx;
-              } else {
-                const computed = effectiveQueue.indexOf(serverTrackId);
-                resolvedIndex = computed >= 0 ? computed : s.queueIndex;
-              }
+            const serverTrackId: string = msg.payload.track_id ?? s.trackId;
+            if (serverTrackId && effectiveQueue.length > 0) {
+              const computed = effectiveQueue.indexOf(serverTrackId);
+              resolvedIndex = computed >= 0 ? computed : s.queueIndex;
             }
 
             // update state accordingly which will update the UI with its new state
@@ -150,8 +131,12 @@ export function connectWS() {
               positionMs: msg.payload.position_ms ?? s.positionMs,
               paused:
                 msg.payload.playing != null ? !msg.payload.playing : s.paused,
-              shuffle: msg.payload.shuffle ?? s.shuffle,
-              repeat: msg.payload.repeat ?? s.repeat
+              // The desktop app manages shuffle entirely client-side, so the server's value
+              // is always stale. Preserve the client's shuffle/repeat on
+              // every playback.changed echo; they only change when the user
+              // explicitly toggles them via the desktop UI.
+              shuffle: s.shuffle,
+              repeat: s.repeat
             };
           });
           break;

@@ -26,7 +26,8 @@
   } from "../lib/stores/recent";
   import { Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "../components/TrackRow.svelte";
-  import { totalDuration } from "../lib/utils";
+  import { totalDuration } from "@pneuma/shared";
+  import { generateRandomPlaylist } from "../lib/api";
   import type { PlaylistItem, PlaylistSummary } from "../lib/types";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
@@ -34,6 +35,12 @@
   let showNewDialog = false;
   let newName = "";
   let newDesc = "";
+
+  let showGenerateDialog = false;
+  let generateName = "";
+  let generateDesc = "";
+  let generateDuration = 30;
+  let generating = false;
 
   let editingId: string | null = null;
   let editName = "";
@@ -98,6 +105,32 @@
     if (id) {
       pushNav({ view: "playlists", playlistId: id });
     }
+  }
+
+  async function handleGenerate() {
+    if (!generateName.trim() || generateDuration < 1) return;
+    generating = true;
+    try {
+      const pl = await generateRandomPlaylist(
+        generateName.trim(),
+        generateDesc.trim(),
+        generateDuration
+      );
+      handleCancelGenerate();
+      if (pl) {
+        await loadPlaylists();
+        pushNav({ view: "playlists", playlistId: pl.id });
+      }
+    } finally {
+      generating = false;
+    }
+  }
+
+  function handleCancelGenerate() {
+    generateName = "";
+    generateDesc = "";
+    generateDuration = 30;
+    showGenerateDialog = false;
   }
 
   function openPlaylist(pl: PlaylistSummary) {
@@ -337,9 +370,14 @@
   <div class="playlist-list">
     <div class="list-header">
       <h2>Playlists</h2>
-      <button class="new-btn" onclick={() => (showNewDialog = true)}>
-        + New Playlist
-      </button>
+      <div class="list-header-actions">
+        <button class="new-btn" onclick={() => (showGenerateDialog = true)}>
+          Generate Random
+        </button>
+        <button class="new-btn" onclick={() => (showNewDialog = true)}>
+          + New Playlist
+        </button>
+      </div>
     </div>
 
     {#if showNewDialog}
@@ -359,6 +397,49 @@
         <div class="new-actions">
           <button class="small-btn" onclick={handleCreate}>Create</button>
           <button class="small-btn secondary" onclick={handleCancelCreate}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    {/if}
+
+    {#if showGenerateDialog}
+      <div class="new-dialog">
+        <input
+          class="new-input"
+          placeholder="Playlist name"
+          bind:value={generateName}
+          onkeydown={(e) => e.key === "Enter" && handleGenerate()}
+        />
+        <input
+          class="new-input"
+          placeholder="Description (optional)"
+          bind:value={generateDesc}
+          onkeydown={(e) => e.key === "Enter" && handleGenerate()}
+        />
+        <div class="generate-duration-row">
+          <label class="generate-label" for="gen-duration">Duration</label>
+          <input
+            id="gen-duration"
+            type="number"
+            class="new-input gen-duration-input"
+            min="1"
+            max="999"
+            bind:value={generateDuration}
+          />
+          <span class="generate-unit">minutes</span>
+        </div>
+        <div class="new-actions">
+          <button
+            class="small-btn"
+            onclick={handleGenerate}
+            disabled={generating ||
+              !generateName.trim() ||
+              generateDuration < 1}
+          >
+            {generating ? "Generating..." : "Generate"}
+          </button>
+          <button class="small-btn secondary" onclick={handleCancelGenerate}>
             Cancel
           </button>
         </div>
@@ -416,6 +497,11 @@
     font-weight: 700;
   }
 
+  .list-header-actions {
+    display: flex;
+    gap: 8px;
+  }
+
   .new-btn {
     padding: 6px 14px;
     border-radius: var(--r-md);
@@ -452,6 +538,26 @@
   .new-actions {
     display: flex;
     gap: 8px;
+  }
+
+  .generate-duration-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .generate-label {
+    font-size: 12px;
+    color: var(--text-2);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .gen-duration-input {
+    width: 80px;
+  }
+  .generate-unit {
+    font-size: 12px;
+    color: var(--text-3);
   }
 
   .pl-grid {
