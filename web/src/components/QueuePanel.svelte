@@ -2,7 +2,7 @@
   import { playerState } from "../lib/stores/playback";
   import { fetchTracksByIDs, isLocalId } from "../lib/stores/library";
   import { closePanel } from "../lib/stores/ui";
-  import { formatDuration } from "../lib/utils";
+  import { formatDuration } from "@pneuma/shared";
   import { artworkUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import type { Track } from "../lib/types";

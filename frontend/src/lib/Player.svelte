@@ -12,7 +12,7 @@
   import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { onMount } from "svelte";
-  import { shuffle } from "../utils/algos";
+  import { shuffle } from "@pneuma/shared";
   import { addToast } from "../stores/toasts";
   import {
     Play,

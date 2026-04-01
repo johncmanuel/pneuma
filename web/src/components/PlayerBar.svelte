@@ -3,7 +3,7 @@
   import { playerState } from "../lib/stores/playback";
   import { apiFetch, artworkUrl, getStreamToken, streamUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
-  import { formatDuration, shuffle } from "../lib/utils";
+  import { formatDuration, shuffle } from "@pneuma/shared";
   import {
     Play,
     Pause,

@@ -26,8 +26,7 @@
     type LocalAlbumGroup
   } from "../stores/localLibrary";
   import { playerState } from "../stores/player";
-  import { totalDuration } from "../utils";
-  import { shuffle } from "../utils/algos";
+  import { totalDuration, shuffle } from "@pneuma/shared";
   import TrackRow from "./TrackRow.svelte";
   import SortButton from "./SortButton.svelte";
   import "../assets/css/track-list.css";
@@ -60,7 +59,7 @@
     ChevronRight,
     Search
   } from "@lucide/svelte";
-  import { portal } from "../utils/dom";
+  import { portal } from "@pneuma/shared";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 

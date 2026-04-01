@@ -19,7 +19,7 @@
   import { artworkUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import { recordRecentAlbum } from "../lib/stores/recent";
-  import { totalDuration, shuffle } from "../lib/utils";
+  import { totalDuration, shuffle } from "@pneuma/shared";
   import type { Track, AlbumGroup } from "../lib/types";
   import TrackRow from "../components/TrackRow.svelte";
   import { Music, Search, X } from "@lucide/svelte";
