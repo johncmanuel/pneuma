@@ -228,3 +228,23 @@ export async function uploadPlaylistArtwork(
   const data = await res.json();
   return data.artwork_path ?? null;
 }
+
+export async function generateRandomPlaylist(
+  name: string,
+  description: string,
+  durationMinutes: number
+): Promise<{ id: string; name: string; item_count: number } | null> {
+  const res = await apiFetch("/api/playlists/generate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, description, duration: durationMinutes })
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("Failed to generate playlist:", err);
+    return null;
+  }
+
+  return await res.json();
+}

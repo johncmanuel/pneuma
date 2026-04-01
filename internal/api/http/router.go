@@ -147,6 +147,7 @@ func NewRouter(svc Services) *echo.Echo {
 	pl := e.Group("/api/playlists", authMW)
 	pl.GET("", plh.ListPlaylists)
 	pl.POST("", plh.CreatePlaylist)
+	pl.POST("/generate", plh.GenerateRandom)
 	pl.GET("/:id", plh.GetPlaylist)
 	pl.PUT("/:id", plh.UpdatePlaylist)
 	pl.DELETE("/:id", plh.DeletePlaylist)
