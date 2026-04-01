@@ -46,6 +46,10 @@
     ].sort((a, b) => b.key.localeCompare(a.key))
   );
 
+  function handleNavClick(item: { id: string }) {
+    onnavigate?.(item.id);
+  }
+
   function handleRecentClick(item: { key: string }) {
     if (item.key.startsWith("pl-")) {
       const pl = $recentPlaylists.find((p) => "pl-" + p.id === item.key);
@@ -68,6 +72,6 @@
   {activeView}
   {navItems}
   {recentItems}
-  {onnavigate}
+  onnavigate={handleNavClick}
   onRecentClick={handleRecentClick}
 />
