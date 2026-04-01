@@ -40,6 +40,8 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   user-select: none;
+  margin: 0;
+  overflow: hidden;
 }
 
 #app {
@@ -68,7 +70,8 @@ button:disabled {
   cursor: not-allowed;
 }
 
-input {
+input,
+select {
   font-family: var(--font);
   font-size: 14px;
   background: var(--surface-2);
@@ -80,7 +83,8 @@ input {
   width: 100%;
 }
 
-input:focus {
+input:focus,
+select:focus {
   border-color: var(--accent);
 }
 

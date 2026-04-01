@@ -7,10 +7,7 @@ export default defineConfig({
   plugins: [svelte()],
   resolve: {
     alias: {
-      "@pneuma/shared": path.resolve(
-        __dirname,
-        "../packages/shared/src/index.ts"
-      ),
+      "@pneuma/shared": path.resolve(__dirname, "../packages/shared/src"),
       "@pneuma/ui": path.resolve(__dirname, "../packages/ui/src/lib/index.ts")
     }
   },

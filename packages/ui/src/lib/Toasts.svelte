@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { toasts, dismissToast, type Toast } from '@pneuma/shared';
+  import { toasts, dismissToast, type Toast } from "@pneuma/shared";
   import { Info, TriangleAlert, CircleX, Check, X } from "@lucide/svelte";
 
   const icons: Record<Toast["type"], any> = {

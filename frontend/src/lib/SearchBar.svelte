@@ -1,9 +1,6 @@
 <script lang="ts">
   import { SearchBar } from "@pneuma/ui";
-  import {
-    searchTracks,
-    searchAlbumGroups,
-  } from "../stores/library";
+  import { searchTracks, searchAlbumGroups } from "../stores/library";
   import {
     searchLocalTracksQuery,
     searchLocalAlbumGroups,

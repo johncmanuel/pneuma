@@ -126,7 +126,8 @@
     {#if !isLocal || !disableLocal}
       <button onclick={handleAddToQueue}>Add to queue</button>
       {#if playlists.length > 0}
-        <div role="presentation"
+        <div
+          role="presentation"
           class="ctx-submenu-wrap"
           onmouseenter={() => (showPlaylistSub = true)}
           onmouseleave={() => (showPlaylistSub = false)}
