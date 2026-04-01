@@ -165,7 +165,7 @@ func (c *client) readPump() {
 
 	deadline := 60 * time.Second
 
-	c.conn.SetReadLimit(4096)
+	c.conn.SetReadLimit(65536)
 	c.conn.SetReadDeadline(time.Now().Add(deadline))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(deadline))
@@ -180,7 +180,15 @@ func (c *client) readPump() {
 		if c.hub.onMessage != nil {
 			var msg InboundMessage
 			if json.Unmarshal(data, &msg) == nil && msg.Type != "" {
-				c.hub.onMessage(c.userID, c.deviceID, msg)
+				// isolate panics in the message handler to prevent crashing the entire hub and affecting other clients
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							c.hub.log.Error("panic in ws handler", "type", msg.Type, "recover", r)
+						}
+					}()
+					c.hub.onMessage(c.userID, c.deviceID, msg)
+				}()
 			}
 		}
 	}

@@ -28,15 +28,17 @@
         key: "al-" + a.album_name + "|||" + a.album_artist,
         name: a.album_name,
         sub: a.album_artist,
-        artworkUrl: a.first_track_id ? artworkUrl(a.first_track_id) : undefined
+        artworkUrl: a.first_track_id ? artworkUrl(a.first_track_id) : undefined,
+        playedAt: new Date(a.played_at).getTime()
       })),
       ...$recentPlaylists.map((p) => ({
         key: "pl-" + p.playlist_id,
         name: p.name,
         sub: "Playlist",
-        artworkUrl: p.playlist_id ? playlistArtUrl(p.playlist_id) : undefined
+        artworkUrl: p.playlist_id ? playlistArtUrl(p.playlist_id) : undefined,
+        playedAt: new Date(p.played_at).getTime()
       }))
-    ].sort((a, b) => b.key.localeCompare(a.key))
+    ].sort((a, b) => (b.playedAt ?? 0) - (a.playedAt ?? 0))
   );
 
   function handleNavClick(item: { id: string }) {

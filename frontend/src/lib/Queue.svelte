@@ -108,11 +108,12 @@
       positionMs: 0,
       paused: false
     }));
-    if (!isLocalTrack && $connected)
+    if (!isLocalTrack && $connected) {
       wsSend("playback.play", {
         track_id: track.id,
         position_ms: 0
       });
+    }
   }
 </script>
 

@@ -32,7 +32,8 @@
         sub: "Playlist",
         artworkUrl: p.artworkPath
           ? getRecentPlaylistArtUrl(p.artworkPath)
-          : undefined
+          : undefined,
+        playedAt: p.playedAt
       })),
       ...$recentAlbums.map((a) => ({
         key: "al-" + a.key,
@@ -41,9 +42,10 @@
         artworkUrl:
           _authDeps && getRecentAlbumArtUrl(a)
             ? getRecentAlbumArtUrl(a)
-            : undefined
+            : undefined,
+        playedAt: a.playedAt ?? 0
       }))
-    ].sort((a, b) => b.key.localeCompare(a.key))
+    ].sort((a, b) => (b.playedAt ?? 0) - (a.playedAt ?? 0))
   );
 
   function handleNavClick(item: { id: string }) {
