@@ -623,6 +623,7 @@
                     isLocal={currentAlbumGroup?.isLocal ?? false}
                     active={$currentTrackId ===
                       filteredAlbumDetailTracks[row.index]?.id}
+                    disableLocal={false}
                     onplay={handlePlay}
                     onselect={() => {}}
                     onaddtoqueue={handleQueue}

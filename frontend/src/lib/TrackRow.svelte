@@ -1,229 +1,55 @@
 <script lang="ts">
-  import { formatDuration } from "../utils";
-  import { onDestroy } from "svelte";
-  import type { Track } from "../stores/player";
-  import {
-    playlists,
-    addTrackToPlaylist,
-    type PlaylistSummary
-  } from "../stores/playlists";
+  import { TrackRow } from "@pneuma/ui";
+  import { playlists, addTrackToPlaylist } from "../stores/playlists";
   import { connected } from "../utils/api";
-  import { ChevronRight } from "@lucide/svelte";
-  import { portal } from "../utils/dom";
+  import type { Track } from "@pneuma/shared";
 
-  export let track: Track | null = null;
-  export let active: boolean = false;
-  export let hideAlbum: boolean = false;
-  export let isLocal: boolean = false;
-
-  /** When set, the row is in playlist mode: artist column shows album, album column shows this date string. */
-  export let dateAdded: string | undefined = undefined;
-
-  /** When true, adds a "Remove from playlist" item to the context menu. */
-  export let showRemove: boolean = false;
-
-  export let onplay: ((track: Track | null) => void) | undefined = undefined;
-  export let onselect: (() => void) | undefined = undefined;
-  export let onaddtoqueue: ((track: Track | null) => void) | undefined =
-    undefined;
-  export let onremove: ((track: Track | null) => void) | undefined = undefined;
-
-  let showMenu = false;
-  let menuX = 0;
-  let menuY = 0;
-  let showPlaylistSub = false;
-
-  // show the context menu on right click
-  function onContext(e: MouseEvent) {
-    e.preventDefault();
-    menuX = e.clientX;
-    menuY = e.clientY;
-    showMenu = true;
-
-    const close = () => {
-      showMenu = false;
-      window.removeEventListener("click", close);
-    };
-    window.addEventListener("click", close);
+  interface Props {
+    track?: Track | null;
+    active?: boolean;
+    hideAlbum?: boolean;
+    isLocal?: boolean;
+    dateAdded?: string;
+    showRemove?: boolean;
+    onplay?: (track: Track | null) => void;
+    onselect?: () => void;
+    onaddtoqueue?: (track: Track | null) => void;
+    onremove?: (track: Track | null) => void;
   }
 
-  function handleAddToQueue() {
-    onaddtoqueue?.(track);
-    showMenu = false;
-  }
+  let {
+    track,
+    active,
+    hideAlbum,
+    isLocal,
+    dateAdded,
+    showRemove,
+    onplay,
+    onselect,
+    onaddtoqueue,
+    onremove
+  }: Props = $props();
 
-  function handleAddToPlaylist(pl: PlaylistSummary) {
+  function handleAddToPlaylist(track: Track | null, playlistId: string) {
     if (track) {
-      addTrackToPlaylist(pl.id, track, isLocal);
+      addTrackToPlaylist(playlistId, track, isLocal ?? false);
     }
-    showMenu = false;
-    showPlaylistSub = false;
   }
-
-  function handleRemove() {
-    onremove?.(track);
-    showMenu = false;
-  }
-
-  onDestroy(() => {
-    showMenu = false;
-    showPlaylistSub = false;
-  });
 </script>
 
-<button
-  class="track-row"
-  class:active
-  class:hide-album={hideAlbum}
-  class:offline={!isLocal && !$connected}
-  ondblclick={() => onplay?.(track)}
-  onclick={() => onselect?.()}
-  oncontextmenu={onContext}
->
-  <span class="num text-3">{track?.track_number || "-"}</span>
-  <span class="title truncate">{track?.title ?? "Unknown"}</span>
-  <span class="artist truncate text-2"
-    >{dateAdded !== undefined
-      ? track?.album_name || "-"
-      : track?.artist_name || track?.album_artist || "-"}</span
-  >
-  {#if !hideAlbum}
-    <span class="album truncate text-2"
-      >{dateAdded !== undefined ? dateAdded : track?.album_name || "-"}</span
-    >
-  {/if}
-  <span class="duration text-3">{formatDuration(track?.duration_ms ?? 0)}</span>
-</button>
-
-{#if showMenu}
-  <div class="ctx-menu" use:portal style="left:{menuX}px;top:{menuY}px">
-    <button onclick={handleAddToQueue}>Add to queue</button>
-    {#if $playlists.length > 0}
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div
-        class="ctx-submenu-wrap"
-        onmouseenter={() => (showPlaylistSub = true)}
-        onmouseleave={() => (showPlaylistSub = false)}
-      >
-        <button class="has-sub"
-          >Add to playlist <ChevronRight size={14} /></button
-        >
-        {#if showPlaylistSub}
-          <div class="ctx-submenu">
-            {#each $playlists as pl (pl.id)}
-              <button onclick={() => handleAddToPlaylist(pl)}>{pl.name}</button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/if}
-    {#if showRemove}
-      <hr class="ctx-sep" />
-      <button class="ctx-danger" onclick={handleRemove}
-        >Remove from playlist</button
-      >
-    {/if}
-  </div>
-{/if}
-
-<style>
-  .track-row {
-    display: grid;
-    grid-template-columns: 32px 2fr 1fr 1fr 76px;
-    align-items: center;
-    gap: 0 12px;
-    padding: 6px 12px;
-    width: 100%;
-    text-align: left;
-    border-radius: var(--r-sm);
-    color: var(--text-1);
-    transition: background 0.1s;
-  }
-  .track-row.hide-album {
-    grid-template-columns: 32px 2fr 1fr 76px;
-  }
-  .track-row:hover {
-    background: var(--surface-hover);
-  }
-  .track-row.active {
-    color: var(--accent);
-  }
-  .track-row.offline {
-    opacity: 0.4;
-  }
-  .num {
-    font-size: 12px;
-    text-align: right;
-  }
-  .duration {
-    font-size: 12px;
-    text-align: right;
-  }
-
-  .ctx-menu {
-    position: fixed;
-    z-index: 9999;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: 4px 0;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-    min-width: 160px;
-  }
-  .ctx-menu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 8px 14px;
-    font-size: 13px;
-    color: var(--text-1);
-    border-radius: 0;
-  }
-  .ctx-menu button:hover {
-    background: var(--surface-hover);
-  }
-
-  .ctx-submenu-wrap {
-    position: relative;
-  }
-  .ctx-submenu-wrap .has-sub {
-    cursor: default;
-  }
-  .ctx-submenu {
-    position: absolute;
-    left: 100%;
-    top: 0;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: 4px 0;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-    min-width: 160px;
-    max-height: 240px;
-    overflow-y: auto;
-  }
-  .ctx-submenu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 8px 14px;
-    font-size: 13px;
-    color: var(--text-1);
-    border-radius: 0;
-  }
-  .ctx-submenu button:hover {
-    background: var(--surface-hover);
-  }
-
-  .ctx-sep {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 4px 0;
-  }
-  .ctx-danger {
-    color: #e74c3c !important;
-  }
-  .ctx-danger:hover {
-    background: rgba(231, 76, 60, 0.1) !important;
-  }
-</style>
+<TrackRow
+  {track}
+  {active}
+  {hideAlbum}
+  {isLocal}
+  {dateAdded}
+  {showRemove}
+  playlists={$playlists}
+  offline={!isLocal && !$connected}
+  disableLocal={false}
+  {onplay}
+  {onselect}
+  {onaddtoqueue}
+  {onremove}
+  onaddtoplaylist={handleAddToPlaylist}
+/>

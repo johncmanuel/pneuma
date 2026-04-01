@@ -16,7 +16,7 @@
   /* --accent-dim: #22c55e; */
   /* https://imagecolorpicker.com/color-code/4ff4bf */
   --accent: #4ff4bf;
-  --accent-dim: #47dcac;
+  --accent-dim: #3fc399;
 
   --text-1: #f0f0f0;
   --text-2: #a0a0a0;
@@ -40,6 +40,9 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  user-select: none;
+  margin: 0;
+  overflow: hidden;
 }
 #app {
   height: 100vh;
