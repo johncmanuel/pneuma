@@ -10,7 +10,8 @@
     "fmt": "prettier --write .",
     "build:web": "cd web && bun run build",
     "build:dash": "cd dashboard && bun run build",
-    "build": "bun run build:web && bun run build:dash"
+    "build": "bun run build:web && bun run build:dash",
+    "server": "bun run build && go run ./cmd/server/"
   },
   "dependencies": {
     "@lucide/svelte": "^0.577.0",
