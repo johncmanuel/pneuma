@@ -3,6 +3,8 @@
   import { searchTracks, searchAlbumGroups } from "../lib/stores/library";
   import { artworkUrl, apiFetch } from "../lib/api";
   import { pushNav } from "../lib/stores/ui";
+  import { playerState } from "../lib/stores/playback";
+  import { wsSend } from "../lib/ws";
   import type { Track, AlbumGroup } from "@pneuma/shared";
 
   let searchBar: SearchBar;
@@ -46,7 +48,6 @@
     const idx = albumTracks.findIndex((t) => t.id === track.id);
     const queueIds = albumTracks.slice(Math.max(0, idx)).map((t) => t.id);
 
-    const { playerState } = await import("../lib/stores/playback");
     playerState.update((s) => ({
       ...s,
       trackId: track.id,
@@ -57,7 +58,6 @@
       paused: false
     }));
 
-    const { wsSend } = await import("../lib/ws");
     wsSend("playback.queue", {
       track_ids: queueIds,
       start_index: 0
