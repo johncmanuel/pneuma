@@ -144,7 +144,7 @@ Some useful Docker sanity check methods:
 docker ps
 
 # review logs
-docker logs -f pneuma-server
+docker logs -f <container id>
 
 # test if container can be reached
 curl http://localhost:8989 # or whatever port you set it to
