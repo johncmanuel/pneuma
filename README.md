@@ -156,8 +156,6 @@ docker exec -it <container id> /bin/sh
 ##### Docker Compose (for the server)
 
 ```yaml
-version: "3.8"
-
 services:
   server:
     image: ghcr.io/johncmanuel/pneuma/server:latest
@@ -193,6 +191,33 @@ services:
 volumes:
   pneuma_data:
 ```
+
+**Field-by-field breakdown:**
+
+| Field | Value | Notes |
+|---|---|---|
+| `image` | `ghcr.io/johncmanuel/pneuma/server:latest` | Pre-built server image published to GitHub Container Registry on every tagged release. |
+| `container_name` | `pneuma-server` | Fixed name so `docker stop pneuma-server` / `docker logs pneuma-server` always work. |
+| `restart` | `unless-stopped` | Automatically restarts the container after crashes or reboots; stops only when you explicitly stop it. |
+| `ports` | `"8989:8989"` | Maps host port 8989 to container port 8989, which is the server's default (`PNEUMA_SERVER_PORT`). Change the left side (host port) if 8989 is already in use on your machine. |
+| `volumes – pneuma_data:/data` | named volume → `/data` | Docker-managed named volume that persists the SQLite database (`pneuma.db`), config file (`config.toml`), artwork cache, playlist artwork cache, and user uploads across container restarts and upgrades. |
+| `volumes – ./music:/music:ro` | bind mount → `/music` (read-only) | Mounts a local music directory into the container. The `:ro` flag makes it read-only so the server can scan and stream your files without being able to modify or delete them. Replace `./music` with the absolute or relative path to your actual music directory. If the directory does not exist yet, Docker Compose will create an empty one automatically. |
+| `PNEUMA_SERVER_HOST` | `0.0.0.0` | Tells the HTTP server to bind to all network interfaces inside the container. This is required for the port mapping to be reachable from the host; the default (`127.0.0.1`) would make the server unreachable from outside the container. |
+| `PNEUMA_DATA_DIR` | `/data` | Sets the root directory for all server-managed data. Matches the named volume mount point, so the database and supporting files land inside the persistent volume. |
+| `PNEUMA_LIBRARY_WATCH_FOLDERS` | `/music` | Comma-separated list of directories the music scanner monitors. Points to the read-only bind mount above. Multiple paths are supported (e.g. `/music,/podcasts`). |
+| `PNEUMA_AUTH_SECRET_KEY` _(commented out)_ | — | JWT signing secret used for session tokens. If omitted, the server auto-generates a 32-byte hex key on first start and writes it to `config.toml` inside the data volume. Set this explicitly to keep the secret stable across container replacements. |
+| `PNEUMA_RATE_LIMITING_ENABLED` _(commented out)_ | `true` | Toggles the application-layer rate limiter (10 registrations/hour, 30 logins/minute, 20 password-changes/minute). Set to `false` if you place the server behind a reverse proxy (e.g., Nginx, Caddy) that already handles rate limiting. |
+| `PNEUMA_UPLOAD_MAX_SIZE_MB` _(commented out)_ | `500` | Maximum size for a single uploaded file in megabytes. Raise this if your users need to upload large audio files. |
+
+**Compliance with the server:**
+
+The compose file fully matches the server's configuration layer (`internal/config/config.go`):
+
+- All environment variables (`PNEUMA_*`) are recognized by `applyEnvOverrides()` and correctly override the corresponding TOML config fields.
+- `PNEUMA_SERVER_HOST=0.0.0.0` and `PNEUMA_DATA_DIR=/data` are also set as `ENV` defaults in the Dockerfile, so they are technically redundant in the compose file but are included for explicitness.
+- Port `8989` is the server's compiled-in default (`ServerPortDefault`) and matches the `EXPOSE 8989` directive in the Dockerfile.
+- The `/data` volume target matches the `VOLUME ["/data"]` declaration in the Dockerfile, ensuring Docker correctly handles volume persistence.
+- The `/music` read-only bind mount combined with `PNEUMA_LIBRARY_WATCH_FOLDERS=/music` correctly wires up the file-system watcher without giving the server write access to your music files.
 
 ### Formatting
 
