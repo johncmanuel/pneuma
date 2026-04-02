@@ -21,7 +21,7 @@ func SecurityHeaders() echo.MiddlewareFunc {
 					"connect-src 'self' ws: wss:; "+
 					"font-src 'self'; "+
 					"frame-ancestors 'none'; "+
-					"trusted-types default; "+
+					"trusted-types default svelte-trusted-html; "+
 					"require-trusted-types-for 'script'",
 			)
 
