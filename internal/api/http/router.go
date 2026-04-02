@@ -63,6 +63,15 @@ func NewRouter(svc Services) *echo.Echo {
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORS())
 	e.Use(echomw.RequestID())
+	e.Use(echomw.SecureWithConfig(echomw.SecureConfig{
+		XSSProtection:         "1; mode=block",
+		ContentTypeNosniff:    "nosniff",
+		XFrameOptions:         "DENY",
+		HSTSMaxAge:            31536000,
+		HSTSExcludeSubdomains: false,
+		HSTSPreloadEnabled:    true,
+		ContentSecurityPolicy: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ws: wss:; font-src 'self'; require-trusted-types-for 'script'; trusted-types default svelte-trusted-html",
+	}))
 
 	secret := svc.JWTSecret
 	authMW := middleware.RequireAuth(secret)
