@@ -156,8 +156,6 @@ docker exec -it <container id> /bin/sh
 ##### Docker Compose (for the server)
 
 ```yaml
-version: "3.8"
-
 services:
   server:
     image: ghcr.io/johncmanuel/pneuma/server:latest
