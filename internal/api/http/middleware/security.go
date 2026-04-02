@@ -11,7 +11,7 @@ func SecurityHeaders() echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			h := c.Response().Header()
 
-			// Mitigate XSS attacks; require Trusted Types for DOM sinks.
+			// require Trusted Types for DOM sinks.
 			h.Set("Content-Security-Policy",
 				"default-src 'self'; "+
 					"script-src 'self'; "+
@@ -25,11 +25,14 @@ func SecurityHeaders() echo.MiddlewareFunc {
 					"require-trusted-types-for 'script'",
 			)
 
-			// Enforce HTTPS for the site and all subdomains; opt into the preload list.
-			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+			// Prevent MIME type sniffing to reduce the risk of XSS attacks.
+			h.Set("X-Content-Type-Options", "nosniff")
 
 			// Isolate the browsing context to prevent cross-origin attacks.
 			h.Set("Cross-Origin-Opener-Policy", "same-origin")
+
+			// Control the Referer header to protect user privacy and prevent information leakage.
+			h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
 			// Prevent the page from being embedded in iframes (clickjacking mitigation).
 			h.Set("X-Frame-Options", "DENY")
