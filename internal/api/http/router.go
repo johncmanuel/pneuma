@@ -63,6 +63,7 @@ func NewRouter(svc Services) *echo.Echo {
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORS())
 	e.Use(echomw.RequestID())
+	e.Use(middleware.SecurityHeaders())
 
 	secret := svc.JWTSecret
 	authMW := middleware.RequireAuth(secret)
