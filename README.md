@@ -76,6 +76,13 @@ Install the following:
 3. [Wails](https://wails.io/docs/gettingstarted/installation)
 4. [sqlc](https://docs.sqlc.dev/en/stable/overview/install.html)
 5. (OPTIONAL): [golang-migrate](https://github.com/golang-migrate/migrate/tree/master/cmd/migrate) CLI tool
+6. [Docker](https://www.docker.com/)
+
+For Docker, ensure you have Docker's [BuildX](https://github.com/docker/buildx) installed. Run the following to verify it is installed:
+
+```bash
+docker buildx version
+```
 
 ### Setting up the environment
 
@@ -107,17 +114,17 @@ Upon first start, the server will create a directory `${HOME}/.pneuma/` for stor
 
 #### Docker
 
-Ensure you have Docker's [BuildX](https://github.com/docker/buildx) installed.
+Then run the commands below.
 
 ```bash
+# build normally
 docker build -t pneuma:latest .
 
-# if you want to be more explicit with the platform:
+# or if you want to be more explicit with the platform:
 # supported OS/arch:
 # 1. linux/amd64
 # 2. linux/arm64
 docker build --platform <placeholder> -t pneuma-server .
-
 
 docker run -d -p 8989:8989 pneuma
 # use docker stop <container id> if you want to stop it
