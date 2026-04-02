@@ -64,7 +64,7 @@ func NewRouter(svc Services) *echo.Echo {
 	e.Use(echomw.CORS())
 	e.Use(echomw.RequestID())
 	e.Use(echomw.SecureWithConfig(echomw.SecureConfig{
-		XSSProtection:         "1; mode=block",
+		XSSProtection:         "",
 		ContentTypeNosniff:    "nosniff",
 		XFrameOptions:         "DENY",
 		HSTSMaxAge:            31536000,
