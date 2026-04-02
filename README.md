@@ -16,6 +16,8 @@ Register an account, and play a couple of songs from the [Library of Congress](h
 ![Screenshot 2](.github/imgs/Screenshot_20260319_110300.png)
 ![Screenshot 3](.github/imgs/Screenshot_20260319_113205.png)
 
+> Web player is aesthetically identical to the desktop application.
+
 ### Admin server interface
 
 ![Screenshot 4](.github/imgs/Screenshot_20260319_113102.png)
@@ -69,64 +71,82 @@ pneuma supports the following metadata for each individual track.
 
 Install the following:
 
-1. Go 1.24+
-2. Node.js 20+
-3. Wails https://wails.io/docs/gettingstarted/installation
-4. sqlc https://docs.sqlc.dev/en/stable/overview/install.html
-5. (OPTIONAL): golang-migrate CLI tool https://github.com/golang-migrate/migrate/tree/master/cmd/migrate
+1. [Go](https://go.dev/) 1.24+
+2. [Bun](https://bun.sh/)
+3. [Wails](https://wails.io/docs/gettingstarted/installation)
+4. [sqlc](https://docs.sqlc.dev/en/stable/overview/install.html)
+5. (OPTIONAL): [golang-migrate](https://github.com/golang-migrate/migrate/tree/master/cmd/migrate) CLI tool
+
+### Setting up the environment
+
+Run to set up frontend dependencies:
+
+```bash
+bun install
+```
 
 ### Running the desktop application
 
 Run `wails dev` to start the desktop application in development mode. By default, it runs both the frontend and the Go process. It will also install frontend dependencies if not already installed.
 
-Run `wails build` to build the desktop application. The output executable will be under `build/bin/pneuma`.
+Run `wails build` to build the desktop application. The output executable will be `build/bin/pneuma` (or whatever executable your OS supports).
 
-Upon first start, the desktop application will create a directory `${OS_CACHE}/pneuma/` for storing its SQLite database and other types of data. See https://pkg.go.dev/os#UserCacheDir to find the appropriate cache directory for your OS.
+Upon first start, the desktop application will create a directory at `${OS_CONFIG}/pneuma/` for storing its SQLite database and other types of data. See the function, [os.UserConfigDir()](https://pkg.go.dev/os#UserConfigDir) to find the appropriate config directory for your OS.
 
 ### Running the server
 
-First, run the following to build the admin dashboard UI:
+To run the server, run:
 
 ```bash
-cd dashboard
-npm run build
+# this will compile web/ and dashboard/, embed them into the server binary,
+# and run the server
+bun run server
 ```
-
-The build output is placed under `dist/`.
-
-Then, run the following to build the web player UI:
-
-```bash
-cd web
-npm run build
-```
-
-The build output is also placed under `dist/`.
-
-Run `go run ./cmd/server` to start the server. The default port is 8989.
-
-Run `go build -o build/bin/server ./cmd/server` to create the server executable at `./build/bin/` with the name, `server` (on Unix) or `server.exe` (on Windows).
 
 Upon first start, the server will create a directory `${HOME}/.pneuma/` for storing its SQLite database and other types of data. Visit `localhost:8989` to register an admin user and perform operations like managing music files for others to stream.
 
-By default, it embeds the admin dashboard UI from `./dashboard/dist/` (if it exists). To exclude the UI, run `go build -tags no_embed -o build/bin/server ./cmd/server`.
-
 #### Docker
+
+Ensure you have Docker's [BuildX](https://github.com/docker/buildx) installed.
 
 ```bash
 docker build -t pneuma:latest .
+
+# if you want to be more explicit with the platform:
+# supported OS/arch:
+# 1. linux/amd64
+# 2. linux/arm64
+docker build --platform <placeholder> -t pneuma-server .
+
+
 docker run -d -p 8989:8989 pneuma
 # use docker stop <container id> if you want to stop it
 ```
 
-To build the server without the UI:
+To build the server without the UI (for faster builds for testing):
 
 ```bash
 docker build -t pneuma:latest --build-arg EMBED_UI=false .
 docker run -p 8989:8989 pneuma
 ```
 
-Docker Compose (for the server and web player)
+Some useful Docker sanity check methods:
+
+```bash
+# is the container running?
+docker ps
+
+# review logs
+docker logs -f pneuma-server
+
+# test if container can be reached
+curl http://localhost:8989 # or whatever port you set it to
+
+# access container filesystem
+docker exec -it <container id> /bin/sh
+```
+
+##### Docker Compose (for the server)
 
 ```yaml
 version: "3.8"
@@ -171,7 +191,7 @@ volumes:
 
 Run `go fmt ./...` to format Go code.
 
-Run `npm i` at the root directory to install `prettier`, then run `npm run fmt` to format TypeScript and Svelte code.
+Run `bun fmt` to format Svelte/TypeScript code.
 
 ### Running sqlc
 
@@ -181,6 +201,8 @@ Add SQL query files under `internal/store/sqlite/<desktop or server>/query/`.
 
 Once done so, run `sqlc generate` to generate the Go code equivalent of the queries. The generated code will be placed under `internal/store/sqlite/<desktop or server>db/` with the file extension `.sql.go`. They can be imported from the the package, `<desktop or server>db`.
 
+The config file, `sqlc.yaml` is found at the root.
+
 ### Database Migrations
 
 Create new migration SQL files under `internal/store/sqlite/<desktop or server>/migrations/`.
@@ -189,3 +211,11 @@ Run `go run ./cmd/dbmigrate up` to apply all pending migrations.
 Run `go run ./cmd/dbmigrate down [N]` to roll back N steps (default 1).  
 Run `go run ./cmd/dbmigrate force <version>` to force schema version and clear the dirty flag.  
 Run `go run ./cmd/dbmigrate version` to print current version and dirty status.
+
+If wanted, use [golang-migrate](https://github.com/golang-migrate/migrate/tree/master/cmd/migrate)'s CLI tool to do this instead. The custom CLI in `/cmd/dbmigrate` is a wrapper over the Go library version; it is for those that don't want to install another external tool.
+
+## FAQ
+
+### Will there be a mobile version?
+
+Eventually, yes. There are three options I'm looking at: wait for Wails to support mobile platforms, optimize the web player to be a [progressive web app (PWA)](https://en.wikipedia.org/wiki/Progressive_web_app), or look into tools like [Capacitor](https://capacitorjs.com/) for building mobile applications with Svelte support.
