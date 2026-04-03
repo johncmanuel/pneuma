@@ -3,7 +3,7 @@
   import { playerState } from "../lib/stores/playback";
   import { apiFetch, artworkUrl, getStreamToken, streamUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
-  import { formatDuration, shuffle } from "@pneuma/shared";
+  import { formatDuration } from "@pneuma/shared";
   import {
     Play,
     Pause,
@@ -40,11 +40,17 @@
   });
 
   let audioDurationMs = 0;
+
   let seeking = false;
   let seekSyncTimer: ReturnType<typeof setTimeout> | null = null;
   let currentAudioSrc = "";
+
   let streamToken = "";
   let streamTokenTimer: ReturnType<typeof setTimeout> | null = null;
+  let streamRetryCount = 0;
+
+  const MAX_STREAM_RETRIES = 2;
+
   let lastTrackId = "";
   let lastPaused = true;
   let rafId = 0;
@@ -96,6 +102,7 @@
     if (trackChanged) {
       lastTrackId = $playerState.trackId;
       lastPaused = $playerState.paused;
+      streamRetryCount = 0;
 
       if (seekSyncTimer) {
         clearTimeout(seekSyncTimer);
@@ -402,6 +409,32 @@
     skipNext();
   }
 
+  async function onAudioError() {
+    if (streamRetryCount >= MAX_STREAM_RETRIES) return;
+
+    streamRetryCount++;
+
+    const fresh = await getStreamToken();
+    if (!fresh) return;
+
+    streamToken = fresh;
+    const trackId = $playerState.trackId;
+    if (!trackId || !audio) return;
+
+    const url = streamUrl(trackId, streamToken);
+    currentAudioSrc = url;
+    audio.src = url;
+    audio.currentTime = $playerState.positionMs / 1000;
+
+    if (!$playerState.paused) {
+      audio.play().catch((e) => {
+        if (e.name !== "AbortError") {
+          console.warn("Audio retry play failed", e);
+        }
+      });
+    }
+  }
+
   function onTimeUpdate() {
     // The seek bar is driven by displayPosition from the rAF loop.
     const debounceMs = 5000;
@@ -429,6 +462,7 @@
     bind:this={audio}
     ontimeupdate={onTimeUpdate}
     onended={onEnded}
+    onerror={onAudioError}
     onloadedmetadata={changeAudioDuration}
     ondurationchange={changeAudioDuration}
     preload="metadata"
