@@ -220,6 +220,16 @@
     if (rq.length === 0) return;
 
     if ($playerState.repeat === 2) {
+      if (audio) {
+        audio.currentTime = 0;
+        displayPosition = 0;
+        audio.play().catch((e) => {
+          if (e.name !== "AbortError") {
+            console.warn("Audio play failed", e);
+          }
+        });
+        startPositionLoop();
+      }
       playerState.update((s) => ({ ...s, positionMs: 0 }));
       wsSend("playback.play", {
         track_id: $playerState.trackId,
@@ -265,6 +275,16 @@
 
     const currentTime = audio ? audio.currentTime * 1000 : displayPosition;
     if (currentTime > 3000) {
+      if (audio) {
+        audio.currentTime = 0;
+        displayPosition = 0;
+        audio.play().catch((e) => {
+          if (e.name !== "AbortError") {
+            console.warn("Audio play failed", e);
+          }
+        });
+        startPositionLoop();
+      }
       playerState.update((s) => ({ ...s, positionMs: 0 }));
       wsSend("playback.play", {
         track_id: $playerState.trackId,
