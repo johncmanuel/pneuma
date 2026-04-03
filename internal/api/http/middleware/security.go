@@ -29,7 +29,12 @@ func SecurityHeaders() echo.MiddlewareFunc {
 			h.Set("X-Content-Type-Options", "nosniff")
 
 			// Isolate the browsing context to prevent cross-origin attacks.
-			h.Set("Cross-Origin-Opener-Policy", "same-origin")
+			// COOP is only honored by browsers on secure (HTTPS) origins, so skip it on
+			// plain HTTP to avoid a spurious console warning (e.g. when running behind a
+			// reverse proxy like Tailscale that terminates TLS externally).
+			if c.Request().TLS != nil || c.Request().Header.Get("X-Forwarded-Proto") == "https" {
+				h.Set("Cross-Origin-Opener-Policy", "same-origin")
+			}
 
 			// Control the Referer header to protect user privacy and prevent information leakage.
 			h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
