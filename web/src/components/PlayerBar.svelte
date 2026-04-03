@@ -214,12 +214,25 @@
     return rq.indexOf($playerState.trackId);
   }
 
+  function restartCurrentTrack() {
+    if (!audio) return;
+    audio.currentTime = 0;
+    displayPosition = 0;
+    audio.play().catch((e) => {
+      if (e.name !== "AbortError") {
+        console.warn("Audio play failed", e);
+      }
+    });
+    startPositionLoop();
+  }
+
   async function skipNext() {
     if (!hasTrack) return;
     const rq = remoteQueue();
     if (rq.length === 0) return;
 
     if ($playerState.repeat === 2) {
+      restartCurrentTrack();
       playerState.update((s) => ({ ...s, positionMs: 0 }));
       wsSend("playback.play", {
         track_id: $playerState.trackId,
@@ -265,6 +278,7 @@
 
     const currentTime = audio ? audio.currentTime * 1000 : displayPosition;
     if (currentTime > 3000) {
+      restartCurrentTrack();
       playerState.update((s) => ({ ...s, positionMs: 0 }));
       wsSend("playback.play", {
         track_id: $playerState.trackId,

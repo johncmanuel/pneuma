@@ -82,13 +82,35 @@ export async function updatePlaylist(
 }
 
 export async function addTracksToPlaylist(playlistId: string, tracks: Track[]) {
-  const items = tracks.map((t) => ({
+  const existing =
+    get(selectedPlaylist)?.id === playlistId
+      ? get(selectedPlaylistItems)
+      : await (async () => {
+          const r = await apiFetch(`/api/playlists/${playlistId}/items`);
+          if (!r.ok) return [] as PlaylistItem[];
+          const data = await r.json();
+          return Array.isArray(data) ? data : (data.items ?? []);
+        })();
+
+  const existingItems = existing.map((item: PlaylistItem) => ({
+    source: item.source || "remote",
+    track_id: item.track_id,
+    ref_title: item.ref_title,
+    ref_album: item.ref_album,
+    ref_album_artist: item.ref_album_artist,
+    ref_duration_ms: item.ref_duration_ms
+  }));
+
+  const newItems = tracks.map((t) => ({
+    source: "remote",
     track_id: t.id,
     ref_title: t.title,
     ref_album: t.album_name,
     ref_album_artist: t.album_artist,
     ref_duration_ms: t.duration_ms
   }));
+
+  const items = [...existingItems, ...newItems];
 
   await apiFetch(`/api/playlists/${playlistId}/items`, {
     method: "PUT",
