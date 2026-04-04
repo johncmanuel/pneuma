@@ -24,7 +24,7 @@ See the section, `Setting up the environment`, in the README.md for details
 
 ## Styling
 
-See the section, `Formatting`, in the README.md for the commands
+See the section, `Formatting`, in the README.md for commands on formatting the codebase. Run them after making changes.
 
 Some general styling guidelines:
 - TypeScript
@@ -35,4 +35,9 @@ Some general styling guidelines:
     - Use ternaries or early returns if possible. For ternaries, if the conditions are too long, define additional variables to ensure readability.
     - Use dot notations over bracket notation for readability.
 - Go
-    - 
+    - Run `go vet ./...` when making changes to the codebase.
+    - Always handle errors explicitly; never ignore them with `_` unless there's a deliberate, commented reason. Prefer early returns over nested `if` blocks. 
+    - Use `camelCase` for unexported identifiers and `PascalCase` for exported ones. Any acronyms should be all caps.
+    - Group `const` and `var` variables into a single declaration block using parentheses. 
+    - Avoid using naked returns, unless the function is very short.
+
