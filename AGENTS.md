@@ -1,22 +1,21 @@
-
 ## Project Structure
 
 - Desktop application
-    - Desktop UI is in `frontend/`
-    - Desktop backend is in `internal/`. Most of the backend is found in `internal/desktop` under the package `desktop`.
+  - Desktop UI is in `frontend/`
+  - Desktop backend is in `internal/`. Most of the backend is found in `internal/desktop` under the package `desktop`.
 - Web player
-    - Web player UI is in `web/`
+  - Web player UI is in `web/`
 - Dashboard
-    - Dashboard UI is in `dashboard/`
+  - Dashboard UI is in `dashboard/`
 - Server
-    - Server code is in `internal/`
+  - Server code is in `internal/`
 - Database
-    - Database code is in `internal/store/sqlite`
+  - Database code is in `internal/store/sqlite`
 - Shared
-    - Shared code between different components of the project is in `packages/`
+  - Shared code between different components of the project is in `packages/`
 - Build
-    - Build outputs are found in `build/bin/`
-    - `build/darwin` and `build/windows` are folders that `wails build` will use when building and packaging MacOS and Windows applications for this project respectively
+  - Build outputs are found in `build/bin/`
+  - `build/darwin` and `build/windows` are folders that `wails build` will use when building and packaging MacOS and Windows applications for this project respectively
 
 ## Building
 
@@ -27,17 +26,17 @@ See the section, `Setting up the environment`, in the README.md for details
 See the section, `Formatting`, in the README.md for commands on formatting the codebase. Run them after making changes.
 
 Some general styling guidelines:
-- TypeScript
-    - Avoid the `any` type if possible. If the proper types cannot be found, use `any` as fallback
-    - Use type inference as much as possible; do not explicitly state the type or interfaces for variables unless needed for clarity or exports.
-    - Use built-in, functional methods for processing arrays and other data structures over loops
-    - Prefer `const` over `let` unless state mutation is needed. 
-    - Use ternaries or early returns if possible. For ternaries, if the conditions are too long, define additional variables to ensure readability.
-    - Use dot notations over bracket notation for readability.
-- Go
-    - Run `go vet ./...` when making changes to the codebase.
-    - Always handle errors explicitly; never ignore them with `_` unless there's a deliberate, commented reason. Prefer early returns over nested `if` blocks. 
-    - Use `camelCase` for unexported identifiers and `PascalCase` for exported ones. Any acronyms should be all caps.
-    - Group `const` and `var` variables into a single declaration block using parentheses. 
-    - Avoid using naked returns, unless the function is very short.
 
+- TypeScript
+  - Avoid the `any` type if possible. If the proper types cannot be found, use `any` as fallback
+  - Use type inference as much as possible; do not explicitly state the type or interfaces for variables unless needed for clarity or exports.
+  - Use built-in, functional methods for processing arrays and other data structures over loops
+  - Prefer `const` over `let` unless state mutation is needed.
+  - Use ternaries or early returns if possible. For ternaries, if the conditions are too long, define additional variables to ensure readability.
+  - Use dot notations over bracket notation for readability.
+- Go
+  - Run `go vet ./...` when making changes to the codebase.
+  - Always handle errors explicitly; never ignore them with `_` unless there's a deliberate, commented reason. Prefer early returns over nested `if` blocks.
+  - Use `camelCase` for unexported identifiers and `PascalCase` for exported ones. Any acronyms should be all caps.
+  - Group `const` and `var` variables into a single declaration block using parentheses.
+  - Avoid using naked returns, unless the function is very short.
