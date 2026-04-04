@@ -23,7 +23,7 @@ See the section, `Setting up the environment`, in the README.md for details
 
 ## Styling
 
-See the section, `Formatting`, in the README.md for commands on formatting the codebase. Run them after making changes.
+See the section, `Formatting`, in the README.md for commands on formatting the codebase. Run them after finalizing changes.
 
 Some general styling guidelines:
 
@@ -40,3 +40,12 @@ Some general styling guidelines:
   - Use `camelCase` for unexported identifiers and `PascalCase` for exported ones. Any acronyms should be all caps.
   - Group `const` and `var` variables into a single declaration block using parentheses.
   - Avoid using naked returns, unless the function is very short.
+- Svelte
+  - Keep components small and single-purpose
+  - Avoid logic in templates beyond simple ternaries or #each/#if blocks
+  - Prefer scoped styles. Use global styles when absolutely necessary
+- HTML
+  - Keep markup free of inline styles; all styling belongs in CSS
+  - Always include alt attributes on images
+  - Prioritize accessibility via ARIA
+  - Boolean attributes should be written without a value
