@@ -376,6 +376,11 @@
 
   // Add new files to the upload queue, avoiding duplicates. Start upload if not active.
   function enqueueFiles(files: File[]) {
+    if (!uploadActive && uploadDone) {
+      uploadQueue = [];
+      uploadDone = false;
+    }
+
     const existing = new Set(
       uploadQueue.map((i) => `${i.file.name}::${i.file.size}`)
     );
