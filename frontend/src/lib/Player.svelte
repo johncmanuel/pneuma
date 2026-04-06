@@ -1,5 +1,10 @@
 <script lang="ts">
-  import { playerState, type Track, isRemoteTrack } from "../stores/player";
+  import {
+    playerState,
+    type Track,
+    isRemoteTrack,
+    RepeatMode
+  } from "../stores/player";
   import { fetchTracksByIDs, UNORGANIZED_KEY } from "../stores/library";
   import { resolveLocalTracksByPaths, isLocalId } from "../stores/localLibrary";
   import {
@@ -258,7 +263,7 @@
     const q = $playerState.queue;
     if (q.length === 0) return;
 
-    if ($playerState.repeat === 2) {
+    if ($playerState.repeat === RepeatMode.One) {
       // Repeat-one: restart the current track in-place
       await playQueueTrack(
         q[$playerState.queueIndex],
@@ -362,14 +367,15 @@
   }
 
   function toggleRepeat() {
-    //  TODO: use enums instead of numbers, see Player.svelte TODO comment on enums
-    const nextMode = (($playerState.repeat + 1) % 3) as 0 | 1 | 2;
+    const modes = [RepeatMode.Off, RepeatMode.All, RepeatMode.One];
+    const currentIdx = modes.indexOf($playerState.repeat);
+    const nextMode = modes[(currentIdx + 1) % modes.length];
     playerState.update((s) => ({ ...s, repeat: nextMode }));
 
     if (!isLocal) wsSend("playback.repeat", { mode: nextMode });
   }
 
-  const repeatLabels = ["Off", "All", "One"] as const;
+  const repeatLabels = ["Off", "All", "One"];
   $: repeatLabel = repeatLabels[$playerState.repeat] ?? "Off";
 
   function onSeekInput(e: Event) {
@@ -633,11 +639,11 @@
       >
       <button
         class="ctrl-btn repeat-btn"
-        class:active-toggle={$playerState.repeat !== 0}
+        class:active-toggle={$playerState.repeat !== RepeatMode.Off}
         on:click={toggleRepeat}
         title="Repeat: {repeatLabel}"
       >
-        <Repeat size={16} />{#if $playerState.repeat === 2}<span
+        <Repeat size={16} />{#if $playerState.repeat === RepeatMode.One}<span
             class="repeat-badge">1</span
           >{/if}
       </button>

@@ -323,57 +323,54 @@
     if (files.length) enqueueFiles(files);
   }
 
-  /** Recursively collect Files from FileSystemEntry[]. TODO: code can be cleaned up more */
   async function collectFilesFromEntries(
     entries: FileSystemEntry[]
   ): Promise<File[]> {
-    const files: File[] = [];
-    const promises: Promise<void>[] = [];
+    const results = await Promise.all(
+      entries.map(async (entry) => {
+        if (entry.isFile) {
+          return [await readFileEntry(entry as FileSystemFileEntry)];
+        }
+        if (entry.isDirectory) {
+          return await readDirectoryEntries(entry as FileSystemDirectoryEntry);
+        }
+        return [];
+      })
+    );
+    return results.flat();
+  }
 
-    // Recursively collect files from entries.
-    // Though for directories, read their entries and process them in batches
-    for (const entry of entries) {
-      if (entry.isFile) {
-        promises.push(
-          new Promise<void>((resolve) => {
-            (entry as FileSystemFileEntry).file(
-              (f) => {
-                files.push(f);
-                resolve();
-              },
-              () => resolve()
-            );
-          })
-        );
-      } else if (entry.isDirectory) {
-        promises.push(
-          new Promise<void>((resolve) => {
-            const reader = (entry as FileSystemDirectoryEntry).createReader();
-            const readBatch = () => {
-              // Read a batch of entries from the directory
-              // NOTE: readEntries() returns first 100 entries, so need to
-              // call it multiple times until all instances are read
-              // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemDirectoryReader/readEntries#browser_compatibility
-              reader.readEntries(
-                async (batch) => {
-                  if (batch.length === 0) {
-                    resolve();
-                    return;
-                  }
-                  const subFiles = await collectFilesFromEntries(batch);
-                  files.push(...subFiles);
-                  readBatch();
-                },
-                () => resolve()
-              );
-            };
-            readBatch();
-          })
-        );
-      }
+  function readFileEntry(entry: FileSystemFileEntry): Promise<File> {
+    return new Promise((resolve) => {
+      entry.file(resolve, () => resolve(null as unknown as File));
+    });
+  }
+
+  async function readDirectoryEntries(
+    entry: FileSystemDirectoryEntry
+  ): Promise<File[]> {
+    const files: File[] = [];
+    const reader = entry.createReader();
+
+    while (true) {
+      const batch = await readEntriesBatch(reader);
+      if (batch.length === 0) break;
+      const subFiles = await collectFilesFromEntries(batch);
+      files.push(...subFiles);
     }
-    await Promise.all(promises);
+
     return files;
+  }
+
+  // Read a batch of entries from the directory
+  // NOTE: readEntries() returns first 100 entries
+  // https://developer.mozilla.org/en-US/docs/Web/API/FileSystemDirectoryReader/readEntries#browser_compatibility
+  function readEntriesBatch(
+    reader: FileSystemDirectoryReader
+  ): Promise<FileSystemEntry[]> {
+    return new Promise((resolve) => {
+      reader.readEntries(resolve, () => resolve([]));
+    });
   }
 
   // Add new files to the upload queue, avoiding duplicates. Start upload if not active.

@@ -1,7 +1,10 @@
 import { writable, derived } from "svelte/store";
 
-// TODO: enum would be better here i believe
-export type RepeatMode = 0 | 1 | 2; // Off | Queue | One
+export enum RepeatMode {
+  Off = 0,
+  All = 1,
+  One = 2
+}
 
 export interface Track {
   id: string;
