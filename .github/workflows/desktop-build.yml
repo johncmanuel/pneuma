@@ -37,7 +37,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
 
       - name: Install Wails Linux Dependencies
         if: runner.os == 'Linux'
@@ -48,23 +48,46 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
+      - name: Inject version into wails.json from git tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${VERSION:-1.0.0}"
+          jq --arg v "$VERSION" '.info.productVersion = $v' wails.json > wails.tmp.json && mv wails.tmp.json wails.json
+          echo "Building version: $VERSION"
+
       - name: Build wails
         run: wails build -platform ${{ matrix.build.platform }}
+
+      - name: Build Windows NSIS installer
+        if: runner.os == 'Windows'
+        run: wails build -platform windows/amd64 -nsis -webview2 embed
 
       - name: Package macOS app bundle
         if: runner.os == 'macOS'
         run: zip -r build/bin/pneuma-macos-universal.zip build/bin/pneuma.app
 
+      # TODO: look more into this
+      # - name: Create macOS DMG
+      #   if: runner.os == 'macOS'
+      #   env:
+      #     MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      #     MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      #     MACOS_CERT_IDENTITY: ${{ secrets.MACOS_CERT_IDENTITY }}
+      #     APPLE_ID: ${{ secrets.APPLE_ID }}
+      #     APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      #     APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      #   maybe some script here to create + sign dmg
+      #   run: bash build/darwin/create-dmg.sh
+
       - name: Rename Linux binary
         if: runner.os == 'Linux'
-        run: mv build/bin/pneuma build/bin/pneuma-linux-amd64
-
-      - name: Rename Windows binary
-        if: runner.os == 'Windows'
         shell: bash
-        run: mv build/bin/pneuma.exe build/bin/pneuma-windows-amd64.exe
+        run: |
+          VERSION=$(jq -r '.info.productVersion' wails.json)
+          mv build/bin/pneuma "build/bin/pneuma-${VERSION}-linux-amd64"
 
-      - name: Upload binary artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: pneuma-desktop-${{ matrix.build.os }}
@@ -80,7 +103,7 @@ jobs:
       contents: write
 
     steps:
-      - name: Download all binary artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: dist

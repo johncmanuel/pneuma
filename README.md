@@ -98,6 +98,23 @@ Run `wails dev` to start the desktop application in development mode. By default
 
 Run `wails build` to build the desktop application. The output executable will be `build/bin/pneuma` (or whatever executable your OS supports).
 
+##### Linux Runtime Requirements
+
+On Linux, the desktop application requires GStreamer plugins for audio playback. This addresses the error: `GStreamer element autoaudiosink not found`. Install it using your distribution's package manager:
+
+```bash
+# Debian/Ubuntu
+sudo apt-get install gstreamer1.0-plugins-good
+
+# Fedora
+sudo dnf install gstreamer1-plugins-good
+
+# Arch Linux
+sudo pacman -S gst-plugins-good
+```
+
+Source: https://wails.io/docs/guides/linux/#gstreamer-error-when-using-audio-or-video-elements
+
 Upon first start, the desktop application will create a directory at `${OS_CONFIG}/pneuma/` for storing its SQLite database and other types of data. See the function, [os.UserConfigDir()](https://pkg.go.dev/os#UserConfigDir) to find the appropriate config directory for your OS.
 
 ### Running the server

@@ -9,5 +9,9 @@
   "author": {
     "name": "John Carlo Manuel",
     "email": "39042556+johncmanuel@users.noreply.github.com"
-  }
+  },
+  "info": {
+    "productVersion": "1.0.0"
+  },
+  "nsisType": "single"
 }
