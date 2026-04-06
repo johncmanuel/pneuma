@@ -10,7 +10,6 @@ import (
 	"io"
 	"log/slog"
 	"math"
-	"math/rand/v2"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -22,6 +21,7 @@ import (
 
 	"pneuma/internal/artwork"
 	"pneuma/internal/models"
+	"pneuma/internal/playlist"
 	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/desktopdb"
 )
@@ -687,22 +687,15 @@ func (a *App) GenerateRandomPlaylist(name, description string, durationMinutes i
 		deduped = append(deduped, t)
 	}
 
-	rand.Shuffle(
-		len(deduped),
-		func(i, j int) {
-			deduped[i], deduped[j] = deduped[j], deduped[i]
-		},
-	)
-
-	var selected []randomTrack
-	var cumulative int64
-	for _, t := range deduped {
-		if cumulative >= targetMS {
-			break
-		}
-		selected = append(selected, t)
-		cumulative += t.durationMS
+	if len(deduped) == 0 {
+		return nil, fmt.Errorf("no track candidates available after deduplication")
 	}
+
+	durations := make([]int64, len(deduped))
+	for i, t := range deduped {
+		durations[i] = t.durationMS
+	}
+	selected := playlist.SelectRandomByDuration(durations, targetMS)
 
 	if len(selected) == 0 {
 		return nil, fmt.Errorf("no selected tracks available")
@@ -714,7 +707,8 @@ func (a *App) GenerateRandomPlaylist(name, description string, durationMinutes i
 	}
 
 	items := make([]LocalPlaylistItem, len(selected))
-	for i, t := range selected {
+	for i, idx := range selected {
+		t := deduped[idx]
 		items[i] = LocalPlaylistItem{
 			Position:       i,
 			Source:         t.source,

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"math/rand"
 	"strings"
 	"time"
 
@@ -172,8 +171,6 @@ func (s *Service) AddItem(ctx context.Context, playlistID string, item models.Pl
 
 // GenerateRandom creates a new playlist filled with randomly selected tracks
 // targeting the given duration in minutes. Only remote tracks are used.
-// TODO: thinking of merging the common logic of GenerateRandomPlaylist in
-// desktop logic and this into a shared helper that can be used by both.
 func (s *Service) GenerateRandom(ctx context.Context, userID, name, description string, durationMinutes int) (*models.Playlist, error) {
 	if strings.TrimSpace(name) == "" {
 		return nil, fmt.Errorf("playlist name is required")
@@ -188,9 +185,11 @@ func (s *Service) GenerateRandom(ctx context.Context, userID, name, description 
 	}
 
 	var candidates []serverdb.ListTracksRow
+	var durations []int64
 	for _, t := range tracks {
 		if t.DurationMs > 0 {
 			candidates = append(candidates, t)
+			durations = append(durations, t.DurationMs)
 		}
 	}
 
@@ -204,22 +203,10 @@ func (s *Service) GenerateRandom(ctx context.Context, userID, name, description 
 	}
 
 	targetMS := int64(durationMinutes) * 60 * 1000
-	var selected []serverdb.ListTracksRow
-	var totalMS int64
+	selected := SelectRandomByDuration(durations, targetMS)
 
-	rand.Shuffle(len(candidates), func(i, j int) {
-		candidates[i], candidates[j] = candidates[j], candidates[i]
-	})
-
-	for _, t := range candidates {
-		if totalMS >= targetMS {
-			break
-		}
-		selected = append(selected, t)
-		totalMS += t.DurationMs
-	}
-
-	for i, t := range selected {
+	for i, idx := range selected {
+		t := candidates[idx]
 		if err := s.q.InsertPlaylistItem(ctx, serverdb.InsertPlaylistItemParams{
 			PlaylistID:     pl.ID,
 			TrackID:        sql.NullString{String: t.ID, Valid: true},
