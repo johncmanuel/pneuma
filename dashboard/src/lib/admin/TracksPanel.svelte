@@ -4,9 +4,6 @@
   import { libraryVersion, scanRunning, scanResult } from "../ws";
   import { formatDuration } from "@pneuma/shared";
 
-  // TODO: fix reactivity when uploading multiple files (not with uploading a folder)
-  // seems like it's blinking (i.e it's always switching between Loading.. and the table views)
-
   interface Track {
     id: string;
     title: string;
@@ -157,7 +154,11 @@
   let _prevLibVer: number | undefined;
   $: {
     const v = $libraryVersion;
-    if (_prevLibVer !== undefined && v !== _prevLibVer) loadTracks();
+
+    // prevent repetitive reloads when libraryVersion changes rapidly (e.g. during bulk upload)
+    if (_prevLibVer !== undefined && v !== _prevLibVer && !uploadActive)
+      loadTracks();
+
     _prevLibVer = v;
   }
 
