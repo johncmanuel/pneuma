@@ -8,9 +8,10 @@ COPY package.json bun.lock tsconfig*.json ./
 COPY dashboard/package.json ./dashboard/
 COPY web/package.json ./web/
 COPY frontend/package.json ./frontend/
+COPY landing/package.json ./landing/
 COPY packages/ ./packages/
 
-RUN bun install --filter "!frontend" --frozen-lockfile
+RUN bun install --filter "!frontend" --filter "!landing" --frozen-lockfile
 
 COPY dashboard/ ./dashboard/
 RUN cd dashboard && bun run build
