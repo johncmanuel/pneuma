@@ -348,7 +348,7 @@
   }
 
   .features {
-    padding: 80px 24px;
+    padding: 90px 24px;
     max-width: 1100px;
     margin: 0 auto;
   }
