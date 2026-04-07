@@ -32,12 +32,11 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Install landing dependencies only
-        run: bun install --frozen-lockfile --filter landing
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --filter . --filter landing
 
       - name: Build landing site
-        working-directory: ./landing
-        run: bun run build
+        run: bun run build:landing
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
