@@ -15,6 +15,7 @@
     "build": "bun run build:web && bun run build:dash",
     "landing:dev": "cd landing && bun run dev",
     "landing:build": "cd landing && bun run build",
+    "landing:preview": "cd landing && bun run preview",
     "server": "bun run build && go run ./cmd/server/"
   },
   "dependencies": {

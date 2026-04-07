@@ -10,10 +10,56 @@
     RotateCw,
     MonitorSmartphone,
     Users,
-    Github
+    Github,
+    ChevronLeft,
+    ChevronRight
   } from "@lucide/svelte";
 
+  const screenshotModules = import.meta.glob<string>(
+    "$lib/screenshots/*.{png,jpg,jpeg,webp}",
+    {
+      eager: true,
+      import: "default"
+    }
+  );
+  const screenshots = Object.values(screenshotModules);
+
+  let currentIndex = $state(0);
+  let isPaused = $state(false);
+  let autoTimer: ReturnType<typeof setInterval> | undefined;
+
+  function next() {
+    currentIndex = (currentIndex + 1) % screenshots.length;
+  }
+
+  function prev() {
+    currentIndex = (currentIndex - 1 + screenshots.length) % screenshots.length;
+  }
+
+  function goTo(index: number) {
+    currentIndex = index;
+  }
+
+  const autoAdvanceTimeoutMs = 5000;
+
+  function startAutoAdvance() {
+    autoTimer = setInterval(() => {
+      if (!isPaused) next();
+    }, autoAdvanceTimeoutMs);
+  }
+
+  function stopAutoAdvance() {
+    if (autoTimer) {
+      clearInterval(autoTimer);
+      autoTimer = undefined;
+    }
+  }
+
   onMount(() => {
+    if (screenshots.length > 1) {
+      startAutoAdvance();
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
@@ -30,7 +76,18 @@
       observer.observe(el);
     });
 
-    return () => observer.disconnect();
+    function handleKeydown(e: KeyboardEvent) {
+      if (e.key === "ArrowLeft") prev();
+      if (e.key === "ArrowRight") next();
+    }
+
+    window.addEventListener("keydown", handleKeydown);
+
+    return () => {
+      observer.disconnect();
+      stopAutoAdvance();
+      window.removeEventListener("keydown", handleKeydown);
+    };
   });
 
   const features = [
@@ -116,8 +173,8 @@
             <feature.icon
               size={28}
               strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             />
           </div>
           <h3>{feature.title}</h3>
@@ -125,6 +182,75 @@
         </article>
       {/each}
     </div>
+  </section>
+
+  <section
+    class="screenshots"
+    id="screenshots"
+    aria-labelledby="screenshots-heading"
+  >
+    <h2 id="screenshots-heading" class="section-heading animate-on-scroll">
+      Screenshots
+    </h2>
+    {#if screenshots.length > 0}
+      <div
+        class="carousel animate-on-scroll"
+        role="region"
+        onpointerenter={() => (isPaused = true)}
+        onpointerleave={() => (isPaused = false)}
+        aria-roledescription="carousel"
+        aria-label="Screenshots of pneuma"
+      >
+        <div class="carousel-track">
+          {#each screenshots as src, i (src)}
+            <div
+              class="carousel-slide"
+              class:active={i === currentIndex}
+              role="group"
+              aria-roledescription="slide"
+              aria-label="Slide {i + 1} of {screenshots.length}"
+              aria-hidden={i !== currentIndex}
+            >
+              <img {src} alt="Screenshot of pneuma" />
+            </div>
+          {/each}
+        </div>
+
+        {#if screenshots.length > 1}
+          <button
+            class="carousel-btn carousel-prev"
+            onclick={prev}
+            aria-label="Previous screenshot"
+          >
+            <ChevronLeft size={24} />
+          </button>
+          <button
+            class="carousel-btn carousel-next"
+            onclick={next}
+            aria-label="Next screenshot"
+          >
+            <ChevronRight size={24} />
+          </button>
+
+          <div
+            class="carousel-dots"
+            role="tablist"
+            aria-label="Slide indicators"
+          >
+            {#each screenshots as _, i (i)}
+              <button
+                class="carousel-dot"
+                class:active={i === currentIndex}
+                onclick={() => goTo(i)}
+                role="tab"
+                aria-label="Go to slide {i + 1}"
+                aria-selected={i === currentIndex}
+              ></button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
   </section>
 
   <section class="download" id="download" aria-labelledby="download-heading">
@@ -431,6 +557,132 @@
     font-size: 0.95rem;
   }
 
+  .screenshots {
+    padding: 90px 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .carousel {
+    position: relative;
+    opacity: 0;
+    transform: translateY(30px);
+    transition:
+      opacity 0.5s ease,
+      transform 0.5s ease;
+
+    &:global(.visible) {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .carousel-track {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--r-lg);
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .carousel-slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+
+    &.active {
+      position: relative;
+      opacity: 1;
+      pointer-events: auto;
+    }
+  }
+
+  .carousel-slide img {
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .carousel-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-1);
+    cursor: pointer;
+    transition:
+      background 0.2s ease,
+      border-color 0.2s ease,
+      transform 0.2s ease;
+    z-index: 2;
+
+    &:hover {
+      background: var(--surface-hover);
+      border-color: var(--accent);
+      transform: translateY(-50%) scale(1.05);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+  }
+
+  .carousel-prev {
+    left: -22px;
+  }
+
+  .carousel-next {
+    right: -22px;
+  }
+
+  .carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .carousel-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: none;
+    background: var(--text-3);
+    opacity: 0.4;
+    cursor: pointer;
+    padding: 0;
+    transition:
+      opacity 0.2s ease,
+      background 0.2s ease,
+      transform 0.2s ease;
+
+    &:hover {
+      opacity: 0.7;
+    }
+
+    &.active {
+      opacity: 1;
+      background: var(--accent);
+      transform: scale(1.2);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+  }
+
   .download {
     padding: 80px 24px 100px;
     display: flex;
@@ -590,6 +842,19 @@
       flex-direction: column;
       width: 100%;
       max-width: 280px;
+    }
+
+    .carousel-prev {
+      left: 8px;
+    }
+
+    .carousel-next {
+      right: 8px;
+    }
+
+    .carousel-btn {
+      width: 36px;
+      height: 36px;
     }
 
     .footer-top {
