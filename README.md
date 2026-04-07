@@ -12,15 +12,15 @@ Register an account, and play a couple of songs from the [Library of Congress](h
 
 ### Desktop application
 
-![Screenshot 1](.github/imgs/Screenshot_20260319_105737.png)
-![Screenshot 2](.github/imgs/Screenshot_20260319_110300.png)
-![Screenshot 3](.github/imgs/Screenshot_20260319_113205.png)
+![Screenshot 1](.github/imgs/Screenshot_20260319_105737.webp)
+![Screenshot 2](.github/imgs/Screenshot_20260319_110300.webp)
+![Screenshot 3](.github/imgs/Screenshot_20260319_113205.webp)
 
 > Web player is aesthetically identical to the desktop application.
 
 ### Admin server interface
 
-![Screenshot 4](.github/imgs/Screenshot_20260319_113102.png)
+![Screenshot 4](.github/imgs/Screenshot_20260319_113102.webp)
 
 > NOTE: This project is currently under active development. Expect bugs and possibly breaking changes.
 
