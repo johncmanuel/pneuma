@@ -12,7 +12,7 @@ const config = {
       precompress: true
     }),
     paths: {
-      base: ""
+      base: process.env.NODE_ENV === "development" ? "" : "/pneuma"
     },
     prerender: {
       handleMissingId: "warn"
