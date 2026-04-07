@@ -16,6 +16,12 @@
 - Build
   - Build outputs are found in `build/bin/`
   - `build/darwin` and `build/windows` are folders that `wails build` will use when building and packaging MacOS and Windows applications for this project respectively
+- Landing page
+  - The landing page for the project is in `landing/`
+
+## Package management
+
+Bun is used for package management in Svelte and TypeScript environments. Do not use npm or other Node-based package managers.
 
 ## Building
 
