@@ -29,8 +29,6 @@ See the section, `Setting up the environment`, in the README.md for details
 
 ## Styling
 
-See the section, `Formatting`, in the README.md for commands on formatting the codebase. Run them after finalizing changes.
-
 Some general styling guidelines:
 
 - TypeScript
@@ -55,3 +53,10 @@ Some general styling guidelines:
   - Always include alt attributes on images
   - Prioritize accessibility via ARIA
   - Boolean attributes should be written without a value
+
+### Formatting
+
+Run `bun fmt` to format TypeScript and Svelte code.
+Run `gofmt ./...` to format Go code.
+
+Run them after finalizing changes.
