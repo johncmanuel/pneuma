@@ -4,13 +4,16 @@
     "web",
     "dashboard",
     "frontend",
+    "landing",
     "packages/*"
   ],
   "scripts": {
     "fmt": "prettier --write .",
     "build:web": "cd web && bun run build",
     "build:dash": "cd dashboard && bun run build",
+    "build:landing": "cd landing && bun run build",
     "build": "bun run build:web && bun run build:dash",
+    "dev:landing": "cd landing && bun run dev",
     "server": "bun run build && go run ./cmd/server/"
   },
   "dependencies": {

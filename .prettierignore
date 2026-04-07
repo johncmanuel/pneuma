@@ -6,3 +6,5 @@ dashboard/dist
 frontend/wailsjs/
 internal/
 cmd/
+
+.svelte-kit/
