@@ -1,13 +1,5 @@
 {
   "extends": "../tsconfig.json",
-  "compilerOptions": {
-    "moduleResolution": "node",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
-  },
-  "include": ["src/**/*.d.ts", "src/**/*.ts", "src/**/*.svelte"],
   "references": [
     {
       "path": "./tsconfig.node.json"

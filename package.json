@@ -16,7 +16,8 @@
     "landing:dev": "cd landing && bun run dev",
     "landing:build": "cd landing && bun run build",
     "landing:preview": "cd landing && bun run preview",
-    "server": "bun run build && go run ./cmd/server/"
+    "server": "bun run build && go run ./cmd/server/",
+    "check": "svelte-check --no-tsconfig --ignore \"dist,build,node_modules\""
   },
   "dependencies": {
     "@lucide/svelte": "^0.577.0",

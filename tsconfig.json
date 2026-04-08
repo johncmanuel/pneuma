@@ -5,6 +5,18 @@
     "useDefineForClassFields": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "paths": {
+      "@pneuma/shared": ["./packages/shared/src/index.ts"],
+      "@pneuma/shared/*": ["./packages/shared/src/*"],
+      "@pneuma/ui": ["./packages/ui/src/lib/index.ts"],
+      "@pneuma/ui/*": ["./packages/ui/src/lib/*"]
+    },
+    "include": [
+      "src/**/*.d.ts",
+      "src/**/*.ts",
+      "src/**/*.js",
+      "src/**/*.svelte"
+    ],
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": true,
