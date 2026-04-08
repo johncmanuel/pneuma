@@ -13,11 +13,17 @@
     currentView,
     pushNav
   } from "../stores/ui";
-  import { formatDuration } from "@pneuma/shared";
+  import {
+    formatDuration,
+    setupMediaSessionActions,
+    setMediaSessionPlaybackState,
+    setMediaSessionTrack,
+    updateMediaSessionMetadata,
+    shuffle
+  } from "@pneuma/shared";
   import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
-  import { onMount } from "svelte";
-  import { shuffle } from "@pneuma/shared";
+  import { onMount, onDestroy } from "svelte";
   import { addToast } from "../stores/toasts";
   import {
     Play,
@@ -45,6 +51,22 @@
     volume = isNaN(saved) ? 1 : Math.max(0, Math.min(1, saved));
     prevVolume = volume > 0 ? volume : 1;
     if (audio) audio.volume = volume;
+
+    setupMediaSessionActions({
+      onPlay: () => {
+        if ($playerState.paused) togglePause();
+      },
+      onPause: () => {
+        if (!$playerState.paused) togglePause();
+      },
+      onPrev: () => skipPrev(),
+      onNext: () => skipNext()
+    });
+  });
+
+  onDestroy(() => {
+    setMediaSessionTrack(null);
+    setMediaSessionPlaybackState(null);
   });
 
   let audioDurationMs = 0; // actual duration from <audio> element
@@ -56,13 +78,29 @@
   // (e.g. %27 -> ') so the comparison never matches for paths with special
   // characters, causing a continuous src reset that prevents playback.
   let currentAudioSrc = "";
+  let lastMediaMetadataKey = "";
 
   $: track = $playerState.track;
   $: hasTrack = !!$playerState.trackId;
-
-  // Use the audio element's actual duration as primary source, fall back to metadata
   $: durationMs =
     audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0);
+
+  // define a key from the track metadata to determine when to update Media Session metadata.
+  $: mediaMetadataKey = track
+    ? `${track.id}|${track.title}|${track.artist_name}|${track.album_artist}|${track.album_name}`
+    : "";
+
+  $: if (
+    mediaMetadataKey &&
+    mediaMetadataKey !== lastMediaMetadataKey &&
+    track
+  ) {
+    lastMediaMetadataKey = mediaMetadataKey;
+    setMediaSessionTrack(track);
+    updateMediaSessionMetadata(track, artworkUrl);
+  }
+
+  $: setMediaSessionPlaybackState(hasTrack ? $playerState.paused : null);
 
   // Local tracks use their filesystem path as the ID; don't send WS events for them.
   $: isLocal = isLocalId($playerState.trackId ?? "");
@@ -492,6 +530,7 @@
       currentAudioSrc = url;
       audio.src = url;
       audio.currentTime = $playerState.positionMs / 1000;
+      if (track) setMediaSessionTrack(track);
     }
 
     if (!$playerState.paused && !audio.seeking && audio.paused) {
@@ -511,11 +550,25 @@
   $: if (audio && !$playerState.trackId && currentAudioSrc) {
     audio.pause();
     audio.src = "";
+
     currentAudioSrc = "";
+    lastMediaMetadataKey = "";
+
+    setMediaSessionTrack(null);
+    setMediaSessionPlaybackState(null);
   }
 
   function onEnded() {
     skipNext();
+  }
+
+  function onAudioPlay() {
+    setMediaSessionPlaybackState(false);
+    if (track) setMediaSessionTrack(track);
+  }
+
+  function onAudioPause() {
+    setMediaSessionPlaybackState(hasTrack ? true : null);
   }
 
   function onAudioError(event: Event) {
@@ -554,6 +607,8 @@
     if (audio && isFinite(audio.duration)) {
       audioDurationMs = audio.duration * 1000;
     }
+
+    if (track) setMediaSessionTrack(track);
   }
 </script>
 
@@ -564,6 +619,8 @@
     bind:this={audio}
     on:timeupdate={onTimeUpdate}
     on:ended={onEnded}
+    on:play={onAudioPlay}
+    on:pause={onAudioPause}
     on:loadedmetadata={changeAudioDuration}
     on:durationchange={changeAudioDuration}
     on:error={onAudioError}

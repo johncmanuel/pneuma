@@ -3,7 +3,13 @@
   import { playerState } from "../lib/stores/playback";
   import { apiFetch, artworkUrl, getStreamToken, streamUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
-  import { formatDuration } from "@pneuma/shared";
+  import {
+    formatDuration,
+    setupMediaSessionActions,
+    setMediaSessionPlaybackState,
+    setMediaSessionTextMetadata,
+    updateMediaSessionMetadata
+  } from "@pneuma/shared";
   import {
     Play,
     Pause,
@@ -31,12 +37,27 @@
     volume = isNaN(saved) ? 1 : Math.max(0, Math.min(1, saved));
     prevVolume = volume > 0 ? volume : 1;
     if (audio) audio.volume = volume;
+
+    setupMediaSessionActions({
+      onPlay: () => {
+        if ($playerState.paused) togglePause();
+      },
+      onPause: () => {
+        if (!$playerState.paused) togglePause();
+      },
+      onPrev: () => skipPrev(),
+      onNext: () => skipNext()
+    });
   });
 
   onDestroy(() => {
     stopPositionLoop();
+
     if (streamTokenTimer) clearInterval(streamTokenTimer);
     if (seekSyncTimer) clearTimeout(seekSyncTimer);
+
+    setMediaSessionTextMetadata(null);
+    setMediaSessionPlaybackState(null);
   });
 
   let audioDurationMs = 0;
@@ -54,6 +75,7 @@
   let lastTrackId = "";
   let lastPaused = true;
   let rafId = 0;
+  let lastMediaMetadataKey = "";
 
   // Position driven directly from audio.currentTime via requestAnimationFrame.
   // Decoupled from the Svelte store to avoid store-update-induced jitter:
@@ -77,6 +99,23 @@
 
   $: track = $playerState.track;
   $: hasTrack = !!$playerState.trackId;
+
+  // define a key from the track metadata to determine when to update Media Session metadata.
+  $: mediaMetadataKey = track
+    ? `${track.id}|${track.title}|${track.artist_name}|${track.album_artist}|${track.album_name}`
+    : "";
+
+  $: if (
+    mediaMetadataKey &&
+    mediaMetadataKey !== lastMediaMetadataKey &&
+    track
+  ) {
+    lastMediaMetadataKey = mediaMetadataKey;
+    setMediaSessionTextMetadata(track);
+    updateMediaSessionMetadata(track, artworkUrl);
+  }
+
+  $: setMediaSessionPlaybackState(hasTrack ? $playerState.paused : null);
 
   $: durationMs =
     audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0);
@@ -144,6 +183,7 @@
           audio.src = url;
           audio.currentTime = $playerState.positionMs / 1000;
           displayPosition = $playerState.positionMs;
+          if (track) setMediaSessionTextMetadata(track);
         }
 
         if (!$playerState.paused) {
@@ -177,16 +217,23 @@
   $: if (audio && !$playerState.trackId && currentAudioSrc) {
     audio.pause();
     audio.src = "";
+
     currentAudioSrc = "";
     lastTrackId = "";
     lastPaused = true;
     displayPosition = 0;
+
     stopPositionLoop();
+
     if (streamTokenTimer) {
       clearInterval(streamTokenTimer);
       streamTokenTimer = null;
     }
+
     streamToken = "";
+    lastMediaMetadataKey = "";
+    setMediaSessionTextMetadata(null);
+    setMediaSessionPlaybackState(null);
   }
 
   function togglePause() {
@@ -423,6 +470,15 @@
     skipNext();
   }
 
+  function onAudioPlay() {
+    setMediaSessionPlaybackState(false);
+    if (track) setMediaSessionTextMetadata(track);
+  }
+
+  function onAudioPause() {
+    setMediaSessionPlaybackState(hasTrack ? true : null);
+  }
+
   async function onAudioError() {
     if (streamRetryCount >= MAX_STREAM_RETRIES) return;
 
@@ -466,6 +522,8 @@
     if (audio && isFinite(audio.duration)) {
       audioDurationMs = audio.duration * 1000;
     }
+
+    if (track) setMediaSessionTextMetadata(track);
   }
 </script>
 
@@ -476,6 +534,8 @@
     bind:this={audio}
     ontimeupdate={onTimeUpdate}
     onended={onEnded}
+    onplay={onAudioPlay}
+    onpause={onAudioPause}
     onerror={onAudioError}
     onloadedmetadata={changeAudioDuration}
     ondurationchange={changeAudioDuration}

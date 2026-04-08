@@ -14,8 +14,33 @@ import (
 	"pneuma/internal/media"
 )
 
+// setLocalCORSHeaders sets permissive CORS headers to allow the <audio> element
+// to fetch from the local HTTP server without CORS issues.
+func setLocalCORSHeaders(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range")
+}
+
+// handleLocalOptions handles preflight CORS requests for the local HTTP server.
+func handleLocalOptions(w http.ResponseWriter, r *http.Request) bool {
+	if r.Method != http.MethodOptions {
+		return false
+	}
+
+	setLocalCORSHeaders(w)
+	w.WriteHeader(http.StatusNoContent)
+	return true
+}
+
 // handleLocalStream serves a local audio file for the <audio> element.
 func (a *App) handleLocalStream(w http.ResponseWriter, r *http.Request) {
+	if handleLocalOptions(w, r) {
+		return
+	}
+
+	setLocalCORSHeaders(w)
+
 	path := r.URL.Query().Get("path")
 	if path == "" {
 		http.Error(w, "path required", http.StatusBadRequest)
@@ -51,6 +76,12 @@ func (a *App) handleLocalStream(w http.ResponseWriter, r *http.Request) {
 // bytes), so every track that shares the same cover image reuses one file on
 // disk instead of creating duplicates.
 func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
+	if handleLocalOptions(w, r) {
+		return
+	}
+
+	setLocalCORSHeaders(w)
+
 	path := r.URL.Query().Get("path")
 	if path == "" {
 		http.Error(w, "path required", http.StatusBadRequest)
@@ -130,6 +161,12 @@ func (a *App) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 // handlePlaylistArt serves a playlist's custom artwork thumbnail.
 // The file query parameter is the basename stored in artwork_path (e.g. "pl-abc123.jpg").
 func (a *App) handlePlaylistArt(w http.ResponseWriter, r *http.Request) {
+	if handleLocalOptions(w, r) {
+		return
+	}
+
+	setLocalCORSHeaders(w)
+
 	file := r.URL.Query().Get("file")
 	if file == "" {
 		http.Error(w, "file required", http.StatusBadRequest)
