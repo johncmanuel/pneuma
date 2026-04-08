@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	ThumbnailsCacheDir = "thumbs"
-	ThumbnailsTempDir  = "pneuma-thumbs"
+	ThumbnailsCacheDir    = "thumbs"
+	ThumbnailsTempDirProd = "pneuma-thumbs"
+	ThumbnailsTempDirDev  = "pneuma-dev-thumbs"
 	// Use a local-only HTTP server on a random port for streaming local files.
 	LocalHTTPServerAddr = "127.0.0.1:0"
 )
@@ -24,8 +25,12 @@ const (
 // Startup is called when the app is starting up.
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	profile := resolveDesktopProfile(ctx)
 
-	if db, err := openAppDB(); err != nil {
+	buildType := runtime.Environment(ctx).BuildType
+	slog.Info("desktop storage profile resolved", "profile", profile, "build_type", buildType)
+
+	if db, err := openAppDB(profile); err != nil {
 		slog.Warn("failed to open database, state will not be persisted", "err", err)
 	} else {
 		a.appDB = db
@@ -33,9 +38,9 @@ func (a *App) Startup(ctx context.Context) {
 	}
 
 	if cacheDir, err := os.UserCacheDir(); err == nil {
-		a.thumbDir = filepath.Join(cacheDir, DesktopAppDirName, ThumbnailsCacheDir)
+		a.thumbDir = filepath.Join(cacheDir, desktopAppDir(profile), ThumbnailsCacheDir)
 	} else {
-		a.thumbDir = filepath.Join(os.TempDir(), ThumbnailsTempDir)
+		a.thumbDir = filepath.Join(os.TempDir(), thumbnailsTempDir(profile))
 		slog.Warn("UserCacheDir unavailable, using temp dir for thumbnails", "dir", a.thumbDir)
 	}
 	if err := os.MkdirAll(a.thumbDir, 0o755); err != nil {

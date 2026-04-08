@@ -98,7 +98,16 @@ Run `wails dev` to start the desktop application in development mode. By default
 
 Run `wails build` to build the desktop application. The output executable will be `build/bin/pneuma` (or whatever executable your OS supports).
 
-Upon first start, the desktop application will create a directory at `${OS_CONFIG}/pneuma/` for storing its SQLite database and other types of data. See the function, [os.UserConfigDir()](https://pkg.go.dev/os#UserConfigDir) to find the appropriate config directory for your OS.
+Desktop data is profile-aware:
+
+- `wails dev` uses the `dev` profile by default and stores data under `${OS_CONFIG}/pneuma-dev/`
+- `wails build` executables use the `prod` profile by default and store data under `${OS_CONFIG}/pneuma/`
+
+For cache data (thumbnail artwork), the app uses `${OS_CACHE}/pneuma-dev/` for `dev` and `${OS_CACHE}/pneuma/` for `prod`.
+
+You can override profile detection at runtime with `PNEUMA_DESKTOP_PROFILE=dev` or `PNEUMA_DESKTOP_PROFILE=prod`.
+
+See [os.UserConfigDir()](https://pkg.go.dev/os#UserConfigDir) and [os.UserCacheDir()](https://pkg.go.dev/os#UserCacheDir) for OS-specific directory locations.
 
 ##### Linux Runtime Requirements
 

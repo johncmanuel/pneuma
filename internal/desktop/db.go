@@ -25,9 +25,10 @@ import (
 // logic atm
 
 const (
-	DesktopAppDirName    = "pneuma"
-	DesktopDBName        = "app.db"
-	DesktopMigrationsDir = "sql/desktop/migrations"
+	DesktopProdAppDirName = "pneuma"
+	DesktopDevAppDirName  = "pneuma-dev"
+	DesktopDBName         = "app.db"
+	DesktopMigrationsDir  = "sql/desktop/migrations"
 )
 
 // openAppDBRaw opens the SQLite database at path, creates the directory if needed,
@@ -86,13 +87,17 @@ func newAppDBMigrator(db *sql.DB) (*migrate.Migrate, error) {
 
 // migrateDBFromCacheToConfig moves the desktop database from the old cache
 // directory to the config directory for existing users. Returns the new path.
-func migrateDBFromCacheToConfig() (string, error) {
+func migrateDBFromCacheToConfig(profile desktopProfile) (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("user config dir: %w", err)
 	}
 
-	newPath := filepath.Join(configDir, DesktopAppDirName, DesktopDBName)
+	newPath := filepath.Join(configDir, desktopAppDir(profile), DesktopDBName)
+
+	if profile != desktopProfileProd {
+		return newPath, nil
+	}
 
 	if _, err := os.Stat(newPath); err == nil {
 		return newPath, nil
@@ -103,7 +108,7 @@ func migrateDBFromCacheToConfig() (string, error) {
 		return newPath, nil
 	}
 
-	oldPath := filepath.Join(cacheDir, DesktopAppDirName, DesktopDBName)
+	oldPath := filepath.Join(cacheDir, DesktopProdAppDirName, DesktopDBName)
 
 	if _, err := os.Stat(oldPath); err != nil {
 		return newPath, nil
@@ -125,8 +130,8 @@ func migrateDBFromCacheToConfig() (string, error) {
 // openAppDB opens (or creates) the app-local SQLite database used to persist
 // desktop client state: local folder list, track cache, recent albums, etc.
 // The database is stored in the OS user-config directory.
-func openAppDB() (*sql.DB, error) {
-	dbPath, err := migrateDBFromCacheToConfig()
+func openAppDB(profile desktopProfile) (*sql.DB, error) {
+	dbPath, err := migrateDBFromCacheToConfig(profile)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +152,7 @@ func openAppDB() (*sql.DB, error) {
 		return nil, fmt.Errorf("apply desktop migrations: %w", migrErr)
 	}
 
-	slog.Info("desktop database opened and migrated", "path", dbPath)
+	slog.Info("desktop database opened and migrated", "profile", profile, "path", dbPath)
 
 	return db, nil
 }
