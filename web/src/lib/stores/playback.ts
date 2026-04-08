@@ -1,25 +1,12 @@
 import { writable } from "svelte/store";
-import type { Track } from "../types";
+import { type PlayerState, isLocalID } from "@pneuma/shared";
 import { apiFetch } from "../api";
-import { isLocalId } from "./library";
-
-export type RepeatMode = 0 | 1 | 2;
-
-export interface PlayerState {
-  trackId: string;
-  track: Track | null;
-  queue: string[];
-  queueIndex: number;
-  positionMs: number;
-  paused: boolean;
-  repeat: RepeatMode;
-  shuffle: boolean;
-}
 
 const initial: PlayerState = {
   trackId: "",
   track: null,
   queue: [],
+  baseQueue: [],
   queueIndex: 0,
   positionMs: 0,
   paused: true,
@@ -45,6 +32,7 @@ export async function loadPlaybackState() {
       track: null,
 
       queue: s.queue ?? [],
+      baseQueue: s.queue ?? [],
       queueIndex: s.queue_index ?? 0,
       positionMs: s.position_ms ?? 0,
 
@@ -60,7 +48,7 @@ export async function loadPlaybackState() {
 function isLocalPayload(payload: any): boolean {
   const id: string | undefined = payload?.track_id;
   if (!id) return false;
-  return isLocalId(id);
+  return isLocalID(id);
 }
 
 export function handlePlaybackChanged(payload: any): boolean {

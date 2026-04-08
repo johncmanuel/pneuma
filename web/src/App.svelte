@@ -15,17 +15,16 @@
     canGoBack,
     canGoForward
   } from "./lib/stores/ui";
-
   import Sidebar from "./components/Sidebar.svelte";
   import PlayerBar from "./components/PlayerBar.svelte";
   import QueuePanel from "./components/QueuePanel.svelte";
-  import Toasts from "./components/Toasts.svelte";
   import SearchBar from "./components/SearchBar.svelte";
   import Library from "./views/Library.svelte";
   import Playlists from "./views/Playlists.svelte";
   import Login from "./views/Login.svelte";
   import Register from "./views/Register.svelte";
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
+  import { Toasts } from "@pneuma/ui";
 
   let wasLoggedIn = false;
   let searchBar: any = undefined;

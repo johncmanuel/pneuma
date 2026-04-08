@@ -26,9 +26,12 @@
   } from "../lib/stores/recent";
   import { Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "../components/TrackRow.svelte";
-  import { totalDuration } from "@pneuma/shared";
+  import {
+    totalDuration,
+    type PlaylistItem,
+    type PlaylistSummary
+  } from "@pneuma/shared";
   import { generateRandomPlaylist } from "../lib/api";
-  import type { PlaylistItem, PlaylistSummary } from "../lib/types";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 

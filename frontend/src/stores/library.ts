@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import type { Track } from "./player";
+import type { Track } from "@pneuma/shared";
 import { serverFetch, connected } from "../utils/api";
 import { get } from "svelte/store";
 

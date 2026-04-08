@@ -1,6 +1,6 @@
 import { writable, get } from "svelte/store";
 import { apiFetch } from "../api";
-import type { AlbumGroup, Track } from "../types";
+import { type AlbumGroup, type Track, isLocalID } from "@pneuma/shared";
 
 export const loading = writable(false);
 export const albumGroups = writable<AlbumGroup[]>([]);
@@ -62,7 +62,7 @@ export async function fetchAlbumTracks(
 export async function fetchTracksByIDs(ids: string[]): Promise<Track[]> {
   if (ids.length === 0) return [];
 
-  const remoteIds = ids.filter((id) => !isLocalId(id));
+  const remoteIds = ids.filter((id) => !isLocalID(id));
   if (remoteIds.length === 0) return [];
 
   const params = new URLSearchParams();
@@ -75,18 +75,6 @@ export async function fetchTracksByIDs(ids: string[]): Promise<Track[]> {
   if (!data) return [];
 
   return Array.isArray(data) ? data : (data.tracks ?? []);
-}
-
-// check if:
-// 1. the ID looks like a missing track placeholder, or
-// 2. the ID looks like a file path (absolute or relative)
-// 3. the ID matches a Windows drive letter pattern (e.g. C:\ or D:/)
-export function isLocalId(id: string): boolean {
-  return (
-    id.startsWith("missing-") ||
-    id.startsWith("/") ||
-    /^[a-zA-Z]:[/\\]/.test(id)
-  );
 }
 
 export async function searchTracks(query: string): Promise<Track[]> {

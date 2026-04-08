@@ -1,6 +1,7 @@
 import { writable, get } from "svelte/store";
 import { apiFetch } from "../api";
-import type { PlaylistSummary, PlaylistItem, Track } from "../types";
+import type { PlaylistSummary, PlaylistItem, Track } from "@pneuma/shared";
+import { localTrackToSharedTrack } from "@pneuma/shared";
 
 export const playlists = writable<PlaylistSummary[]>([]);
 export const selectedPlaylist = writable<PlaylistSummary | null>(null);
@@ -152,21 +153,21 @@ export async function removePlaylistItem(playlistId: string, position: number) {
 }
 
 export function itemToTrack(item: PlaylistItem): Track {
-  return {
-    id: item.track_id || `missing-${item.position}`,
+  const track = localTrackToSharedTrack({
     path: "",
     title: item.ref_title || "Unknown",
-    artist_id: "",
-    album_id: "",
-    artist_name: item.ref_album_artist || "",
+    artist: item.ref_album_artist || "",
+    album: item.ref_album || "",
     album_artist: item.ref_album_artist || "",
-    album_name: item.ref_album || "",
     genre: "",
     year: 0,
     track_number: item.position + 1,
     disc_number: 0,
-    duration_ms: item.ref_duration_ms,
-    bitrate_kbps: 0,
-    artwork_id: ""
+    duration_ms: item.ref_duration_ms
+  });
+
+  return {
+    ...track,
+    id: item.track_id || `missing-${item.position}`
   };
 }

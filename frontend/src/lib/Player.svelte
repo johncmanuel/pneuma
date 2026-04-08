@@ -1,12 +1,7 @@
 <script lang="ts">
-  import {
-    playerState,
-    type Track,
-    isRemoteTrack,
-    RepeatMode
-  } from "../stores/player";
+  import { playerState } from "../stores/player";
   import { fetchTracksByIDs, UNORGANIZED_KEY } from "../stores/library";
-  import { resolveLocalTracksByPaths, isLocalId } from "../stores/localLibrary";
+  import { resolveLocalTracksByPaths } from "../stores/localLibrary";
   import {
     activePanel,
     toggleQueuePanel,
@@ -19,12 +14,18 @@
     setMediaSessionPlaybackState,
     setMediaSessionTrack,
     updateMediaSessionMetadata,
-    shuffle
+    shuffle,
+    isRemoteTrack,
+    storageKeys,
+    type Track,
+    isLocalID,
+    RepeatModeEnum,
+    addToast,
+    RepeatLabels
   } from "@pneuma/shared";
   import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { onMount, onDestroy } from "svelte";
-  import { addToast } from "../stores/toasts";
   import {
     Play,
     Pause,
@@ -43,7 +44,7 @@
   let volume = 1;
   let prevVolume = 1; // last non-zero volume, restored on unmute
 
-  const VOLUME_KEY = "pneuma_volume";
+  const VOLUME_KEY = storageKeys.volume;
 
   // load volume upon mounting
   onMount(() => {
@@ -103,7 +104,7 @@
   $: setMediaSessionPlaybackState(hasTrack ? $playerState.paused : null);
 
   // Local tracks use their filesystem path as the ID; don't send WS events for them.
-  $: isLocal = isLocalId($playerState.trackId ?? "");
+  $: isLocal = isLocalID($playerState.trackId ?? "");
 
   // Store original queues for restoration when reconnected
   let originalQueue: string[] = [];
@@ -155,7 +156,7 @@
   }
 
   const trackCache = new Map<string, Track>();
-  const isLocalPath = isLocalId;
+  const isLocalPath = isLocalID;
 
   /** Resolve a track ID to a Track object (server library OR local files). */
   async function findTrackById(id: string): Promise<Track | null> {
@@ -301,8 +302,7 @@
     const q = $playerState.queue;
     if (q.length === 0) return;
 
-    if ($playerState.repeat === RepeatMode.One) {
-      // Repeat-one: restart the current track in-place
+    if ($playerState.repeat === RepeatModeEnum.One) {
       await playQueueTrack(
         q[$playerState.queueIndex],
         q,
@@ -405,7 +405,7 @@
   }
 
   function toggleRepeat() {
-    const modes = [RepeatMode.Off, RepeatMode.All, RepeatMode.One];
+    const modes = [RepeatModeEnum.Off, RepeatModeEnum.All, RepeatModeEnum.One];
     const currentIdx = modes.indexOf($playerState.repeat);
     const nextMode = modes[(currentIdx + 1) % modes.length];
     playerState.update((s) => ({ ...s, repeat: nextMode }));
@@ -413,8 +413,7 @@
     if (!isLocal) wsSend("playback.repeat", { mode: nextMode });
   }
 
-  const repeatLabels = ["Off", "All", "One"];
-  $: repeatLabel = repeatLabels[$playerState.repeat] ?? "Off";
+  $: repeatLabel = RepeatLabels[$playerState.repeat] ?? "Off";
 
   function onSeekInput(e: Event) {
     seeking = true;
@@ -594,7 +593,7 @@
     if (!isLocal && !seekSyncTimer) {
       seekSyncTimer = setTimeout(() => {
         seekSyncTimer = null;
-        if (!isLocalId($playerState.trackId ?? "")) {
+        if (!isLocalID($playerState.trackId ?? "")) {
           wsSend("playback.seek", {
             position_ms: audio.currentTime * 1000
           });
@@ -696,11 +695,13 @@
       >
       <button
         class="ctrl-btn repeat-btn"
-        class:active-toggle={$playerState.repeat !== RepeatMode.Off}
+        class:active-toggle={$playerState.repeat !== RepeatModeEnum.Off}
         on:click={toggleRepeat}
         title="Repeat: {repeatLabel}"
       >
-        <Repeat size={16} />{#if $playerState.repeat === RepeatMode.One}<span
+        <Repeat
+          size={16}
+        />{#if $playerState.repeat === RepeatModeEnum.One}<span
             class="repeat-badge">1</span
           >{/if}
       </button>

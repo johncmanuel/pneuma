@@ -8,7 +8,8 @@
     type LocalAlbumGroup,
     localTrackToTrack
   } from "../stores/localLibrary";
-  import { playerState, type Track } from "../stores/player";
+  import type { Track } from "@pneuma/shared";
+  import { playerState } from "../stores/player";
   import { connected, serverFetch, artworkUrl, localBase } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { pushNav } from "../stores/ui";

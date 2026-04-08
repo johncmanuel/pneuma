@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { apiFetch, currentUser } from "../api";
   import { libraryVersion, scanRunning, scanResult } from "../ws";
-  import { formatDuration } from "@pneuma/shared";
+  import { formatDuration, storageKeys } from "@pneuma/shared";
 
   interface Track {
     id: string;
@@ -63,14 +63,20 @@
   $: canEdit = $currentUser?.is_admin || $currentUser?.can_edit;
   $: canDelete = $currentUser?.is_admin || $currentUser?.can_delete;
 
-  const STORAGE_KEY = "pneuma_admin_tracks";
+  const STORAGE_KEY = storageKeys.adminTracksPanel;
 
   function loadPersistedState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
 
-      const s = JSON.parse(raw);
+      const s = JSON.parse(raw) as {
+        sortKey?: SortKey;
+        sortDir?: SortDir;
+        searchQuery?: string;
+      };
+      if (!s) return;
+
       if (s.sortKey) sortKey = s.sortKey;
       if (s.sortDir) sortDir = s.sortDir;
       if (typeof s.searchQuery === "string") searchQuery = s.searchQuery;

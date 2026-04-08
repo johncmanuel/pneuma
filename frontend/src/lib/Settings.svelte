@@ -16,7 +16,7 @@
   } from "../utils/api";
   import { recentAlbums, recentPlaylists } from "../stores/recentAlbums";
   import { db } from "../utils/db";
-  import { addToast } from "../stores/toasts";
+  import { addToast } from "@pneuma/shared";
   import { RotateCcw } from "@lucide/svelte";
   import { BrowserOpenURL } from "../../wailsjs/runtime";
 

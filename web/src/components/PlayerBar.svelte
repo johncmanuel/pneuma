@@ -8,7 +8,10 @@
     setupMediaSessionActions,
     setMediaSessionPlaybackState,
     setMediaSessionTrack,
-    updateMediaSessionMetadata
+    storageKeys,
+    updateMediaSessionMetadata,
+    isLocalID,
+    RepeatLabels
   } from "@pneuma/shared";
   import {
     Play,
@@ -24,13 +27,12 @@
     List
   } from "@lucide/svelte";
   import { activePanel, toggleQueuePanel } from "../lib/stores/ui";
-  import { isLocalId } from "../lib/stores/library";
 
   let audio: HTMLAudioElement;
   let volume = 1;
   let prevVolume = 1;
 
-  const VOLUME_KEY = "pneuma_volume";
+  const VOLUME_KEY = storageKeys.volume;
 
   onMount(() => {
     const saved = parseFloat(localStorage.getItem(VOLUME_KEY) ?? "1");
@@ -252,7 +254,7 @@
 
   /** Filter the queue to remote-only tracks for navigation. */
   function remoteQueue(): string[] {
-    return $playerState.queue.filter((id) => !isLocalId(id));
+    return $playerState.queue.filter((id) => !isLocalID(id));
   }
 
   /** Find the current track's position in the filtered queue. */
@@ -374,8 +376,7 @@
     wsSend("playback.repeat", { mode: nextMode });
   }
 
-  const repeatLabels = ["Off", "All", "One"] as const;
-  $: repeatLabel = repeatLabels[$playerState.repeat] ?? "Off";
+  $: repeatLabel = RepeatLabels[$playerState.repeat] ?? "Off";
 
   function onSeekInput(e: Event) {
     seeking = true;

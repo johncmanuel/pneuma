@@ -48,8 +48,8 @@
     ].sort((a, b) => (b.playedAt ?? 0) - (a.playedAt ?? 0))
   );
 
-  function handleNavClick(item: { id: string }) {
-    onnavigate?.(item.id);
+  function handleNavClick(id: string) {
+    onnavigate?.(id);
   }
 
   function handleRecentClick(item: { key: string }) {

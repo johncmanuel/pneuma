@@ -22,13 +22,13 @@
     type PlaylistSummary
   } from "../stores/playlists";
   import { selectedPlaylistView, pushNav } from "../stores/ui";
-  import { playerState, type Track } from "../stores/player";
+  import { playerState } from "../stores/player";
   import { connected, playlistArtUrl } from "../utils/api";
   import { Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "./TrackRow.svelte";
   import SortButton from "./SortButton.svelte";
   import "../assets/css/track-list.css";
-  import { totalDuration } from "@pneuma/shared";
+  import { totalDuration, type Track } from "@pneuma/shared";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 

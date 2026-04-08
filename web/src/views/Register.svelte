@@ -1,7 +1,7 @@
 <script lang="ts">
   import { register } from "../lib/api";
   import { pushNav } from "../lib/stores/ui";
-  import { addToast } from "../lib/stores/toasts";
+  import { addToast } from "@pneuma/shared";
 
   let { onswitch }: { onswitch?: () => void } = $props();
 
@@ -31,7 +31,6 @@
       error = result;
       addToast(result, "error");
     } else {
-      addToast("Account created successfully", "success");
       pushNav({ view: "home" });
     }
 
