@@ -7,7 +7,7 @@
     formatDuration,
     setupMediaSessionActions,
     setMediaSessionPlaybackState,
-    setMediaSessionTextMetadata,
+    setMediaSessionTrack,
     updateMediaSessionMetadata
   } from "@pneuma/shared";
   import {
@@ -56,7 +56,7 @@
     if (streamTokenTimer) clearInterval(streamTokenTimer);
     if (seekSyncTimer) clearTimeout(seekSyncTimer);
 
-    setMediaSessionTextMetadata(null);
+    setMediaSessionTrack(null);
     setMediaSessionPlaybackState(null);
   });
 
@@ -111,7 +111,7 @@
     track
   ) {
     lastMediaMetadataKey = mediaMetadataKey;
-    setMediaSessionTextMetadata(track);
+    setMediaSessionTrack(track);
     updateMediaSessionMetadata(track, artworkUrl);
   }
 
@@ -183,7 +183,7 @@
           audio.src = url;
           audio.currentTime = $playerState.positionMs / 1000;
           displayPosition = $playerState.positionMs;
-          if (track) setMediaSessionTextMetadata(track);
+          if (track) setMediaSessionTrack(track);
         }
 
         if (!$playerState.paused) {
@@ -232,7 +232,7 @@
 
     streamToken = "";
     lastMediaMetadataKey = "";
-    setMediaSessionTextMetadata(null);
+    setMediaSessionTrack(null);
     setMediaSessionPlaybackState(null);
   }
 
@@ -472,7 +472,7 @@
 
   function onAudioPlay() {
     setMediaSessionPlaybackState(false);
-    if (track) setMediaSessionTextMetadata(track);
+    if (track) setMediaSessionTrack(track);
   }
 
   function onAudioPause() {
@@ -523,7 +523,7 @@
       audioDurationMs = audio.duration * 1000;
     }
 
-    if (track) setMediaSessionTextMetadata(track);
+    if (track) setMediaSessionTrack(track);
   }
 </script>
 
