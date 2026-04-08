@@ -1,5 +1,6 @@
 import { writable, get } from "svelte/store";
-import { initLocalLibrary, isLocalId } from "../stores/localLibrary";
+import { getOrCreateDeviceID, storageKeys, isLocalID } from "@pneuma/shared";
+import { initLocalLibrary } from "../stores/localLibrary";
 import { initRecentAlbums } from "../stores/recentAlbums";
 import {
   IsConnected,
@@ -21,27 +22,12 @@ export const localPort = writable(0);
 
 export const isReconnecting = writable(false);
 
-const DEVICE_KEY = "pneuma_device_id";
-
-function getDeviceId(): string {
-  if (typeof localStorage === "undefined") return "unknown";
-
-  const existingId = localStorage.getItem(DEVICE_KEY);
-  if (existingId) return existingId;
-
-  const newId =
-    crypto.randomUUID?.() ?? Math.random().toString(36).substring(2);
-
-  localStorage.setItem(DEVICE_KEY, newId);
-  return newId;
-}
-
-export const deviceId = getDeviceId();
+export const deviceId = getOrCreateDeviceID();
 
 // Only the server URL and JWT token are persisted.
 // The token is short-lived (24 h), rotated automatically, and can be
 // revoked server-side
-const SESSION_KEY = "pneuma_session";
+const SESSION_KEY = storageKeys.session;
 
 interface SavedSession {
   url: string;
@@ -49,8 +35,10 @@ interface SavedSession {
 }
 
 export function saveSession(url: string, token: string) {
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify({ url, token }));
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ url, token }));
+  const payload = { url, token };
+  const serialized = JSON.stringify(payload);
+  sessionStorage.setItem(SESSION_KEY, serialized);
+  localStorage.setItem(SESSION_KEY, serialized);
 }
 
 export function clearSession() {
@@ -59,29 +47,25 @@ export function clearSession() {
 }
 
 export function loadSession(): SavedSession | null {
-  const raw =
-    sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY);
-
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
+  const fromSession = sessionStorage.getItem(SESSION_KEY);
+  if (fromSession) {
+    try {
+      return JSON.parse(fromSession) as SavedSession;
+    } catch {
+      sessionStorage.removeItem(SESSION_KEY);
+    }
   }
-}
 
-/** Decode a JWT and return the user_id claim, or null if unavailable. */
-export function decodeJWTUserId(token: string): string | null {
-  if (!token) return null;
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(atob(parts[1]));
-    return payload.user_id ?? null;
-  } catch {
-    return null;
+  const fromLocal = localStorage.getItem(SESSION_KEY);
+  if (fromLocal) {
+    try {
+      return JSON.parse(fromLocal) as SavedSession;
+    } catch {
+      localStorage.removeItem(SESSION_KEY);
+    }
   }
+
+  return null;
 }
 
 export async function initApi() {
@@ -249,14 +233,14 @@ export function streamUrl(trackId: string, localPath?: string): string {
   const p = get(localPort);
 
   // If the track ID looks like a filesystem path, use the local server
-  if (isLocalId(trackId) && p) {
+  if (isLocalID(trackId) && p) {
     return `http://127.0.0.1:${p}/local/stream?path=${encodeURIComponent(trackId)}`;
   }
 
   // If an explicit local path is provided and the port is available, use the local server.
   // Only applies when the trackId is a local (path-style) ID; remote tracks with UUID IDs
   // have server-side paths that the desktop app can never access.
-  if (localPath && isLocalId(trackId) && p) {
+  if (localPath && isLocalID(trackId) && p) {
     return `http://127.0.0.1:${p}/local/stream?path=${encodeURIComponent(localPath)}`;
   }
 
@@ -274,7 +258,7 @@ export function streamUrl(trackId: string, localPath?: string): string {
 export function artworkUrl(trackId: string): string {
   const p = get(localPort);
 
-  if (isLocalId(trackId) && p) {
+  if (isLocalID(trackId) && p) {
     return `http://127.0.0.1:${p}/local/art?path=${encodeURIComponent(trackId)}`;
   }
 

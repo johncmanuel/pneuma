@@ -26,12 +26,10 @@
     type LocalAlbumGroup
   } from "../stores/localLibrary";
   import { playerState } from "../stores/player";
-  import { totalDuration, shuffle } from "@pneuma/shared";
+  import { totalDuration, shuffle, type Track } from "@pneuma/shared";
   import TrackRow from "./TrackRow.svelte";
   import SortButton from "./SortButton.svelte";
   import "../assets/css/track-list.css";
-
-  import type { Track } from "../stores/player";
   import {
     serverFetch,
     artworkUrl,

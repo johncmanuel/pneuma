@@ -1,13 +1,13 @@
 <script lang="ts">
   import { playerState } from "../lib/stores/playback";
-  import { fetchTracksByIDs, isLocalId } from "../lib/stores/library";
+  import { fetchTracksByIDs } from "../lib/stores/library";
   import { closePanel } from "../lib/stores/ui";
   import { formatDuration } from "@pneuma/shared";
   import { artworkUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
-  import type { Track } from "../lib/types";
+  import { type Track, isLocalID } from "@pneuma/shared";
 
-  $: queue = ($playerState.queue ?? []).filter((id) => !isLocalId(id));
+  $: queue = ($playerState.queue ?? []).filter((id) => !isLocalID(id));
   $: currentIndex = $playerState.queueIndex ?? 0;
   $: nowPlayingTrack = $playerState.track;
 

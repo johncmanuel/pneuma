@@ -20,10 +20,10 @@
   import Playlists from "./lib/Playlists.svelte";
   import SearchBar from "./lib/SearchBar.svelte";
   import Queue from "./lib/Queue.svelte";
-  import Toasts from "./lib/Toasts.svelte";
   import Settings from "./lib/Settings.svelte";
   import DisconnectBanner from "./lib/DisconnectBanner.svelte";
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
+  import { Toasts } from "@pneuma/ui";
 
   let wasConnected = false;
   let searchBar: SearchBar;

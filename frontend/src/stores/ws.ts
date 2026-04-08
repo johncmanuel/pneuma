@@ -1,6 +1,6 @@
 import { writable } from "svelte/store";
 import { playerState } from "./player";
-import type { Track } from "./player";
+import { type Track, addToast } from "@pneuma/shared";
 import { loadRemoteAlbumGroupsPage, tracks } from "./library";
 import { loadPlaylists, selectPlaylist, selectedPlaylistId } from "./playlists";
 import {
@@ -11,8 +11,6 @@ import {
   autoReconnect,
   deviceId
 } from "../utils/api";
-import { addToast } from "./toasts";
-import { isLocalId } from "./localLibrary";
 import { get } from "svelte/store";
 import { RefreshPlaylistArtByRemoteID } from "../../wailsjs/go/desktop/App";
 

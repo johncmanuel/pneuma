@@ -45,6 +45,10 @@
     inputEl?.select();
   }
 
+  export function hasResults() {
+    return trackResults.length > 0 || albumResults.length > 0;
+  }
+
   function onInput() {
     clearTimeout(debounce);
     debounce = window.setTimeout(async () => {

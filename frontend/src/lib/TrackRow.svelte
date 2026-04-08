@@ -9,6 +9,7 @@
     active?: boolean;
     hideAlbum?: boolean;
     isLocal?: boolean;
+    disableLocal?: boolean;
     dateAdded?: string;
     showRemove?: boolean;
     onplay?: (track: Track | null) => void;
@@ -22,6 +23,7 @@
     active,
     hideAlbum,
     isLocal,
+    disableLocal,
     dateAdded,
     showRemove,
     onplay,
@@ -46,7 +48,7 @@
   {showRemove}
   playlists={$playlists}
   offline={!isLocal && !$connected}
-  disableLocal={false}
+  disableLocal={disableLocal ?? false}
   {onplay}
   {onselect}
   {onaddtoqueue}

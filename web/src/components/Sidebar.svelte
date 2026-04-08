@@ -41,11 +41,11 @@
     ].sort((a, b) => (b.playedAt ?? 0) - (a.playedAt ?? 0))
   );
 
-  function handleNavClick(item: { id: string }) {
-    if (item.id === "__dashboard") {
+  function handleNavClick(id: string) {
+    if (id === "__dashboard") {
       window.location.href = "/dashboard";
     } else {
-      onnavigate?.(item.id);
+      onnavigate?.(id);
     }
   }
 

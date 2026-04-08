@@ -1,9 +1,11 @@
 import { writable, derived, get } from "svelte/store";
+import { decodeJWT, storageKeys } from "@pneuma/shared";
 
-const TOKEN_KEY = "pneuma_token";
+export type { UserClaims } from "@pneuma/shared";
 
-const stored =
-  typeof localStorage !== "undefined" ? localStorage.getItem(TOKEN_KEY) : null;
+const TOKEN_KEY = storageKeys.token;
+
+const stored = localStorage.getItem(TOKEN_KEY);
 
 /** JWT token */
 export const authToken = writable(stored ?? "");
@@ -12,43 +14,9 @@ export const loggedIn = derived(authToken, ($t) => $t.length > 0);
 
 // Persist token changes to localStorage
 authToken.subscribe((v) => {
-  if (typeof localStorage !== "undefined") {
-    if (v) localStorage.setItem(TOKEN_KEY, v);
-    else localStorage.removeItem(TOKEN_KEY);
-  }
+  if (v) localStorage.setItem(TOKEN_KEY, v);
+  else localStorage.removeItem(TOKEN_KEY);
 });
-
-export interface UserClaims {
-  user_id: string;
-  username: string;
-  is_admin: boolean;
-  can_upload: boolean;
-  can_edit: boolean;
-  can_delete: boolean;
-  exp: number;
-}
-
-/** Decode and read JWT payload. Offload verification to the server. */
-function decodeJWT(token: string): UserClaims | null {
-  try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const payload = JSON.parse(
-      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
-    );
-    return {
-      user_id: payload.user_id ?? "",
-      username: payload.username ?? "",
-      is_admin: !!payload.is_admin,
-      can_upload: !!payload.can_upload,
-      can_edit: !!payload.can_edit,
-      can_delete: !!payload.can_delete,
-      exp: payload.exp ?? 0
-    };
-  } catch {
-    return null;
-  }
-}
 
 /** Reactive current user decoded from the JWT. */
 export const currentUser = derived(authToken, ($t) =>

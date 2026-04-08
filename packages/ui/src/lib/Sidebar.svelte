@@ -41,7 +41,7 @@
       <li>
         <button
           class:active={activeView === item.id}
-          onclick={() => onnavigate?.(item)}
+          onclick={() => onnavigate?.(item.id)}
         >
           {item.label}
         </button>

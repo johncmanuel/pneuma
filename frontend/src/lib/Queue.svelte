@@ -1,12 +1,17 @@
 <script lang="ts">
-  import { playerState, type Track, isRemoteTrack } from "../stores/player";
+  import {
+    isRemoteTrack,
+    formatDuration,
+    type Track,
+    isLocalID,
+    addToast
+  } from "@pneuma/shared";
+  import { playerState } from "../stores/player";
   import { fetchTracksByIDs } from "../stores/library";
-  import { resolveLocalTracksByPaths, isLocalId } from "../stores/localLibrary";
+  import { resolveLocalTracksByPaths } from "../stores/localLibrary";
   import { closePanel } from "../stores/ui";
-  import { formatDuration } from "@pneuma/shared";
   import { artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
-  import { addToast } from "../stores/toasts";
 
   $: queue = $playerState.queue ?? [];
   $: currentIndex = $playerState.queueIndex ?? 0;
@@ -92,7 +97,7 @@
 
   function playFromQueue(track: Track, idx: number) {
     const newIndex = currentIndex + 1 + idx;
-    const isLocalTrack = isLocalId(track.id);
+    const isLocalTrack = isLocalID(track.id);
 
     // Don't play offline tracks - skip to next available
     if (!isLocalTrack && isRemoteTrack(track.id) && !$connected) {

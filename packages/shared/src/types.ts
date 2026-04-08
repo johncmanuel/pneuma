@@ -1,4 +1,13 @@
-export type RepeatMode = 0 | 1 | 2; // Off | Queue | One
+export const RepeatModeEnum = {
+  Off: 0,
+  All: 1,
+  One: 2
+} as const;
+
+export const RepeatLabels = ["Off", "All", "One"];
+
+export type RepeatModeEnum =
+  (typeof RepeatModeEnum)[keyof typeof RepeatModeEnum];
 
 export interface Track {
   id: string;
@@ -51,6 +60,23 @@ export interface PlaylistSummary {
   updated_at: string;
 }
 
+export interface LocalPlaylistSummary {
+  id: string;
+  name: string;
+  description: string;
+  artwork_path: string;
+  remote_playlist_id: string;
+  item_count: number;
+  total_duration_ms: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlaylistMenuItem {
+  id: string;
+  name: string;
+}
+
 export interface PlaylistItem {
   track_id: string;
   position: number;
@@ -63,13 +89,19 @@ export interface PlaylistItem {
   missing: boolean;
 }
 
+export interface LocalPlaylistItem extends PlaylistItem {
+  source: "remote" | "local_ref";
+  local_path: string;
+  resolved: boolean;
+}
+
 export interface PlaybackState {
   playing: boolean;
   track_id: string;
   position_ms: number;
   queue: string[];
   queue_index: number;
-  repeat: RepeatMode;
+  repeat: RepeatModeEnum;
   shuffle: boolean;
 }
 
@@ -81,7 +113,7 @@ export interface PlayerState {
   queueIndex: number;
   positionMs: number;
   paused: boolean;
-  repeat: RepeatMode;
+  repeat: RepeatModeEnum;
   shuffle: boolean;
 }
 

@@ -11,9 +11,16 @@ import {
   UnwatchLocalFolder
 } from "../../wailsjs/go/desktop/App";
 import { EventsOn } from "../../wailsjs/runtime/runtime";
-import { authToken, decodeJWTUserId } from "../utils/api";
-import { playerState, type Track } from "./player";
-import { addToast } from "./toasts";
+import { authToken } from "../utils/api";
+import {
+  decodeJWTUserId,
+  localTrackToSharedTrack,
+  isLocalID,
+  getScopedLocalFoldersKey,
+  type Track,
+  addToast
+} from "@pneuma/shared";
+import { playerState } from "./player";
 
 export interface LocalTrack {
   path: string;
@@ -30,16 +37,6 @@ export interface LocalTrack {
 }
 
 /**
- * Returns true if the given ID looks like a local filesystem path
- * (Unix absolute path or Windows drive letter, e.g. C:\).
- */
-export function isLocalId(id: string): boolean {
-  return id.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(id);
-}
-
-const LOCAL_FOLDERS_KEY_PREFIX = "pneuma_local_folders";
-
-/**
  * Returns the localStorage key for local folders, scoped by the current
  * user's ID from the JWT token. Falls back to "default" when no token
  * is available so folders can still be managed while disconnected.
@@ -47,7 +44,7 @@ const LOCAL_FOLDERS_KEY_PREFIX = "pneuma_local_folders";
 function getLocalFoldersKey(): string {
   const token = get(authToken);
   const userId = decodeJWTUserId(token);
-  return `${LOCAL_FOLDERS_KEY_PREFIX}_${userId ?? "default"}`;
+  return getScopedLocalFoldersKey(userId);
 }
 
 let _initialized = false;
@@ -55,8 +52,9 @@ let _initialized = false;
 export const localFolders = writable<string[]>([]);
 
 localFolders.subscribe((v) => {
-  if (_initialized)
+  if (_initialized) {
     localStorage.setItem(getLocalFoldersKey(), JSON.stringify(v));
+  }
 });
 
 export const localTracks = writable<LocalTrack[]>([]);
@@ -134,7 +132,7 @@ async function injectTrackIntoQueue(newTrack: LocalTrack) {
   if (!s.trackId || !s.track) return;
 
   // Only act on local-track queues (IDs are filesystem paths).
-  if (!isLocalId(s.trackId)) return;
+  if (!isLocalID(s.trackId)) return;
 
   // Match by album name + album artist (same logic as Go getLocalAlbumTracks).
   if (
@@ -345,16 +343,17 @@ export async function resolveLocalTracksByPaths(
  * Load all persisted local-library state from localStorage into the Svelte stores.
  */
 export async function initLocalLibrary(): Promise<void> {
-  const foldersRaw = localStorage.getItem(getLocalFoldersKey());
+  let folders: string[] = [];
+  const raw = localStorage.getItem(getLocalFoldersKey());
+  if (raw) {
+    try {
+      folders = JSON.parse(raw) as string[];
+    } catch {
+      localStorage.removeItem(getLocalFoldersKey());
+    }
+  }
 
   _initialized = true;
-
-  let folders: string[] = [];
-  try {
-    if (foldersRaw) folders = JSON.parse(foldersRaw);
-  } catch {
-    console.warn("Failed to parse local folders from localStorage");
-  }
 
   localFolders.set(folders);
 
@@ -511,21 +510,5 @@ export async function scanLocalFolders() {
 }
 
 export function localTrackToTrack(t: LocalTrack): Track {
-  return {
-    id: t.path,
-    path: t.path,
-    title: t.title,
-    artist_id: "",
-    album_id: "",
-    artist_name: t.artist,
-    album_artist: t.album_artist,
-    album_name: t.album,
-    genre: t.genre,
-    year: t.year,
-    track_number: t.track_number,
-    disc_number: t.disc_number,
-    duration_ms: t.duration_ms,
-    bitrate_kbps: 0,
-    artwork_id: ""
-  };
+  return localTrackToSharedTrack(t);
 }

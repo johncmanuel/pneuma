@@ -12,47 +12,32 @@ import {
   PickPlaylistArtwork,
   GenerateRandomPlaylist
 } from "../../wailsjs/go/desktop/App";
-import { addToast } from "./toasts";
-import { playerState, type Track } from "./player";
+import {
+  localTrackToSharedTrack,
+  type LocalPlaylistItem,
+  type LocalPlaylistSummary,
+  type Track,
+  isLocalID,
+  addToast
+} from "@pneuma/shared";
+import { playerState } from "./player";
 import { fetchTracksByIDs } from "./library";
-import { resolveLocalTracksByPaths, isLocalId } from "./localLibrary";
+import { resolveLocalTracksByPaths } from "./localLibrary";
 import { recordRecentPlaylist, removeRecentPlaylist } from "./recentAlbums";
 import { wsSend } from "./ws";
 import { serverFetch } from "../utils/api";
 
-export interface PlaylistSummary {
-  id: string;
-  name: string;
-  description: string;
-  artwork_path: string;
-  remote_playlist_id: string;
-  item_count: number;
-  total_duration_ms: number;
-  created_at: string;
-  updated_at: string;
-}
+export type { LocalPlaylistSummary as PlaylistSummary } from "@pneuma/shared";
+export type { LocalPlaylistItem as PlaylistItem } from "@pneuma/shared";
+export type { PlaylistMenuItem } from "@pneuma/shared";
 
-export interface PlaylistItem {
-  position: number;
-  source: "remote" | "local_ref";
-  track_id: string;
-  local_path: string;
-  ref_title: string;
-  ref_album: string;
-  ref_album_artist: string;
-  ref_duration_ms: number;
-  added_at: string;
-  resolved: boolean;
-  missing: boolean;
-}
-
-export const playlists = writable<PlaylistSummary[]>([]);
+export const playlists = writable<LocalPlaylistSummary[]>([]);
 
 export const selectedPlaylistId = writable<string | null>(null);
 
-export const selectedPlaylistItems = writable<PlaylistItem[]>([]);
+export const selectedPlaylistItems = writable<LocalPlaylistItem[]>([]);
 
-export const selectedPlaylist = writable<PlaylistSummary | null>(null);
+export const selectedPlaylist = writable<LocalPlaylistSummary | null>(null);
 
 export const playlistsLoading = writable(false);
 
@@ -62,7 +47,7 @@ export const playingPlaylistId = writable<string | null>(null);
 export async function loadPlaylists() {
   try {
     const list = await GetLocalPlaylists();
-    playlists.set(list ?? []);
+    playlists.set((list ?? []) as LocalPlaylistSummary[]);
   } catch (e: any) {
     console.error("loadPlaylists:", e);
   }
@@ -138,7 +123,9 @@ export async function selectPlaylist(id: string) {
     const summary = list.find((p) => p.id === id) ?? null;
     selectedPlaylist.set(summary);
 
-    const items = (await ResolvePlaylistItems(id)) as PlaylistItem[] | null;
+    const items = (await ResolvePlaylistItems(id)) as
+      | LocalPlaylistItem[]
+      | null;
     selectedPlaylistItems.set(items ?? []);
   } catch (e: any) {
     console.error("selectPlaylist:", e);
@@ -165,13 +152,13 @@ export async function addTrackToPlaylist(
   const playlistName = pl?.name ?? "playlist";
 
   // use cached items if this is the selected playlist, else fetch them.
-  let currentItems: PlaylistItem[];
+  let currentItems: LocalPlaylistItem[];
   if (get(selectedPlaylistId) === playlistId) {
     currentItems = get(selectedPlaylistItems);
   } else {
     try {
       currentItems = ((await GetLocalPlaylistItems(playlistId)) ??
-        []) as PlaylistItem[];
+        []) as LocalPlaylistItem[];
     } catch {
       currentItems = [];
     }
@@ -244,13 +231,13 @@ export async function addTracksToPlaylist(
   const playlistName = pl?.name ?? "playlist";
 
   // Fetch current items once for duplicate detection.
-  let currentItems: PlaylistItem[];
+  let currentItems: LocalPlaylistItem[];
   if (get(selectedPlaylistId) === playlistId) {
     currentItems = get(selectedPlaylistItems);
   } else {
     try {
       currentItems = ((await GetLocalPlaylistItems(playlistId)) ??
-        []) as PlaylistItem[];
+        []) as LocalPlaylistItem[];
     } catch {
       currentItems = [];
     }
@@ -310,7 +297,7 @@ export async function addTracksToPlaylist(
 
 export async function reorderPlaylistItems(
   playlistId: string,
-  items: PlaylistItem[]
+  items: LocalPlaylistItem[]
 ) {
   try {
     const reindexed = items.map((item, i) => ({ ...item, position: i }));
@@ -368,7 +355,7 @@ export async function uploadPlaylist(playlistId: string) {
 
 /** Play a playlist from a given index (builds queue from playlist items). */
 export async function playPlaylist(
-  items: PlaylistItem[],
+  items: LocalPlaylistItem[],
   startIndex: number,
   playlistId?: string
 ) {
@@ -416,27 +403,11 @@ export async function playPlaylist(
   const startId = validIds[adjustedStart];
   let startTrack: Track | null = null;
   try {
-    if (isLocalId(startId)) {
+    if (isLocalID(startId)) {
       const locals = await resolveLocalTracksByPaths([startId]);
       if (locals.length > 0) {
         const lt = locals[0];
-        startTrack = {
-          id: lt.path,
-          path: lt.path,
-          title: lt.title,
-          artist_id: "",
-          album_id: "",
-          artist_name: lt.artist,
-          album_artist: lt.album_artist,
-          album_name: lt.album,
-          genre: lt.genre,
-          year: lt.year,
-          track_number: lt.track_number,
-          disc_number: lt.disc_number,
-          duration_ms: lt.duration_ms,
-          bitrate_kbps: 0,
-          artwork_id: ""
-        } as Track;
+        startTrack = localTrackToSharedTrack(lt);
       }
     } else {
       const remotes = await fetchTracksByIDs([startId]);
@@ -460,8 +431,8 @@ export async function playPlaylist(
   // state from the previous play, and a subsequent seek causes the server
   // to echo back the wrong track_id which switches playback to a different
   // song. Only send for remote tracks (local paths are unknown to the server).
-  if (!isLocalId(startId)) {
-    const queueAllRemote = validIds.every((id) => !isLocalId(id));
+  if (!isLocalID(startId)) {
+    const queueAllRemote = validIds.every((id) => !isLocalID(id));
     if (queueAllRemote) {
       wsSend("playback.queue", {
         track_ids: validIds,

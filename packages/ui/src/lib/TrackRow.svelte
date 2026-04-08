@@ -2,7 +2,12 @@
   import { formatDuration, portal } from "@pneuma/shared";
   import { onDestroy } from "svelte";
   import { ChevronRight } from "@lucide/svelte";
-  import type { Track, PlaylistSummary } from "@pneuma/shared";
+  import type { Track } from "@pneuma/shared";
+
+  interface PlaylistMenuItem {
+    id: string;
+    name: string;
+  }
 
   interface Props {
     track?: Track | null;
@@ -13,7 +18,7 @@
     isLocal?: boolean;
     offline?: boolean;
     disableLocal?: boolean;
-    playlists?: PlaylistSummary[];
+    playlists?: PlaylistMenuItem[];
     onplay?: (track: Track | null) => void;
     onselect?: () => void;
     onaddtoqueue?: (track: Track | null) => void;
@@ -78,7 +83,7 @@
     showMenu = false;
   }
 
-  function handleAddToPlaylist(pl: PlaylistSummary) {
+  function handleAddToPlaylist(pl: PlaylistMenuItem) {
     onaddtoplaylist?.(track, pl.id);
     showMenu = false;
     showPlaylistSub = false;

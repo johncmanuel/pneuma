@@ -1,7 +1,7 @@
 <script lang="ts">
   import { login } from "../lib/api";
   import { pushNav } from "../lib/stores/ui";
-  import { addToast } from "../lib/stores/toasts";
+  import { addToast } from "@pneuma/shared";
 
   let { onswitch }: { onswitch?: () => void } = $props();
 
