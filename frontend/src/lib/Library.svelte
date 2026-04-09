@@ -46,7 +46,7 @@
   import {
     playlists,
     addTracksToPlaylist,
-    isTrackFavorited,
+    favoriteTrackIDs,
     toggleFavoriteTrack,
     visiblePlaylistsForAddMenu,
     type PlaylistSummary
@@ -634,7 +634,7 @@
                     track={filteredAlbumDetailTracks[row.index]}
                     hideAlbum={true}
                     isLocal={currentAlbumGroup?.isLocal ?? false}
-                    isFavorite={isTrackFavorited(
+                    isFavorite={$favoriteTrackIDs.has(
                       filteredAlbumDetailTracks[row.index]?.id ?? ""
                     )}
                     active={$currentTrackId ===

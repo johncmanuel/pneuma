@@ -20,8 +20,9 @@
     pickPlaylistArtwork,
     generateRandomPlaylist,
     isFavoritesPlaylist,
-    isTrackFavorited,
+    favoriteTrackIDs,
     toggleFavoriteTrack,
+    syncFavoritesFromServer,
     type PlaylistItem,
     type PlaylistSummary
   } from "../stores/playlists";
@@ -32,7 +33,7 @@
   import TrackRow from "./TrackRow.svelte";
   import SortButton from "./SortButton.svelte";
   import "../assets/css/track-list.css";
-  import { totalDuration, type Track } from "@pneuma/shared";
+  import { addToast, totalDuration, type Track } from "@pneuma/shared";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -217,6 +218,24 @@
     generateUseRemote = false;
   }
 
+  let syncingFavorites = false;
+
+  async function handleForceSync() {
+    syncingFavorites = true;
+    try {
+      await syncFavoritesFromServer();
+      await loadPlaylists();
+      if ($selectedPlaylistId) {
+        await selectPlaylist($selectedPlaylistId);
+      }
+      addToast("Favorites synchronized", "success");
+    } catch (e: any) {
+      addToast(`Failed to sync favorites: ${e}`, "error");
+    } finally {
+      syncingFavorites = false;
+    }
+  }
+
   async function handleGenerate() {
     if (!generateName.trim() || generateDuration < 1) return;
 
@@ -342,6 +361,14 @@
             on:click={() => startEdit($selectedPlaylist)}>Edit</button
           >
         {/if}
+        {#if selectedIsFavorites && $connected}
+          <button
+            class="action-btn"
+            on:click={handleForceSync}
+            disabled={syncingFavorites}
+            >{syncingFavorites ? "Syncing..." : "Force Sync"}</button
+          >
+        {/if}
         {#if !selectedIsFavorites && $connected && !$selectedPlaylist.remote_playlist_id}
           <button class="action-btn" on:click={handleUpload}
             >Upload to Server</button
@@ -422,7 +449,8 @@
                 dateAdded={formatDate(item.added_at)}
                 showRemove={true}
                 isLocal={item.source === "local_ref"}
-                isFavorite={isTrackFavorited(track.id)}
+                isFavorite={$favoriteTrackIDs.has(track.id)}
+                hideFavoriteIcon={selectedIsFavorites}
                 disableLocal={false}
                 onplay={() => handlePlay(item)}
                 onaddtoqueue={(t) => {}}

@@ -94,6 +94,10 @@ export function IsConnected() {
   return window['go']['desktop']['App']['IsConnected']();
 }
 
+export function LinkLocalPlaylistToRemote(arg1, arg2) {
+  return window['go']['desktop']['App']['LinkLocalPlaylistToRemote'](arg1, arg2);
+}
+
 export function LoadPlaybackSession() {
   return window['go']['desktop']['App']['LoadPlaybackSession']();
 }

@@ -1,6 +1,9 @@
 <script lang="ts">
   import { TrackRow } from "@pneuma/ui";
-  import { visiblePlaylistsForAddMenu } from "../lib/stores/playlists";
+  import {
+    visiblePlaylistsForAddMenu,
+    favoriteTrackIDs
+  } from "../lib/stores/playlists";
   import type { Track, PlaylistSummary } from "@pneuma/shared";
 
   interface Props {
@@ -10,7 +13,7 @@
     dateAdded?: string;
     showRemove?: boolean;
     isLocal?: boolean;
-    isFavorite?: boolean;
+    hideFavoriteIcon?: boolean;
     playlists?: PlaylistSummary[];
     onplay?: (track: Track | null) => void;
     onselect?: () => void;
@@ -27,7 +30,7 @@
     dateAdded,
     showRemove,
     isLocal,
-    isFavorite,
+    hideFavoriteIcon,
     playlists,
     onplay,
     onselect,
@@ -36,6 +39,8 @@
     onaddtoplaylist,
     onToggleFavorite
   }: Props = $props();
+
+  const isFavorite = $derived($favoriteTrackIDs.has(track?.id ?? ""));
 </script>
 
 <TrackRow
@@ -46,6 +51,7 @@
   {showRemove}
   {isLocal}
   {isFavorite}
+  {hideFavoriteIcon}
   playlists={visiblePlaylistsForAddMenu(playlists ?? [])}
   {onplay}
   {onselect}

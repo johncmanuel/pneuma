@@ -10,6 +10,7 @@ import {
   ResolvePlaylistItems,
   SetLocalPlaylistItems,
   UpdateLocalPlaylist,
+  LinkLocalPlaylistToRemote,
   UploadPlaylistToServer
 } from "../../wailsjs/go/desktop/App";
 import {
@@ -329,7 +330,7 @@ async function ensureRemoteFavoritesPlaylist(): Promise<string | null> {
     method: "POST",
     body: JSON.stringify({
       name: favoritesPlaylistName,
-      description: ""
+      description: favoritesPlaylistMarker
     })
   });
   if (!createRes.ok) return null;
@@ -419,6 +420,10 @@ export async function ensureFavoritesPlaylist(): Promise<string | null> {
   const existing = findFavoritesPlaylist(hydrated);
 
   if (existing?.id) {
+    if (remoteID && existing.remote_playlist_id !== remoteID) {
+      await LinkLocalPlaylistToRemote(existing.id, remoteID);
+      await hydrateLocalPlaylistsState();
+    }
     return existing.id;
   }
 
@@ -504,6 +509,16 @@ export async function toggleFavoriteTrack(track: Track | null) {
 
   const localAlreadyFavorite = Boolean(localExisting);
 
+  // flip the heart icon prior to calling the server
+  const prevIDs = get(favoriteTrackIDs);
+  const optimisticIDs = new Set(prevIDs);
+  if (localAlreadyFavorite) {
+    optimisticIDs.delete(track.id);
+  } else {
+    optimisticIDs.add(track.id);
+  }
+  favoriteTrackIDs.set(optimisticIDs);
+
   const canSyncRemote = shouldSyncFavoritesToServer() && !isLocalTrack;
   let wasRemoved = localAlreadyFavorite;
 
@@ -514,6 +529,7 @@ export async function toggleFavoriteTrack(track: Track | null) {
       get(favoritesRemotePlaylistId) ?? (await ensureRemoteFavoritesPlaylist());
     if (!remoteID) {
       console.error("Failed to update favorites: no remote favorites playlist");
+      favoriteTrackIDs.set(prevIDs);
       addToast("Failed to update Favorites", "error");
       return;
     }
@@ -523,6 +539,7 @@ export async function toggleFavoriteTrack(track: Track | null) {
       console.error(
         "Failed to update favorites: failed to read remote favorites playlist"
       );
+      favoriteTrackIDs.set(prevIDs);
       addToast("Failed to update Favorites", "error");
       return;
     }
@@ -553,6 +570,7 @@ export async function toggleFavoriteTrack(track: Track | null) {
       console.error(
         "Failed to update favorites: failed to write remote favorites playlist"
       );
+      favoriteTrackIDs.set(prevIDs);
       addToast("Failed to update Favorites", "error");
       return;
     }
@@ -606,10 +624,18 @@ export async function toggleFavoriteTrack(track: Track | null) {
   );
 }
 
-/** Load all local playlists from the desktop DB. */
 export async function loadPlaylists() {
   try {
-    await hydrateLocalPlaylistsState();
+    const list = await hydrateLocalPlaylistsState();
+    if (!findFavoritesPlaylist(list)) {
+      await CreateLocalPlaylist(
+        favoritesPlaylistName,
+        favoritesPlaylistMarker
+      ).catch((e) =>
+        console.error("Failed to create local favorites playlist:", e)
+      );
+      await hydrateLocalPlaylistsState();
+    }
   } catch (e: any) {
     console.error("loadPlaylists:", e);
   }

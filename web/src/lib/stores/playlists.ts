@@ -176,8 +176,20 @@ export async function toggleFavoriteTrack(track: Track | null) {
     return;
   }
 
+  // flip the heart icon prior to calling the server
+  const prevIDs = get(favoriteTrackIDs);
+  const optimisticIDs = new Set(prevIDs);
+  const locallyFavorited = prevIDs.has(track.id);
+  if (locallyFavorited) {
+    optimisticIDs.delete(track.id);
+  } else {
+    optimisticIDs.add(track.id);
+  }
+  favoriteTrackIDs.set(optimisticIDs);
+
   const res = await apiFetch(`/api/playlists/${favoritesID}/items`);
   if (!res.ok) {
+    favoriteTrackIDs.set(prevIDs);
     addToast("Failed to update Favorites", "error");
     return;
   }
@@ -204,6 +216,7 @@ export async function toggleFavoriteTrack(track: Track | null) {
     body: JSON.stringify(nextItems)
   });
   if (!write.ok) {
+    favoriteTrackIDs.set(prevIDs);
     addToast("Failed to update Favorites", "error");
     return;
   }

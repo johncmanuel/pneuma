@@ -14,7 +14,6 @@
   import { selectedAlbum, pushNav } from "../lib/stores/ui";
   import {
     handleAddToPlaylist,
-    isTrackFavorited,
     playlists as playlistsStore,
     toggleFavoriteTrack
   } from "../lib/stores/playlists";
@@ -279,9 +278,6 @@
                     track={filteredTracks[row.index]}
                     hideAlbum={true}
                     active={$currentTrackId === filteredTracks[row.index]?.id}
-                    isFavorite={isTrackFavorited(
-                      filteredTracks[row.index]?.id ?? ""
-                    )}
                     playlists={$playlistsStore}
                     onplay={(t) => t && playTrack(t)}
                     onselect={() => {}}

@@ -15,6 +15,7 @@
     isLocal?: boolean;
     disableLocal?: boolean;
     isFavorite?: boolean;
+    hideFavoriteIcon?: boolean;
     dateAdded?: string;
     showRemove?: boolean;
     onplay?: (track: Track | null) => void;
@@ -31,6 +32,7 @@
     isLocal,
     disableLocal,
     isFavorite,
+    hideFavoriteIcon,
     dateAdded,
     showRemove,
     onplay,
@@ -53,6 +55,7 @@
   {hideAlbum}
   {isLocal}
   {isFavorite}
+  {hideFavoriteIcon}
   {dateAdded}
   {showRemove}
   playlists={visiblePlaylistsForAddMenu($playlists)}

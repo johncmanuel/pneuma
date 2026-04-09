@@ -4,7 +4,6 @@
   import { derived } from "svelte/store";
   import {
     isFavoritesPlaylist,
-    isTrackFavorited,
     playlists,
     selectedPlaylist,
     selectedPlaylistItems,
@@ -379,7 +378,7 @@
                 dateAdded={formatDate(item.added_at)}
                 showRemove={true}
                 isLocal={item.source === "local_ref"}
-                isFavorite={isTrackFavorited(track.id)}
+                hideFavoriteIcon={selectedIsFavorites}
                 playlists={$playlists}
                 onplay={() => handlePlay(item)}
                 onselect={() => {}}
