@@ -146,7 +146,7 @@
   <div class="ctx-menu" use:portal style="left:{menuX}px;top:{menuY}px">
     {#if !isLocal || !disableLocal}
       <button onclick={handleAddToQueue}>Add to queue</button>
-      {#if !isLocal && onToggleFavorite}
+      {#if onToggleFavorite}
         <button onclick={handleToggleFavorite}
           >{isFavorite ? "Unfavorite" : "Favorite"}</button
         >
