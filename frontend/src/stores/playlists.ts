@@ -18,6 +18,7 @@ import {
   favoriteItemKey,
   favoriteTrackIDsFromItems,
   findFavoritesPlaylist,
+  favoritesPlaylistMarker,
   favoritesPlaylistName,
   hasSameFavoriteKeyOrder,
   isFavoritesPlaylistMeta,
@@ -305,17 +306,16 @@ async function ensureRemoteFavoritesPlaylist(): Promise<string | null> {
       }
     }
 
-    // if the canonical favorites playlist is not named
-    // "Favorites" or has a description, rename it
+    // ensure the canonical favorites playlist has the right name and marker
     if (
       canonical.name !== favoritesPlaylistName ||
-      (canonical.description ?? "") !== ""
+      (canonical.description ?? "") !== favoritesPlaylistMarker
     ) {
       await serverFetch(`/api/playlists/${canonical.id}`, {
         method: "PUT",
         body: JSON.stringify({
           name: favoritesPlaylistName,
-          description: ""
+          description: favoritesPlaylistMarker
         })
       });
     }
@@ -422,9 +422,10 @@ export async function ensureFavoritesPlaylist(): Promise<string | null> {
     return existing.id;
   }
 
-  const created = await CreateLocalPlaylist(favoritesPlaylistName, "").catch(
-    () => null
-  );
+  const created = await CreateLocalPlaylist(
+    favoritesPlaylistName,
+    favoritesPlaylistMarker
+  ).catch(() => console.error("Failed to create local favorites playlist"));
   if (!created) return null;
 
   await hydrateLocalPlaylistsState();
@@ -615,10 +616,6 @@ export async function loadPlaylists() {
 }
 
 export async function createPlaylist(name: string, description = "") {
-  if (isFavoritesPlaylistMeta(name, description)) {
-    return await ensureFavoritesPlaylist();
-  }
-
   try {
     const pl = await CreateLocalPlaylist(name, description);
     if (pl) {
@@ -1077,7 +1074,30 @@ export async function generateRandomPlaylist(
   return null;
 }
 
+// add the __pneuma_favorites__ marker to any name-only favorites playlists
+// that were created before marker-only detection was introduced
+async function migrateNameOnlyFavoritesPlaylists(list: LocalPlaylistSummary[]) {
+  const nameOnly = list.filter(
+    (pl) =>
+      pl.name.trim().toLowerCase() === favoritesPlaylistName.toLowerCase() &&
+      pl.description !== favoritesPlaylistMarker
+  );
+  await Promise.all(
+    nameOnly.map((pl) =>
+      UpdateLocalPlaylist(
+        pl.id,
+        pl.name,
+        favoritesPlaylistMarker,
+        pl.artwork_path ?? ""
+      )
+    )
+  );
+}
+
 export async function initPlaylists() {
+  const initial = ((await GetLocalPlaylists()) ?? []) as LocalPlaylistSummary[];
+  await migrateNameOnlyFavoritesPlaylists(initial);
+
   await loadPlaylists();
   if (shouldSyncFavoritesToServer()) {
     await syncFavoritesFromServer();

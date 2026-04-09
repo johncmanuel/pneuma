@@ -5,6 +5,7 @@ import {
   dedupeFavoriteTrackItems,
   favoriteTrackIDsFromItems,
   findFavoritesPlaylist,
+  favoritesPlaylistMarker,
   favoritesPlaylistName,
   isFavoritesPlaylistMeta,
   isFavoritesPlaylist as isFavoritesPlaylistShared,
@@ -51,7 +52,7 @@ async function normalizeFavoritesOnServer(
       method: "POST",
       body: JSON.stringify({
         name: favoritesPlaylistName,
-        description: ""
+        description: favoritesPlaylistMarker
       })
     });
 
@@ -79,15 +80,16 @@ async function normalizeFavoritesOnServer(
     }
   }
 
+  // ensure the canonical favorites playlist has the right name and marker
   if (
     canonical.name !== favoritesPlaylistName ||
-    (canonical.description ?? "") !== ""
+    (canonical.description ?? "") !== favoritesPlaylistMarker
   ) {
     await apiFetch(`/api/playlists/${canonical.id}`, {
       method: "PUT",
       body: JSON.stringify({
         name: favoritesPlaylistName,
-        description: ""
+        description: favoritesPlaylistMarker
       })
     });
   }
@@ -268,10 +270,6 @@ export async function createPlaylist(
   name: string,
   description: string
 ): Promise<string | null> {
-  if (isFavoritesPlaylistMeta(name, description)) {
-    return await ensureFavoritesPlaylist();
-  }
-
   const r = await apiFetch("/api/playlists", {
     method: "POST",
     body: JSON.stringify({ name, description })
@@ -331,6 +329,7 @@ export async function addTracksToPlaylist(playlistId: string, tracks: Track[]) {
       : await (async () => {
           const r = await apiFetch(`/api/playlists/${playlistId}/items`);
           if (!r.ok) return [] as PlaylistItem[];
+
           const data = await r.json();
           return Array.isArray(data) ? data : (data.items ?? []);
         })();

@@ -25,13 +25,8 @@ export function isFavoritesPlaylistMeta(
   name: string | null | undefined,
   description: string | null | undefined
 ): boolean {
-  const normalizedName = (name ?? "").trim().toLowerCase();
   const normalizedDescription = (description ?? "").trim();
-
-  return (
-    normalizedDescription === favoritesPlaylistMarker ||
-    normalizedName === favoritesPlaylistName.toLowerCase()
-  );
+  return normalizedDescription === favoritesPlaylistMarker;
 }
 
 export function isFavoritesPlaylist(
