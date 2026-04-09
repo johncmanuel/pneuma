@@ -1,8 +1,12 @@
 <script lang="ts">
   import { Sidebar } from "@pneuma/ui";
   import { currentUser, artworkUrl, playlistArtUrl } from "../lib/api";
+  import {
+    ensureFavoritesPlaylist,
+    favoritesPlaylistId
+  } from "../lib/stores/playlists";
   import { recentAlbums, recentPlaylists } from "../lib/stores/recent";
-  import { pushNav } from "../lib/stores/ui";
+  import { pushNav, selectedPlaylistView } from "../lib/stores/ui";
 
   interface Props {
     activeView?: string;
@@ -13,6 +17,7 @@
 
   const baseNavItems = [
     { id: "library", label: "Library" },
+    { id: "favorites", label: "Favorites" },
     { id: "playlists", label: "Playlists" }
   ];
 
@@ -20,6 +25,23 @@
     $currentUser?.is_admin
       ? [...baseNavItems, { id: "__dashboard", label: "Dashboard" }]
       : baseNavItems
+  );
+
+  let sidebarActiveView = $derived(
+    activeView === "playlists" &&
+      $selectedPlaylistView &&
+      $favoritesPlaylistId &&
+      $selectedPlaylistView === $favoritesPlaylistId
+      ? "favorites"
+      : activeView
+  );
+
+  let filteredRecentPlaylists = $derived(
+    $recentPlaylists.filter(
+      (p) =>
+        p.playlist_id !== $favoritesPlaylistId &&
+        p.name.trim().toLowerCase() !== "favorites"
+    )
   );
 
   let recentItems = $derived(
@@ -31,7 +53,7 @@
         artworkUrl: a.first_track_id ? artworkUrl(a.first_track_id) : undefined,
         playedAt: new Date(a.played_at).getTime()
       })),
-      ...$recentPlaylists.map((p) => ({
+      ...filteredRecentPlaylists.map((p) => ({
         key: "pl-" + p.playlist_id,
         name: p.name,
         sub: "Playlist",
@@ -41,9 +63,21 @@
     ].sort((a, b) => (b.playedAt ?? 0) - (a.playedAt ?? 0))
   );
 
-  function handleNavClick(id: string) {
+  $effect(() => {
+    ensureFavoritesPlaylist().catch((err) => {
+      console.error("Failed to ensure favorites playlist", err);
+    });
+  });
+
+  async function handleNavClick(id: string) {
     if (id === "__dashboard") {
       window.location.href = "/dashboard";
+    } else if (id === "favorites") {
+      const favoritesID =
+        $favoritesPlaylistId ?? (await ensureFavoritesPlaylist());
+      if (favoritesID) {
+        pushNav({ view: "playlists", playlistId: favoritesID });
+      }
     } else {
       onnavigate?.(id);
     }
@@ -53,7 +87,7 @@
     if (item.key.startsWith("al-")) {
       pushNav({ view: "library", albumKey: item.key.replace("al-", "") });
     } else {
-      const pl = $recentPlaylists.find(
+      const pl = filteredRecentPlaylists.find(
         (p) => "pl-" + p.playlist_id === item.key
       );
       if (pl) pushNav({ view: "playlists", playlistId: pl.playlist_id });
@@ -62,7 +96,7 @@
 </script>
 
 <Sidebar
-  {activeView}
+  activeView={sidebarActiveView}
   {navItems}
   {recentItems}
   onnavigate={handleNavClick}

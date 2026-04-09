@@ -3,6 +3,7 @@
   import { createVirtualizer } from "@tanstack/svelte-virtual";
   import { derived } from "svelte/store";
   import {
+    favoritesPlaylistId,
     playlists,
     selectedPlaylistId,
     selectedPlaylist,
@@ -18,17 +19,21 @@
     updatePlaylist,
     pickPlaylistArtwork,
     generateRandomPlaylist,
+    isFavoritesPlaylist,
+    favoriteTrackIDs,
+    toggleFavoriteTrack,
+    syncFavoritesFromServer,
     type PlaylistItem,
     type PlaylistSummary
   } from "../stores/playlists";
   import { selectedPlaylistView, pushNav } from "../stores/ui";
   import { playerState } from "../stores/player";
   import { connected, playlistArtUrl } from "../utils/api";
-  import { Music, SquarePen } from "@lucide/svelte";
+  import { Heart, Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "./TrackRow.svelte";
   import SortButton from "./SortButton.svelte";
   import "../assets/css/track-list.css";
-  import { totalDuration, type Track } from "@pneuma/shared";
+  import { addToast, totalDuration, type Track } from "@pneuma/shared";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -47,6 +52,19 @@
   let editName = "";
   let editDesc = "";
   let trackListEl: HTMLDivElement;
+  let selectedIsFavorites = false;
+
+  $: {
+    const selectedID =
+      $selectedPlaylist?.id ?? $selectedPlaylistId ?? $selectedPlaylistView;
+
+    selectedIsFavorites =
+      !!selectedID &&
+      (($favoritesPlaylistId != null && selectedID === $favoritesPlaylistId) ||
+        isFavoritesPlaylist($selectedPlaylist));
+  }
+
+  console.log("selectedIsFavorites", selectedIsFavorites);
 
   $: if ($selectedPlaylistView) {
     selectPlaylist($selectedPlaylistView);
@@ -91,6 +109,8 @@
 
       return sortDir === "desc" ? -cmp : cmp;
     });
+
+  $: visiblePlaylists = $playlists.filter((pl) => !isFavoritesPlaylist(pl));
 
   function itemToTrack(item: PlaylistItem): Track {
     const id =
@@ -198,6 +218,24 @@
     generateUseRemote = false;
   }
 
+  let syncingFavorites = false;
+
+  async function handleForceSync() {
+    syncingFavorites = true;
+    try {
+      await syncFavoritesFromServer();
+      await loadPlaylists();
+      if ($selectedPlaylistId) {
+        await selectPlaylist($selectedPlaylistId);
+      }
+      addToast("Favorites synchronized", "success");
+    } catch (e: any) {
+      addToast(`Failed to sync favorites: ${e}`, "error");
+    } finally {
+      syncingFavorites = false;
+    }
+  }
+
   async function handleGenerate() {
     if (!generateName.trim() || generateDuration < 1) return;
 
@@ -233,11 +271,15 @@
       <div class="detail-hero">
         <button
           class="detail-art"
-          on:click={() =>
-            $selectedPlaylistId && pickPlaylistArtwork($selectedPlaylistId)}
-          title="Change artwork"
+          class:favorites-art={selectedIsFavorites}
+          on:click={() => {
+            if (selectedIsFavorites) return;
+            if ($selectedPlaylistId) pickPlaylistArtwork($selectedPlaylistId);
+          }}
+          disabled={selectedIsFavorites}
+          title={selectedIsFavorites ? "Favorites" : "Change artwork"}
         >
-          {#if $selectedPlaylist.artwork_path}
+          {#if !selectedIsFavorites && $selectedPlaylist.artwork_path}
             <img
               src={playlistArtUrl($selectedPlaylist.artwork_path)}
               alt=""
@@ -246,10 +288,16 @@
               }}
             />
           {/if}
-          <span class="art-placeholder"><Music size={24} /></span>
-          <div class="art-overlay">
-            <SquarePen size={24} />
-          </div>
+          <span class="art-placeholder"
+            >{#if selectedIsFavorites}<Heart size={24} />{:else}<Music
+                size={24}
+              />{/if}</span
+          >
+          {#if !selectedIsFavorites}
+            <div class="art-overlay">
+              <SquarePen size={24} />
+            </div>
+          {/if}
         </button>
         <div class="detail-meta">
           {#if editingId === $selectedPlaylist.id}
@@ -272,15 +320,24 @@
             </div>
           {:else}
             <h1 class="detail-name">{$selectedPlaylist.name}</h1>
-            {#if $selectedPlaylist.description}
+            {#if !selectedIsFavorites && $selectedPlaylist.description}
               <p class="detail-desc">{$selectedPlaylist.description}</p>
             {/if}
+            <!-- {#if selectedIsFavorites} -->
             <p class="detail-info text-3">
               {$selectedPlaylistItems.length} songs
               {#if $selectedPlaylist.total_duration_ms}
                 &middot; {totalDuration($selectedPlaylist.total_duration_ms)}
               {/if}
             </p>
+            <!-- {:else}
+              <p class="detail-info text-3">
+                {$selectedPlaylistItems.length} songs
+                {#if $selectedPlaylist.total_duration_ms}
+                  &middot; {totalDuration($selectedPlaylist.total_duration_ms)}
+                {/if}
+              </p>
+            {/if} -->
           {/if}
         </div>
       </div>
@@ -298,27 +355,40 @@
         >
           Play
         </button>
-        <button class="action-btn" on:click={() => startEdit($selectedPlaylist)}
-          >Edit</button
-        >
-        {#if $connected && !$selectedPlaylist.remote_playlist_id}
+        {#if !selectedIsFavorites}
+          <button
+            class="action-btn"
+            on:click={() => startEdit($selectedPlaylist)}>Edit</button
+          >
+        {/if}
+        {#if selectedIsFavorites && $connected}
+          <button
+            class="action-btn"
+            on:click={handleForceSync}
+            disabled={syncingFavorites}
+            >{syncingFavorites ? "Syncing..." : "Force Sync"}</button
+          >
+        {/if}
+        {#if !selectedIsFavorites && $connected && !$selectedPlaylist.remote_playlist_id}
           <button class="action-btn" on:click={handleUpload}
             >Upload to Server</button
           >
-        {:else if $connected && $selectedPlaylist.remote_playlist_id}
+        {:else if !selectedIsFavorites && $connected && $selectedPlaylist.remote_playlist_id}
           <button class="action-btn" on:click={handleUpload}
             >Sync to Server</button
           >
         {/if}
-        <button
-          class="action-btn danger"
-          on:click={() => {
-            if (confirm("Delete this playlist?"))
-              deletePlaylist($selectedPlaylist.id);
-          }}
-        >
-          Delete
-        </button>
+        {#if !selectedIsFavorites}
+          <button
+            class="action-btn danger"
+            on:click={() => {
+              if (confirm("Delete this playlist?"))
+                deletePlaylist($selectedPlaylist.id);
+            }}
+          >
+            Delete
+          </button>
+        {/if}
         <div class="filter-spacer"></div>
         <input
           type="text"
@@ -379,10 +449,13 @@
                 dateAdded={formatDate(item.added_at)}
                 showRemove={true}
                 isLocal={item.source === "local_ref"}
+                isFavorite={$favoriteTrackIDs.has(track.id)}
+                hideFavoriteIcon={selectedIsFavorites}
                 disableLocal={false}
                 onplay={() => handlePlay(item)}
                 onaddtoqueue={(t) => {}}
                 onremove={() => handleRemove(item)}
+                onToggleFavorite={toggleFavoriteTrack}
               />
             </div>
           {/each}
@@ -503,13 +576,13 @@
       </div>
     {/if}
 
-    {#if $playlists.length === 0}
+    {#if visiblePlaylists.length === 0}
       <p class="text-3 empty-msg">
         No playlists yet. Create one to get started.
       </p>
     {:else}
       <div class="pl-grid">
-        {#each $playlists as pl (pl.id)}
+        {#each visiblePlaylists as pl (pl.id)}
           <button class="pl-card" on:click={() => openPlaylist(pl)}>
             <div class="pl-art">
               {#if pl.artwork_path}
@@ -686,6 +759,12 @@
     border: none;
     padding: 0;
   }
+  .detail-art.favorites-art {
+    cursor: default !important;
+  }
+  .detail-art:disabled {
+    cursor: default !important;
+  }
   .detail-art img {
     position: absolute;
     inset: 0;
@@ -707,6 +786,9 @@
   .detail-art:hover .art-overlay {
     opacity: 1;
   }
+  .detail-art.favorites-art:hover .art-overlay {
+    opacity: 0;
+  }
 
   .art-placeholder {
     font-size: 48px;
@@ -718,6 +800,11 @@
     flex-direction: column;
     justify-content: flex-end;
   }
+
+  /* .favorites-label {
+    margin: 8px 0 0;
+    font-size: 12px;
+  } */
 
   .detail-name {
     margin: 0;

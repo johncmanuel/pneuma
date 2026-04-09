@@ -1,7 +1,7 @@
 <script lang="ts">
   import { formatDuration, portal } from "@pneuma/shared";
   import { onDestroy } from "svelte";
-  import { ChevronRight } from "@lucide/svelte";
+  import { ChevronRight, Heart } from "@lucide/svelte";
   import type { Track } from "@pneuma/shared";
 
   interface PlaylistMenuItem {
@@ -18,12 +18,15 @@
     isLocal?: boolean;
     offline?: boolean;
     disableLocal?: boolean;
+    isFavorite?: boolean;
+    hideFavoriteIcon?: boolean;
     playlists?: PlaylistMenuItem[];
     onplay?: (track: Track | null) => void;
     onselect?: () => void;
     onaddtoqueue?: (track: Track | null) => void;
     onremove?: (track: Track | null) => void;
     onaddtoplaylist?: (track: Track | null, playlistId: string) => void;
+    onToggleFavorite?: (track: Track | null) => void;
   }
 
   let {
@@ -35,12 +38,15 @@
     isLocal = false,
     offline = false,
     disableLocal = true,
+    isFavorite = false,
+    hideFavoriteIcon = false,
     playlists = [],
     onplay,
     onselect,
     onaddtoqueue,
     onremove,
-    onaddtoplaylist
+    onaddtoplaylist,
+    onToggleFavorite
   }: Props = $props();
 
   let isDisabled = $derived(disableLocal && isLocal);
@@ -89,6 +95,11 @@
     showPlaylistSub = false;
   }
 
+  function handleToggleFavorite() {
+    onToggleFavorite?.(track);
+    showMenu = false;
+  }
+
   onDestroy(() => {
     showMenu = false;
     if (closeMenuListener) {
@@ -112,7 +123,12 @@
     : undefined}
 >
   <span class="num text-3">{track?.track_number || "-"}</span>
-  <span class="title truncate">{track?.title ?? "Unknown"}</span>
+  <span class="title-cell">
+    <span class="title truncate">{track?.title ?? "Unknown"}</span>
+    <span class="fav-indicator" class:visible={isFavorite && !hideFavoriteIcon}>
+      <Heart size={11} fill="currentColor" />
+    </span>
+  </span>
   <span class="artist truncate text-2"
     >{dateAdded !== undefined
       ? track?.album_name || "-"
@@ -130,6 +146,11 @@
   <div class="ctx-menu" use:portal style="left:{menuX}px;top:{menuY}px">
     {#if !isLocal || !disableLocal}
       <button onclick={handleAddToQueue}>Add to queue</button>
+      {#if onToggleFavorite}
+        <button onclick={handleToggleFavorite}
+          >{isFavorite ? "Unfavorite" : "Favorite"}</button
+        >
+      {/if}
       {#if playlists.length > 0}
         <div
           role="presentation"
@@ -206,6 +227,28 @@
   .duration {
     font-size: 12px;
     text-align: right;
+  }
+
+  .title-cell {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+  }
+  .title-cell .title {
+    min-width: 0;
+  }
+
+  .fav-indicator {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .track-row:hover .fav-indicator.visible {
+    opacity: 1;
   }
 
   .ctx-menu {

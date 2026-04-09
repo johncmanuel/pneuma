@@ -46,6 +46,9 @@
   import {
     playlists,
     addTracksToPlaylist,
+    favoriteTrackIDs,
+    toggleFavoriteTrack,
+    visiblePlaylistsForAddMenu,
     type PlaylistSummary
   } from "../stores/playlists";
   import {
@@ -631,12 +634,16 @@
                     track={filteredAlbumDetailTracks[row.index]}
                     hideAlbum={true}
                     isLocal={currentAlbumGroup?.isLocal ?? false}
+                    isFavorite={$favoriteTrackIDs.has(
+                      filteredAlbumDetailTracks[row.index]?.id ?? ""
+                    )}
                     active={$currentTrackId ===
                       filteredAlbumDetailTracks[row.index]?.id}
                     disableLocal={false}
                     onplay={handlePlay}
                     onselect={() => {}}
                     onaddtoqueue={handleQueue}
+                    onToggleFavorite={toggleFavoriteTrack}
                   />
                 </div>
               {/each}
@@ -813,7 +820,7 @@
           >
           {#if albumCtxPlaylistSub}
             <div class="album-ctx-submenu">
-              {#each $playlists as pl (pl.id)}
+              {#each visiblePlaylistsForAddMenu($playlists) as pl (pl.id)}
                 <button on:click={() => addAlbumToPlaylist(pl, grp)}
                   >{pl.name}</button
                 >

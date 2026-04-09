@@ -49,6 +49,8 @@ export function GetToken():Promise<string>;
 
 export function IsConnected():Promise<boolean>;
 
+export function LinkLocalPlaylistToRemote(arg1:string,arg2:string):Promise<void>;
+
 export function LoadPlaybackSession():Promise<desktop.LocalPlaybackSession|boolean>;
 
 export function Notify(arg1:string,arg2:string):Promise<void>;

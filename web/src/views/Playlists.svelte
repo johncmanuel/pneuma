@@ -3,6 +3,7 @@
   import { createVirtualizer } from "@tanstack/svelte-virtual";
   import { derived } from "svelte/store";
   import {
+    isFavoritesPlaylist,
     playlists,
     selectedPlaylist,
     selectedPlaylistItems,
@@ -13,6 +14,7 @@
     selectPlaylist,
     removePlaylistItem,
     itemToTrack,
+    toggleFavoriteTrack,
     updatePlaylist,
     handleAddToPlaylist
   } from "../lib/stores/playlists";
@@ -24,7 +26,7 @@
     recordRecentPlaylist,
     removeRecentPlaylist
   } from "../lib/stores/recent";
-  import { Music, SquarePen } from "@lucide/svelte";
+  import { Heart, Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "../components/TrackRow.svelte";
   import {
     totalDuration,
@@ -68,7 +70,10 @@
     }
   }
 
+  $: selectedIsFavorites = isFavoritesPlaylist($selectedPlaylist);
+
   function triggerArtUpload() {
+    if (selectedIsFavorites) return;
     artInput?.click();
   }
 
@@ -98,6 +103,13 @@
       i.ref_album_artist.toLowerCase().includes(q)
     );
   });
+
+  $: visiblePlaylists = $playlists.filter((pl) => !isFavoritesPlaylist(pl));
+
+  $: playlistDurationMS = $selectedPlaylistItems.reduce(
+    (sum, item) => sum + (item.ref_duration_ms || 0),
+    0
+  );
 
   async function handleCreate() {
     if (!newName.trim()) return;
@@ -235,11 +247,12 @@
         />
         <button
           class="detail-art"
+          class:favorites-art={selectedIsFavorites}
           onclick={triggerArtUpload}
-          disabled={uploadingArt}
-          title="Change artwork"
+          disabled={uploadingArt || selectedIsFavorites}
+          title={selectedIsFavorites ? "Favorites" : "Change artwork"}
         >
-          {#if $selectedPlaylist.artwork_path}
+          {#if !selectedIsFavorites && $selectedPlaylist.artwork_path}
             <img
               src={playlistArtUrl(
                 $selectedPlaylist.id,
@@ -249,10 +262,16 @@
               onerror={hideImg}
             />
           {/if}
-          <span class="art-placeholder"><Music size={24} /></span>
-          <div class="art-overlay">
-            <SquarePen size={24} />
-          </div>
+          <span class="art-placeholder"
+            >{#if selectedIsFavorites}<Heart size={24} />{:else}<Music
+                size={24}
+              />{/if}</span
+          >
+          {#if !selectedIsFavorites}
+            <div class="art-overlay">
+              <SquarePen size={24} />
+            </div>
+          {/if}
         </button>
         <div class="detail-meta">
           {#if editingId === $selectedPlaylist.id}
@@ -275,13 +294,13 @@
             </div>
           {:else}
             <h1 class="detail-name">{$selectedPlaylist.name}</h1>
-            {#if $selectedPlaylist.description}
+            {#if !selectedIsFavorites && $selectedPlaylist.description}
               <p class="detail-desc">{$selectedPlaylist.description}</p>
             {/if}
             <p class="detail-info text-3">
               {$selectedPlaylistItems.length} songs
-              {#if $selectedPlaylist.total_duration_ms}
-                &middot; {totalDuration($selectedPlaylist.total_duration_ms)}
+              {#if playlistDurationMS > 0}
+                &middot; {totalDuration(playlistDurationMS)}
               {/if}
             </p>
           {/if}
@@ -299,20 +318,23 @@
         >
           Play
         </button>
-        <button class="action-btn" onclick={() => startEdit($selectedPlaylist)}
-          >Edit</button
-        >
-        <button
-          class="action-btn danger"
-          onclick={() => {
-            if (confirm("Delete this playlist?") && $selectedPlaylist) {
-              deletePlaylist($selectedPlaylist.id);
-              removeRecentPlaylist($selectedPlaylist.id);
-            }
-          }}
-        >
-          Delete
-        </button>
+        {#if !selectedIsFavorites}
+          <button
+            class="action-btn"
+            onclick={() => startEdit($selectedPlaylist)}>Edit</button
+          >
+          <button
+            class="action-btn danger"
+            onclick={() => {
+              if (confirm("Delete this playlist?") && $selectedPlaylist) {
+                deletePlaylist($selectedPlaylist.id);
+                removeRecentPlaylist($selectedPlaylist.id);
+              }
+            }}
+          >
+            Delete
+          </button>
+        {/if}
         <div class="filter-spacer"></div>
         <input
           type="text"
@@ -356,12 +378,14 @@
                 dateAdded={formatDate(item.added_at)}
                 showRemove={true}
                 isLocal={item.source === "local_ref"}
+                hideFavoriteIcon={selectedIsFavorites}
                 playlists={$playlists}
                 onplay={() => handlePlay(item)}
                 onselect={() => {}}
                 onaddtoqueue={() => {}}
                 onremove={() => handleRemove(item)}
                 onaddtoplaylist={(t, id) => handleAddToPlaylist(t, id)}
+                onToggleFavorite={toggleFavoriteTrack}
               />
             </div>
           {/each}
@@ -449,13 +473,13 @@
       </div>
     {/if}
 
-    {#if $playlists.length === 0 && !showNewDialog}
+    {#if visiblePlaylists.length === 0 && !showNewDialog}
       <p class="text-3 empty-msg">
         No playlists yet. Create one to get started.
       </p>
     {:else}
       <div class="pl-grid">
-        {#each $playlists as pl (pl.id)}
+        {#each visiblePlaylists as pl (pl.id)}
           <button class="pl-card" onclick={() => openPlaylist(pl)}>
             <div class="pl-art">
               {#if pl.artwork_path}
@@ -649,6 +673,12 @@
     padding: 0;
     border: none;
   }
+  .detail-art:disabled {
+    cursor: default !important;
+  }
+  .detail-art.favorites-art {
+    cursor: default !important;
+  }
   .detail-art img {
     position: absolute;
     inset: 0;
@@ -670,6 +700,12 @@
   }
   .detail-art:hover .art-overlay {
     opacity: 1;
+  }
+  .detail-art:disabled:hover .art-overlay {
+    opacity: 0;
+  }
+  .detail-art.favorites-art:hover .art-overlay {
+    opacity: 0;
   }
 
   .art-placeholder {
@@ -697,7 +733,6 @@
     margin: 8px 0 0;
     font-size: 12px;
   }
-
   .detail-actions {
     display: flex;
     align-items: center;

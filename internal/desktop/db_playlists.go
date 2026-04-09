@@ -157,13 +157,41 @@ func (a *App) UpdateLocalPlaylist(id, name, description, artworkPath string) err
 		return fmt.Errorf("db not initialised")
 	}
 
+	pl, err := a.dq.GetLocalPlaylistByID(context.Background(), id)
+	if err != nil {
+		return fmt.Errorf("get local playlist: %w", err)
+	}
+
 	now := dbconv.FormatTime(time.Now())
 
 	return a.dq.UpdateLocalPlaylist(context.Background(), desktopdb.UpdateLocalPlaylistParams{
 		Name:             name,
 		Description:      description,
 		ArtworkPath:      artworkPath,
-		RemotePlaylistID: "", // preserve existing; caller should use LinkLocalPlaylist
+		RemotePlaylistID: pl.RemotePlaylistID,
+		UpdatedAt:        now,
+		ID:               id,
+	})
+}
+
+// LinkLocalPlaylistToRemote updates the local playlist to store its linked remote_playlist_id.
+func (a *App) LinkLocalPlaylistToRemote(id, remoteID string) error {
+	if a.dq == nil {
+		return fmt.Errorf("db not initialised")
+	}
+
+	pl, err := a.dq.GetLocalPlaylistByID(context.Background(), id)
+	if err != nil {
+		return fmt.Errorf("get local playlist: %w", err)
+	}
+
+	now := dbconv.FormatTime(time.Now())
+
+	return a.dq.UpdateLocalPlaylist(context.Background(), desktopdb.UpdateLocalPlaylistParams{
+		Name:             pl.Name,
+		Description:      pl.Description,
+		ArtworkPath:      pl.ArtworkPath,
+		RemotePlaylistID: remoteID,
 		UpdatedAt:        now,
 		ID:               id,
 	})

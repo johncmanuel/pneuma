@@ -2,7 +2,14 @@ import { writable } from "svelte/store";
 import { playerState } from "./player";
 import { type Track, addToast } from "@pneuma/shared";
 import { loadRemoteAlbumGroupsPage, tracks } from "./library";
-import { loadPlaylists, selectPlaylist, selectedPlaylistId } from "./playlists";
+import {
+  favoritesRemotePlaylistId,
+  favoritesSyncEnabled,
+  loadPlaylists,
+  selectPlaylist,
+  selectedPlaylistId,
+  syncFavoritesFromServer
+} from "./playlists";
 import {
   wsBase,
   authToken,
@@ -45,6 +52,14 @@ export function connectWS() {
       serverDisconnected.set(false);
       addToast("Reconnected to server.", "success");
     }
+
+    if (get(favoritesSyncEnabled)) {
+      syncFavoritesFromServer()
+        .then(() => loadPlaylists())
+        .catch((e: any) =>
+          console.warn("Failed to sync favorites on reconnect:", e)
+        );
+    }
   };
 
   socket.onmessage = (e) => {
@@ -69,8 +84,24 @@ export function connectWS() {
         case "playlist.updated": {
           const remoteID: string = msg.payload?.id ?? "";
           if (remoteID) {
-            RefreshPlaylistArtByRemoteID(remoteID)
+            const shouldRefreshArt =
+              get(favoritesRemotePlaylistId) !== remoteID;
+
+            const refreshPromise = shouldRefreshArt
+              ? RefreshPlaylistArtByRemoteID(remoteID)
+              : Promise.resolve();
+
+            refreshPromise
               .then(() => loadPlaylists())
+              // if the favorites playlist was updated, refresh the view
+              .then(async () => {
+                if (!get(favoritesSyncEnabled)) return;
+
+                const favoritesRemoteID = get(favoritesRemotePlaylistId);
+                if (!favoritesRemoteID || favoritesRemoteID === remoteID) {
+                  await syncFavoritesFromServer();
+                }
+              })
               .then(() => {
                 const selId = get(selectedPlaylistId);
                 if (selId) return selectPlaylist(selId);
@@ -79,6 +110,23 @@ export function connectWS() {
                 console.warn("Failed to refresh playlist art from server:", e)
               );
           }
+          break;
+        }
+        case "playlist.created":
+        case "playlist.deleted": {
+          loadPlaylists()
+            .then(async () => {
+              if (get(favoritesSyncEnabled)) {
+                await syncFavoritesFromServer();
+              }
+            })
+            .then(() => {
+              const selId = get(selectedPlaylistId);
+              if (selId) return selectPlaylist(selId);
+            })
+            .catch((e: any) =>
+              console.warn("Failed to refresh playlists from server event:", e)
+            );
           break;
         }
         case "playback.changed": {
