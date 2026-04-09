@@ -38,6 +38,7 @@ Some general styling guidelines:
   - Prefer `const` over `let` unless state mutation is needed.
   - Use ternaries or early returns if possible. For ternaries, if the conditions are too long, define additional variables to ensure readability.
   - Use dot notations over bracket notation for readability.
+  - Use `Boolean()` instead of `!!` for readability.
 - Go
   - Run `go vet ./...` when making changes to the codebase.
   - Always handle errors explicitly; never ignore them with `_` unless there's a deliberate, commented reason. Prefer early returns over nested `if` blocks.
