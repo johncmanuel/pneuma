@@ -157,13 +157,18 @@ func (a *App) UpdateLocalPlaylist(id, name, description, artworkPath string) err
 		return fmt.Errorf("db not initialised")
 	}
 
+	pl, err := a.dq.GetLocalPlaylistByID(context.Background(), id)
+	if err != nil {
+		return fmt.Errorf("get local playlist: %w", err)
+	}
+
 	now := dbconv.FormatTime(time.Now())
 
 	return a.dq.UpdateLocalPlaylist(context.Background(), desktopdb.UpdateLocalPlaylistParams{
 		Name:             name,
 		Description:      description,
 		ArtworkPath:      artworkPath,
-		RemotePlaylistID: "", // preserve existing; caller should use LinkLocalPlaylist
+		RemotePlaylistID: pl.RemotePlaylistID,
 		UpdatedAt:        now,
 		ID:               id,
 	})

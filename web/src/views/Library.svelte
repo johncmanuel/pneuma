@@ -13,8 +13,10 @@
   import { playerState } from "../lib/stores/playback";
   import { selectedAlbum, pushNav } from "../lib/stores/ui";
   import {
+    handleAddToPlaylist,
+    isTrackFavorited,
     playlists as playlistsStore,
-    handleAddToPlaylist
+    toggleFavoriteTrack
   } from "../lib/stores/playlists";
   import { artworkUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
@@ -277,11 +279,15 @@
                     track={filteredTracks[row.index]}
                     hideAlbum={true}
                     active={$currentTrackId === filteredTracks[row.index]?.id}
+                    isFavorite={isTrackFavorited(
+                      filteredTracks[row.index]?.id ?? ""
+                    )}
                     playlists={$playlistsStore}
                     onplay={(t) => t && playTrack(t)}
                     onselect={() => {}}
                     onaddtoqueue={(t) => t && addToQueue(t)}
                     onaddtoplaylist={(t, id) => handleAddToPlaylist(t, id)}
+                    onToggleFavorite={toggleFavoriteTrack}
                   />
                 </div>
               {/each}

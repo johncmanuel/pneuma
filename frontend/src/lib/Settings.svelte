@@ -15,6 +15,10 @@
     stopAutoReconnect
   } from "../utils/api";
   import { recentAlbums, recentPlaylists } from "../stores/recentAlbums";
+  import {
+    favoritesSyncEnabled,
+    setFavoritesSyncEnabled
+  } from "../stores/playlists";
   import { db } from "../utils/db";
   import { addToast } from "@pneuma/shared";
   import { RotateCcw } from "@lucide/svelte";
@@ -27,6 +31,7 @@
   let connecting = false;
 
   let cacheCleared = false;
+  let changingFavoritesSync = false;
 
   async function connect() {
     connectErr = "";
@@ -69,6 +74,22 @@
     recentAlbums.set([]);
     recentPlaylists.set([]);
     addToast("Recently played has been reset.", "info");
+  }
+
+  async function handleFavoritesSyncToggle(e: Event) {
+    const next = (e.currentTarget as HTMLInputElement).checked;
+    changingFavoritesSync = true;
+    try {
+      await setFavoritesSyncEnabled(next);
+      addToast(
+        next
+          ? "Favorites sync enabled"
+          : "Favorites sync disabled. Favorites are now local-only.",
+        "info"
+      );
+    } finally {
+      changingFavoritesSync = false;
+    }
   }
 </script>
 
@@ -140,6 +161,20 @@
       Clear all recently played albums and playlists from the sidebar.
     </p>
     <button on:click={handleResetRecent}>Reset Recently Played</button>
+  </div>
+
+  <div class="group">
+    <h3>Favorites</h3>
+    <p class="text-3">Sync Favorites with server</p>
+
+    <label class="text-3">
+      <input
+        type="checkbox"
+        checked={$favoritesSyncEnabled}
+        on:change={handleFavoritesSyncToggle}
+        disabled={changingFavoritesSync}
+      />
+    </label>
   </div>
 
   <div class="group">

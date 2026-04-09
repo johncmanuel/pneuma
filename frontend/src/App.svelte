@@ -49,6 +49,10 @@
   }
 
   function handleNavigate(view: string) {
+    if (view === "favorites") {
+      view = "playlists";
+    }
+
     pushNav({
       view: view,
       tab: "library",

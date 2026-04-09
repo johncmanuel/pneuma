@@ -18,12 +18,14 @@
     isLocal?: boolean;
     offline?: boolean;
     disableLocal?: boolean;
+    isFavorite?: boolean;
     playlists?: PlaylistMenuItem[];
     onplay?: (track: Track | null) => void;
     onselect?: () => void;
     onaddtoqueue?: (track: Track | null) => void;
     onremove?: (track: Track | null) => void;
     onaddtoplaylist?: (track: Track | null, playlistId: string) => void;
+    onToggleFavorite?: (track: Track | null) => void;
   }
 
   let {
@@ -35,12 +37,14 @@
     isLocal = false,
     offline = false,
     disableLocal = true,
+    isFavorite = false,
     playlists = [],
     onplay,
     onselect,
     onaddtoqueue,
     onremove,
-    onaddtoplaylist
+    onaddtoplaylist,
+    onToggleFavorite
   }: Props = $props();
 
   let isDisabled = $derived(disableLocal && isLocal);
@@ -89,6 +93,11 @@
     showPlaylistSub = false;
   }
 
+  function handleToggleFavorite() {
+    onToggleFavorite?.(track);
+    showMenu = false;
+  }
+
   onDestroy(() => {
     showMenu = false;
     if (closeMenuListener) {
@@ -130,6 +139,11 @@
   <div class="ctx-menu" use:portal style="left:{menuX}px;top:{menuY}px">
     {#if !isLocal || !disableLocal}
       <button onclick={handleAddToQueue}>Add to queue</button>
+      {#if !isLocal}
+        <button onclick={handleToggleFavorite}
+          >{isFavorite ? "Unfavorite" : "Favorite"}</button
+        >
+      {/if}
       {#if playlists.length > 0}
         <div
           role="presentation"

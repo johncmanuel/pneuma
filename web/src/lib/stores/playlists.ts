@@ -1,19 +1,241 @@
 import { writable, get } from "svelte/store";
 import { apiFetch } from "../api";
 import type { PlaylistSummary, PlaylistItem, Track } from "@pneuma/shared";
-import { localTrackToSharedTrack } from "@pneuma/shared";
+import {
+  dedupeFavoriteTrackItems,
+  favoriteTrackIDsFromItems,
+  findFavoritesPlaylist,
+  favoritesPlaylistName,
+  isFavoritesPlaylistMeta,
+  isFavoritesPlaylist as isFavoritesPlaylistShared,
+  localTrackToSharedTrack,
+  pickCanonicalFavoritesPlaylist,
+  toFavoritesWriteItem,
+  toFavoritesWriteItemFromTrack,
+  visiblePlaylistsForAddMenu as visiblePlaylistsForAddMenuShared
+} from "@pneuma/shared";
+import { addToast } from "@pneuma/shared";
 
 export const playlists = writable<PlaylistSummary[]>([]);
 export const selectedPlaylist = writable<PlaylistSummary | null>(null);
 export const selectedPlaylistItems = writable<PlaylistItem[]>([]);
 export const playlistsLoading = writable(false);
 
+export const favoriteTrackIDs = writable<Set<string>>(new Set());
+
+export const favoritesPlaylistId = writable<string | null>(null);
+
+async function fetchRemotePlaylists(): Promise<PlaylistSummary[] | null> {
+  const res = await apiFetch("/api/playlists");
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  return (
+    Array.isArray(data) ? data : (data.playlists ?? [])
+  ) as PlaylistSummary[];
+}
+
+async function fetchPlaylistItems(playlistId: string): Promise<PlaylistItem[]> {
+  const res = await apiFetch(`/api/playlists/${playlistId}/items`);
+  if (!res.ok) return [];
+
+  const data = await res.json();
+  return (Array.isArray(data) ? data : (data.items ?? [])) as PlaylistItem[];
+}
+
+async function normalizeFavoritesOnServer(
+  candidates: PlaylistSummary[]
+): Promise<string | null> {
+  if (candidates.length === 0) {
+    const created = await apiFetch("/api/playlists", {
+      method: "POST",
+      body: JSON.stringify({
+        name: favoritesPlaylistName,
+        description: ""
+      })
+    });
+
+    if (!created.ok) return null;
+    const data = await created.json();
+    return (data?.id as string | undefined) ?? null;
+  }
+
+  const canonical = pickCanonicalFavoritesPlaylist(candidates);
+
+  if (candidates.length > 1) {
+    const merged: PlaylistItem[] = await Promise.all(
+      candidates.map((playlist) => fetchPlaylistItems(playlist.id))
+    ).then((items) => items.flat());
+
+    const deduped = dedupeFavoriteTrackItems(merged);
+    await apiFetch(`/api/playlists/${canonical.id}/items`, {
+      method: "PUT",
+      body: JSON.stringify(deduped)
+    });
+
+    for (const playlist of candidates) {
+      if (playlist.id === canonical.id) continue;
+      await apiFetch(`/api/playlists/${playlist.id}`, { method: "DELETE" });
+    }
+  }
+
+  if (
+    canonical.name !== favoritesPlaylistName ||
+    (canonical.description ?? "") !== ""
+  ) {
+    await apiFetch(`/api/playlists/${canonical.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        name: favoritesPlaylistName,
+        description: ""
+      })
+    });
+  }
+
+  return canonical.id;
+}
+
+function refreshFavoritesCache(nextPlaylists: PlaylistSummary[]) {
+  const favorites = findFavoritesPlaylist(nextPlaylists);
+  favoritesPlaylistId.set(favorites?.id ?? null);
+}
+
+async function refreshFavoriteTrackIDsFromPlaylist(playlistId: string | null) {
+  if (!playlistId) {
+    favoriteTrackIDs.set(new Set());
+    return;
+  }
+
+  const res = await apiFetch(`/api/playlists/${playlistId}/items`);
+  if (!res.ok) {
+    favoriteTrackIDs.set(new Set());
+    return;
+  }
+
+  const data = await res.json();
+  const items = (
+    Array.isArray(data) ? data : (data.items ?? [])
+  ) as PlaylistItem[];
+  favoriteTrackIDs.set(
+    favoriteTrackIDsFromItems(
+      items.map((item) => ({
+        source: item.source,
+        track_id: item.track_id,
+        local_path: ""
+      }))
+    )
+  );
+}
+
+async function refreshFavoritesState(nextPlaylists: PlaylistSummary[]) {
+  refreshFavoritesCache(nextPlaylists);
+  const favorites = findFavoritesPlaylist(nextPlaylists);
+  await refreshFavoriteTrackIDsFromPlaylist(favorites?.id ?? null);
+}
+
+export function isTrackFavorited(trackId: string): boolean {
+  return get(favoriteTrackIDs).has(trackId);
+}
+
+export function isFavoritesPlaylist(
+  playlist: PlaylistSummary | null | undefined
+): boolean {
+  return isFavoritesPlaylistShared(playlist);
+}
+
+export function visiblePlaylistsForAddMenu(
+  list: PlaylistSummary[]
+): PlaylistSummary[] {
+  return visiblePlaylistsForAddMenuShared(list);
+}
+
+export async function ensureFavoritesPlaylist(): Promise<string | null> {
+  const remotePlaylists = await fetchRemotePlaylists();
+  if (!remotePlaylists) return get(favoritesPlaylistId);
+
+  const candidates = remotePlaylists.filter((pl) =>
+    isFavoritesPlaylistMeta(pl.name, pl.description)
+  );
+
+  const favoritesID = await normalizeFavoritesOnServer(candidates);
+  if (!favoritesID) return null;
+
+  await loadPlaylists();
+  favoritesPlaylistId.set(favoritesID);
+  return favoritesID;
+}
+
+export async function toggleFavoriteTrack(track: Track | null) {
+  if (!track?.id) return;
+
+  const favoritesID = await ensureFavoritesPlaylist();
+  if (!favoritesID) {
+    addToast("Failed to open Favorites playlist", "error");
+    return;
+  }
+
+  const res = await apiFetch(`/api/playlists/${favoritesID}/items`);
+  if (!res.ok) {
+    addToast("Failed to update Favorites", "error");
+    return;
+  }
+
+  const data = await res.json();
+  const existingItems = (
+    Array.isArray(data) ? data : (data.items ?? [])
+  ) as PlaylistItem[];
+  const alreadyFavorite = existingItems.some(
+    (item) => item.track_id === track.id
+  );
+
+  const nextItems = alreadyFavorite
+    ? existingItems
+        .filter((item) => item.track_id !== track.id)
+        .map(toFavoritesWriteItem)
+    : [
+        ...existingItems.map(toFavoritesWriteItem),
+        toFavoritesWriteItemFromTrack(track)
+      ];
+
+  const write = await apiFetch(`/api/playlists/${favoritesID}/items`, {
+    method: "PUT",
+    body: JSON.stringify(nextItems)
+  });
+  if (!write.ok) {
+    addToast("Failed to update Favorites", "error");
+    return;
+  }
+
+  favoriteTrackIDs.update((prev) => {
+    const next = new Set(prev);
+    if (alreadyFavorite) next.delete(track.id);
+    else next.add(track.id);
+    return next;
+  });
+
+  if (get(selectedPlaylist)?.id === favoritesID) {
+    await selectPlaylist(favoritesID);
+  }
+
+  await loadPlaylists();
+  addToast(
+    alreadyFavorite
+      ? `Removed "${track.title}" from Favorites`
+      : `Added "${track.title}" to Favorites`,
+    "success"
+  );
+}
+
 export async function loadPlaylists() {
   const r = await apiFetch("/api/playlists");
   if (!r.ok) return;
 
   const data = await r.json();
-  playlists.set(Array.isArray(data) ? data : (data.playlists ?? []));
+  const next = (
+    Array.isArray(data) ? data : (data.playlists ?? [])
+  ) as PlaylistSummary[];
+  playlists.set(next);
+  await refreshFavoritesState(next);
 }
 
 export async function selectPlaylist(id: string) {
@@ -33,6 +255,10 @@ export async function selectPlaylist(id: string) {
         Array.isArray(data) ? data : (data.items ?? [])
       );
     }
+
+    if (id === get(favoritesPlaylistId)) {
+      await refreshFavoriteTrackIDsFromPlaylist(id);
+    }
   } finally {
     playlistsLoading.set(false);
   }
@@ -42,6 +268,10 @@ export async function createPlaylist(
   name: string,
   description: string
 ): Promise<string | null> {
+  if (isFavoritesPlaylistMeta(name, description)) {
+    return await ensureFavoritesPlaylist();
+  }
+
   const r = await apiFetch("/api/playlists", {
     method: "POST",
     body: JSON.stringify({ name, description })
@@ -55,6 +285,12 @@ export async function createPlaylist(
 }
 
 export async function deletePlaylist(id: string) {
+  const target = get(playlists).find((pl) => pl.id === id);
+  if (isFavoritesPlaylist(target)) {
+    addToast("Favorites playlist cannot be deleted", "warning");
+    return;
+  }
+
   await apiFetch(`/api/playlists/${id}`, { method: "DELETE" });
   await loadPlaylists();
 
@@ -70,6 +306,12 @@ export async function updatePlaylist(
   name: string,
   description: string
 ) {
+  const target = get(playlists).find((pl) => pl.id === id);
+  if (isFavoritesPlaylist(target)) {
+    addToast("Favorites playlist cannot be edited", "warning");
+    return;
+  }
+
   await apiFetch(`/api/playlists/${id}`, {
     method: "PUT",
     body: JSON.stringify({ name, description })
