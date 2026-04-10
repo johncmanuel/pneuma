@@ -20,6 +20,7 @@ import (
 	"pneuma/internal/api/http/handlers"
 	"pneuma/internal/api/http/middleware"
 	apws "pneuma/internal/api/ws"
+	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
 	"pneuma/internal/playback"
 	"pneuma/internal/playlist"
@@ -39,12 +40,13 @@ type Services struct {
 		ScanAll()
 		ScanPath(path string)
 	} // *scanner.Scheduler
-	JWTSecret   string
-	UploadsDir  string
-	ArtworkDir  string // directory for playlist artwork thumbnails
-	UploadMaxMB int    // max upload body size in MB (0 = default 500 MB)
-	WebUI       fs.FS  // embedded dashboard assets (nil = disabled)
-	WebPlayerUI fs.FS  // embedded web player assets (nil = disabled)
+	JWTSecret      string
+	UploadsDir     string
+	ArtworkDir     string // directory for playlist artwork thumbnails
+	UploadMaxMB    int    // max upload body size in MB (0 = default 500 MB)
+	IngestionQueue *ingestion.Queue
+	WebUI          fs.FS // embedded dashboard assets (nil = disabled)
+	WebPlayerUI    fs.FS // embedded web player assets (nil = disabled)
 
 	// RateLimitingEnabled toggles the application-layer rate limiter.
 	// Set to false if using a reverse proxy with its own rate limiting.
@@ -69,7 +71,7 @@ func NewRouter(svc Services) *echo.Echo {
 	authMW := middleware.RequireAuth(secret)
 	adminMW := middleware.RequireAdmin(secret)
 
-	lh := handlers.NewLibraryHandler(svc.Library, svc.Queries, svc.Scanner, svc.Hub, svc.UploadsDir)
+	lh := handlers.NewLibraryHandler(svc.Library, svc.Queries, svc.Scanner, svc.Hub, svc.IngestionQueue, svc.UploadsDir)
 	ph := handlers.NewPlaybackHandler(svc.Playback)
 	uh := handlers.NewUserHandler(svc.User, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries)

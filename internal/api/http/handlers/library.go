@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -17,6 +16,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"pneuma/internal/api/http/middleware"
+	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
 	"pneuma/internal/media"
 	"pneuma/internal/models"
@@ -42,12 +42,16 @@ type LibraryHandler struct {
 	q          *serverdb.Queries
 	scanner    scanTrigger
 	hub        eventPublisher
+	queue      *ingestion.Queue
 	uploadsDir string
+	tmpDir     string // temp staging area under uploadsDir
 }
 
 // NewLibraryHandler creates a LibraryHandler.
-func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, uploadsDir string) *LibraryHandler {
-	return &LibraryHandler{lib: lib, q: q, scanner: sc, hub: hub, uploadsDir: uploadsDir}
+func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, queue *ingestion.Queue, uploadsDir string) *LibraryHandler {
+	tmpDir := filepath.Join(uploadsDir, "tmp")
+	_ = os.MkdirAll(tmpDir, 0o755)
+	return &LibraryHandler{lib: lib, q: q, scanner: sc, hub: hub, queue: queue, uploadsDir: uploadsDir, tmpDir: tmpDir}
 }
 
 // ListTracks returns tracks. Supports optional pagination via ?offset=&limit=
@@ -304,7 +308,8 @@ func (h *LibraryHandler) TriggerScan(c echo.Context) error {
 }
 
 // UploadTrack uploads a track to the specified uploads directory.
-// NOTE: this accepts a multipart audio file.
+// The file is streamed to a temp file while being hashed (no full buffering).
+// DB writes are delegated to the ingestion queue; the handler returns 202 Accepted.
 func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	claims := middleware.GetClaims(c)
 	if claims == nil {
@@ -328,86 +333,108 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	}
 	defer src.Close()
 
-	hasher := sha256.New()
-	buf, err := io.ReadAll(src)
+	// create temp file for streaming hash
+	tmp, err := os.CreateTemp(h.tmpDir, "upload-*"+ext)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	hasher.Write(buf)
+	tmpPath := tmp.Name()
+
+	hasher := sha256.New()
+	if _, err = io.Copy(tmp, io.TeeReader(src, hasher)); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	tmp.Close()
+
 	hash := hex.EncodeToString(hasher.Sum(nil))
 
+	// handle dupes
 	existing, err := h.lib.TrackByFingerprint(ctx, hash)
 	if err != nil {
+		os.Remove(tmpPath)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if existing != nil && existing.DeletedAt == nil {
+		os.Remove(tmpPath)
 		return c.JSON(http.StatusConflict, map[string]any{
 			"error": "duplicate file",
 			"track": existing,
 		})
 	}
 
-	if err := os.MkdirAll(h.uploadsDir, 0o755); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	destPath := filepath.Join(h.uploadsDir, hash+ext)
-	if err := os.WriteFile(destPath, buf, 0o644); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
-	// If previously soft-deleted, restore and re-enrich it.
+	// if previously soft-deleted, restore it via the queue
 	if existing != nil && existing.DeletedAt != nil {
 		if err := h.lib.RestoreTrack(ctx, existing.ID); err != nil {
+			os.Remove(tmpPath)
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
-		// Re-read tags in case the file has changed since the original upload.
-		if m, tagErr := tag.ReadFrom(bytes.NewReader(buf)); tagErr == nil {
-			if m.Title() != "" {
-				existing.Title = m.Title()
+		// re-read tags from the temp file
+		if f, openErr := os.Open(tmpPath); openErr == nil {
+			if m, tagErr := tag.ReadFrom(f); tagErr == nil {
+				if m.Title() != "" {
+					existing.Title = m.Title()
+				}
+				existing.AlbumArtist = m.AlbumArtist()
+				if existing.AlbumArtist == "" {
+					existing.AlbumArtist = m.Artist()
+				}
+				if existing.AlbumArtist == "" {
+					existing.AlbumArtist = "__unorganized__"
+				}
+				existing.AlbumName = m.Album()
+				if existing.AlbumName == "" {
+					existing.AlbumName = "__unorganized__"
+				}
+				existing.Genre = m.Genre()
+				existing.Year = m.Year()
+				existing.TrackNumber, _ = m.Track()
+				existing.DiscNumber, _ = m.Disc()
+				existing.UpdatedAt = time.Now()
 			}
-			existing.AlbumArtist = m.AlbumArtist()
-			if existing.AlbumArtist == "" {
-				existing.AlbumArtist = m.Artist()
-			}
-			if existing.AlbumArtist == "" {
-				existing.AlbumArtist = "__unorganized__"
-			}
-			existing.AlbumName = m.Album()
-			if existing.AlbumName == "" {
-				existing.AlbumName = "__unorganized__"
-			}
-			existing.Genre = m.Genre()
-			existing.Year = m.Year()
-			existing.TrackNumber, _ = m.Track()
-			existing.DiscNumber, _ = m.Disc()
-			existing.UpdatedAt = time.Now()
-			_ = h.lib.UpsertTrack(ctx, existing)
+			f.Close()
 		}
-		h.hub.Publish(string(models.EventTrackAdded), existing)
-		return c.JSON(http.StatusOK, existing)
+
+		finalPath := filepath.Join(h.uploadsDir, hash+ext)
+		existing.Path = finalPath
+
+		if err := h.queue.Enqueue(ingestion.Job{
+			TmpPath:   tmpPath,
+			FinalPath: finalPath,
+			Track:     existing,
+			UserID:    claims.UserID,
+			Filename:  file.Filename,
+		}); err != nil {
+			os.Remove(tmpPath)
+			return echo.NewHTTPError(http.StatusServiceUnavailable, "upload queue full")
+		}
+		return c.JSON(http.StatusAccepted, map[string]any{"status": "queued", "id": existing.ID})
 	}
 
-	// Read embedded metadata from the uploaded file so the initial
-	// record is fully populated
+	// handle new uploads from temp file
 	now := time.Now()
-	info, _ := os.Stat(destPath)
+	info, _ := os.Stat(tmpPath)
 
 	title := strings.TrimSuffix(file.Filename, ext)
 	var albumArtist, albumName, genre string
 	var year, trackNumber, discNumber int
-	if m, tagErr := tag.ReadFrom(bytes.NewReader(buf)); tagErr == nil {
-		if m.Title() != "" {
-			title = m.Title()
+	if f, openErr := os.Open(tmpPath); openErr == nil {
+		if m, tagErr := tag.ReadFrom(f); tagErr == nil {
+			if m.Title() != "" {
+				title = m.Title()
+			}
+			albumArtist = m.AlbumArtist()
+			if albumArtist == "" {
+				albumArtist = m.Artist()
+			}
+			albumName = m.Album()
+			genre = m.Genre()
+			year = m.Year()
+			trackNumber, _ = m.Track()
+			discNumber, _ = m.Disc()
 		}
-		albumArtist = m.AlbumArtist()
-		if albumArtist == "" {
-			albumArtist = m.Artist()
-		}
-		albumName = m.Album()
-		genre = m.Genre()
-		year = m.Year()
-		trackNumber, _ = m.Track()
-		discNumber, _ = m.Disc()
+		f.Close()
 	}
 
 	if albumName == "" {
@@ -417,9 +444,11 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		albumArtist = "__unorganized__"
 	}
 
+	finalPath := filepath.Join(h.uploadsDir, hash+ext)
+
 	t := &models.Track{
 		ID:               uuid.NewString(),
-		Path:             destPath,
+		Path:             finalPath, // will be set to final by the queue worker
 		Title:            title,
 		AlbumArtist:      albumArtist,
 		AlbumName:        albumName,
@@ -435,27 +464,18 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		UpdatedAt:        now,
 	}
 
-	if err := h.lib.UpsertTrack(ctx, t); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	if err := h.queue.Enqueue(ingestion.Job{
+		TmpPath:   tmpPath,
+		FinalPath: finalPath,
+		Track:     t,
+		UserID:    claims.UserID,
+		Filename:  file.Filename,
+	}); err != nil {
+		os.Remove(tmpPath)
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "upload queue full")
 	}
 
-	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
-		ID:         uuid.NewString(),
-		UserID:     claims.UserID,
-		Action:     "upload",
-		TargetType: "track",
-		TargetID:   t.ID,
-		Detail:     dbconv.NullStr(file.Filename),
-		CreatedAt:  dbconv.FormatTime(now),
-	})
-
-	h.hub.Publish(string(models.EventTrackAdded), t)
-
-	// Enrich metadata asynchronously (duration, bitrate, tags) using the scanner.
-	// The scanner will publish track.updated when done so all clients refresh.
-	go h.scanner.ScanPath(destPath)
-
-	return c.JSON(http.StatusCreated, t)
+	return c.JSON(http.StatusAccepted, map[string]any{"status": "queued", "id": t.ID})
 }
 
 // DeleteTrack DELETE /api/library/tracks/:id.

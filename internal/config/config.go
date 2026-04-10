@@ -54,6 +54,8 @@ type UploadConfig struct {
 	Dir string `toml:"dir"`
 	// MaxSizeMB is the maximum upload size in megabytes.
 	MaxSizeMB int `toml:"max_size_mb"`
+	// QueueCapacity is the maximum number of queued upload jobs.
+	QueueCapacity int `toml:"queue_capacity"`
 }
 
 // RateLimitingConfig controls the application-layer rate limiter.
@@ -105,6 +107,7 @@ const (
 	EnvArtworkMaxSizeMB      = "PNEUMA_ARTWORK_MAX_SIZE_MB"
 	EnvUploadDir             = "PNEUMA_UPLOAD_DIR"
 	EnvUploadMaxSizeMB       = "PNEUMA_UPLOAD_MAX_SIZE_MB"
+	EnvUploadQueueCapacity   = "PNEUMA_UPLOAD_QUEUE_CAPACITY"
 	EnvTranscodingFFmpegPath = "PNEUMA_TRANSCODING_FFMPEG_PATH"
 	EnvTranscodingFpcalcPath = "PNEUMA_TRANSCODING_FPCALC_PATH"
 	EnvRateLimitingEnabled   = "PNEUMA_RATE_LIMITING_ENABLED"
@@ -152,8 +155,9 @@ func DefaultConfig(dataDir string) *Config {
 			SecretKey: generateKey(),
 		},
 		Upload: UploadConfig{
-			Dir:       filepath.Join(dataDir, ConfigUploadDirName),
-			MaxSizeMB: 500,
+			Dir:           filepath.Join(dataDir, ConfigUploadDirName),
+			MaxSizeMB:     500,
+			QueueCapacity: 256,
 		},
 		// fpcalc will be used for fingerprinting in the future (a stretch goal atm)
 		Transcoding: TranscodingConfig{
@@ -199,6 +203,11 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv(EnvUploadMaxSizeMB); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
 			cfg.Upload.MaxSizeMB = p
+		}
+	}
+	if v := os.Getenv(EnvUploadQueueCapacity); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Upload.QueueCapacity = p
 		}
 	}
 	if v := os.Getenv(EnvTranscodingFFmpegPath); v != "" {

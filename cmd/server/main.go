@@ -17,6 +17,7 @@ import (
 
 	"pneuma/dashboard"
 	"pneuma/internal/config"
+	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
 	"pneuma/internal/metadata/parser"
 	"pneuma/internal/playback"
@@ -80,6 +81,16 @@ func main() {
 	}
 	sched := scanner.NewScheduler(libSvc, metaParser, hub, cfg.Library.WatchFolders, 15*time.Minute)
 
+	// Clean up orphaned temp files from a previous crash
+	tmpUploadsDir := filepath.Join(cfg.Upload.Dir, "tmp")
+	if n := ingestion.CleanupTempUploads(tmpUploadsDir); n > 0 {
+		slog.Info("cleaned up orphaned temp uploads", "count", n)
+	} else {
+		slog.Info("no temp uploads found, continuing")
+	}
+
+	iqQueue := ingestion.New(libSvc, queries, hub, sched, cfg.Upload.QueueCapacity)
+
 	router := api.NewRouter(api.Services{
 		Library:             libSvc,
 		User:                userSvc,
@@ -92,6 +103,7 @@ func main() {
 		UploadsDir:          cfg.Upload.Dir,
 		ArtworkDir:          filepath.Join(dir, config.ConfigCachePlaylistArtDir),
 		UploadMaxMB:         cfg.Upload.MaxSizeMB,
+		IngestionQueue:      iqQueue,
 		WebUI:               dashboard.FS(),
 		WebPlayerUI:         web.FS(),
 		RateLimitingEnabled: cfg.RateLimiting.Enabled,
@@ -102,8 +114,11 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	go sched.Start(ctx)
 	go watcher.Start(ctx)
+	go store.RunOptimizePeriodically(ctx, 24*time.Hour)
+	go iqQueue.Start(ctx)
 
 	go func() {
 		slog.Info("pneuma server listening", "addr", addr)

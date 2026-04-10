@@ -1,12 +1,15 @@
 package sqlite
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	migratesqlite "github.com/golang-migrate/migrate/v4/database/sqlite"
@@ -34,6 +37,8 @@ func OpenRaw(path string, enableFKs bool) (*sql.DB, error) {
 		fkState = "OFF"
 	}
 
+	// Will leave a decent article for reference on sqlite performance below.
+	// https://phiresky.github.io/blog/2020/sqlite-performance-tuning/
 	pragmas := []string{
 		"_pragma=journal_mode(WAL)",                      // ensure concurrent read and writes
 		"_pragma=synchronous(NORMAL)",                    // use fewer fsyncs for better performance (obvs tradeoff is less data durability)
@@ -61,6 +66,13 @@ func OpenRaw(path string, enableFKs bool) (*sql.DB, error) {
 	// not sure how to avoid SQLITE_BUSY errors while increasing the number of connections.
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
+
+	// for long-lived connections, run PRAGMA optimize=0x10002 on first open
+	// https://www.sqlite.org/pragma.html#pragma_optimize
+	if _, err := db.Exec("PRAGMA optimize=0x10002"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("pragma optimize on open: %w", err)
+	}
 
 	return db, nil
 }
@@ -92,9 +104,33 @@ func Open(path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
-// Close closes the database.
+// Close runs PRAGMA optimize then closes the database.
 func (s *Store) Close() error {
+	_ = s.Optimize()
 	return s.db.Close()
+}
+
+// Optimize runs PRAGMA optimize
+func (s *Store) Optimize() error {
+	slog.Info("running PRAGMA optimize...")
+	_, err := s.db.Exec("PRAGMA optimize")
+	return err
+}
+
+// RunOptimizePeriodically calls Optimize on the given interval until ctx is cancelled.
+func (s *Store) RunOptimizePeriodically(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := s.Optimize(); err != nil {
+				slog.Warn("PRAGMA optimize failed", "err", err)
+			}
+		}
+	}
 }
 
 // DB returns the underlying *sql.DB (for testing).
