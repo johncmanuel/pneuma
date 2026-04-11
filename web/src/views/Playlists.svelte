@@ -34,25 +34,28 @@
     type PlaylistSummary
   } from "@pneuma/shared";
   import { generateRandomPlaylist } from "../lib/api";
+  import { SortButton } from "@pneuma/ui";
+
+  type SortField = "default" | "title" | "added_at" | "duration";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
-  let showNewDialog = false;
-  let newName = "";
-  let newDesc = "";
+  let showNewDialog = $state(false);
+  let newName = $state("");
+  let newDesc = $state("");
 
-  let showGenerateDialog = false;
-  let generateName = "";
-  let generateDesc = "";
-  let generateDuration = 30;
-  let generating = false;
+  let showGenerateDialog = $state(false);
+  let generateName = $state("");
+  let generateDesc = $state("");
+  let generateDuration = $state(30);
+  let generating = $state(false);
 
-  let editingId: string | null = null;
-  let editName = "";
-  let editDesc = "";
-  let trackListEl: HTMLDivElement;
-  let artInput: HTMLInputElement;
-  let uploadingArt = false;
+  let editingId: string | null = $state(null);
+  let editName = $state("");
+  let editDesc = $state("");
+  let trackListEl: HTMLDivElement | undefined = $state();
+  let artInput: HTMLInputElement | undefined = $state();
+  let uploadingArt = $state(false);
 
   async function handleArtUpload(e: Event) {
     const input = e.target as HTMLInputElement;
@@ -70,45 +73,67 @@
     }
   }
 
-  $: selectedIsFavorites = isFavoritesPlaylist($selectedPlaylist);
+  let selectedIsFavorites = $derived(isFavoritesPlaylist($selectedPlaylist));
 
   function triggerArtUpload() {
     if (selectedIsFavorites) return;
     artInput?.click();
   }
 
-  $: if ($selectedPlaylistView) {
-    selectPlaylist($selectedPlaylistView);
-  } else {
-    selectedPlaylistView.set(null);
-    selectedPlaylist.set(null);
-    selectedPlaylistItems.set([]);
-  }
-
-  let filter = "";
-
-  $: virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: filteredItems.length,
-    getScrollElement: () => trackListEl,
-    estimateSize: () => 38,
-    overscan: 5
+  $effect(() => {
+    if ($selectedPlaylistView) {
+      selectPlaylist($selectedPlaylistView);
+    } else {
+      selectedPlaylistView.set(null);
+      selectedPlaylist.set(null);
+      selectedPlaylistItems.set([]);
+    }
   });
 
-  $: filteredItems = $selectedPlaylistItems.filter((i) => {
-    if (!filter) return true;
-    const q = filter.toLowerCase();
-    return (
-      i.ref_title.toLowerCase().includes(q) ||
-      i.ref_album.toLowerCase().includes(q) ||
-      i.ref_album_artist.toLowerCase().includes(q)
-    );
-  });
+  let filter = $state("");
+  let sortField: SortField = $state("default");
+  let sortDir: "asc" | "desc" = $state("asc");
 
-  $: visiblePlaylists = $playlists.filter((pl) => !isFavoritesPlaylist(pl));
+  let filteredItems = $derived(
+    $selectedPlaylistItems
+      .filter((i) => {
+        if (!filter) return true;
+        const q = filter.toLowerCase();
+        return i.ref_album_artist.toLowerCase().includes(q);
+      })
+      .sort((a, b) => {
+        if (sortField === "default") return a.position - b.position;
 
-  $: playlistDurationMS = $selectedPlaylistItems.reduce(
-    (sum, item) => sum + (item.ref_duration_ms || 0),
-    0
+        let cmp = 0;
+
+        if (sortField === "title") cmp = a.ref_title.localeCompare(b.ref_title);
+        else if (sortField === "added_at")
+          cmp = (a.added_at || "").localeCompare(b.added_at || "");
+        else if (sortField === "duration")
+          cmp = (a.ref_duration_ms || 0) - (b.ref_duration_ms || 0);
+
+        return sortDir === "desc" ? -cmp : cmp;
+      })
+  );
+
+  let virtualizer = $derived(
+    createVirtualizer<HTMLDivElement, HTMLDivElement>({
+      count: filteredItems.length,
+      getScrollElement: () => trackListEl as HTMLDivElement,
+      estimateSize: () => 38,
+      overscan: 5
+    })
+  );
+
+  let visiblePlaylists = $derived(
+    $playlists.filter((pl) => !isFavoritesPlaylist(pl))
+  );
+
+  let playlistDurationMS = $derived(
+    $selectedPlaylistItems.reduce(
+      (sum, item) => sum + (item.ref_duration_ms || 0),
+      0
+    )
   );
 
   async function handleCreate() {
@@ -347,10 +372,25 @@
 
     <div class="track-headers">
       <span class="num">#</span>
-      <span>Title</span>
+      <SortButton
+        class="sortable"
+        bind:currentField={sortField}
+        bind:sortDir
+        field="title">Title</SortButton
+      >
       <span>Album</span>
-      <span>Date Added</span>
-      <span>Duration</span>
+      <SortButton
+        class="sortable"
+        bind:currentField={sortField}
+        bind:sortDir
+        field="added_at">Date Added</SortButton
+      >
+      <SortButton
+        class="sortable"
+        bind:currentField={sortField}
+        bind:sortDir
+        field="duration">Duration</SortButton
+      >
     </div>
 
     <div class="track-list" bind:this={trackListEl}>
@@ -380,11 +420,11 @@
                 isLocal={item.source === "local_ref"}
                 hideFavoriteIcon={selectedIsFavorites}
                 playlists={$playlists}
-                onplay={() => handlePlay(item)}
-                onselect={() => {}}
-                onaddtoqueue={() => {}}
-                onremove={() => handleRemove(item)}
-                onaddtoplaylist={(t, id) => handleAddToPlaylist(t, id)}
+                onPlay={() => handlePlay(item)}
+                onSelect={() => {}}
+                onAddToQueue={() => {}}
+                onRemove={() => handleRemove(item)}
+                onAddToPlaylist={(t, id) => handleAddToPlaylist(t, id)}
                 onToggleFavorite={toggleFavoriteTrack}
               />
             </div>

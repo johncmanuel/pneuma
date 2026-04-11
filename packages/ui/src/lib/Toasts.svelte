@@ -2,20 +2,21 @@
   import { toasts, dismissToast, type Toast } from "@pneuma/shared";
   import { Info, TriangleAlert, CircleX, Check, X } from "@lucide/svelte";
 
-  const icons: Record<Toast["type"], any> = {
+  const icons = {
     info: Info,
     warning: TriangleAlert,
     error: CircleX,
     success: Check
-  };
+  } satisfies Record<Toast["type"], typeof Info>;
 </script>
 
 {#if $toasts.length > 0}
   <div class="toast-container" role="status" aria-live="polite">
     {#each $toasts as toast (toast.id)}
+      {@const ToastIcon = icons[toast.type]}
       <div class="toast toast-{toast.type}">
         <span class="toast-icon">
-          <svelte:component this={icons[toast.type]} size={16} />
+          <ToastIcon size={16} />
         </span>
         <span class="toast-msg">{toast.message}</span>
         <button

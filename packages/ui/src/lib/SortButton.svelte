@@ -1,10 +1,19 @@
 <script lang="ts" generics="T">
-  export let currentField: T;
-  export let sortDir: "asc" | "desc";
-  export let field: T;
+  import type { Snippet } from "svelte";
 
-  let className = "";
-  export { className as class };
+  let {
+    currentField = $bindable(),
+    sortDir = $bindable(),
+    field,
+    class: className = "",
+    children
+  }: {
+    currentField: T;
+    sortDir: "asc" | "desc";
+    field: T;
+    class?: string;
+    children?: Snippet;
+  } = $props();
 
   function toggle() {
     if (currentField === field) {
@@ -15,13 +24,13 @@
     }
   }
 
-  // i'll keep the character arrows for now
-  $: indicator =
-    currentField === field ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+  let indicator = $derived(
+    currentField === field ? (sortDir === "asc" ? " ↑" : " ↓") : ""
+  );
 </script>
 
 <button class={className} onclick={toggle}>
-  <slot />{indicator}
+  {#if children}{@render children()}{/if}{indicator}
 </button>
 
 <style>

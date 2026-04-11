@@ -6,7 +6,7 @@
   import Sidebar from "./lib/components/Sidebar.svelte";
   import Admin from "./pages/Admin.svelte";
 
-  let ready = false;
+  let ready = $state(false);
 
   onMount(async () => {
     await tryAutoAuth();
@@ -14,8 +14,13 @@
     if ($loggedIn) connectWS();
   });
 
-  $: if (ready && $loggedIn) connectWS();
-  $: if (ready && !$loggedIn) disconnectWS();
+  $effect(() => {
+    if (ready && $loggedIn) connectWS();
+  });
+
+  $effect(() => {
+    if (ready && !$loggedIn) disconnectWS();
+  });
 
   onDestroy(() => disconnectWS());
 </script>
@@ -30,7 +35,7 @@
 
     <header class="topbar">
       <div class="topbar-spacer"></div>
-      <button class="sign-out-btn" on:click={logout}>Sign out</button>
+      <button class="sign-out-btn" onclick={logout}>Sign out</button>
     </header>
 
     <main class="content">

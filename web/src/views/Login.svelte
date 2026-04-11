@@ -3,7 +3,7 @@
   import { pushNav } from "../lib/stores/ui";
   import { addToast } from "@pneuma/shared";
 
-  let { onswitch }: { onswitch?: () => void } = $props();
+  let { onSwitch }: { onSwitch?: () => void } = $props();
 
   let username = $state("");
   let password = $state("");
@@ -63,7 +63,7 @@
 
   <p class="switch-text">
     Don't have an account?{" "}
-    <button class="switch-btn" onclick={onswitch}>Register</button>
+    <button class="switch-btn" onclick={onSwitch}>Register</button>
   </p>
 </div>
 

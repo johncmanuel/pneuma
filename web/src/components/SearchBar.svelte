@@ -7,7 +7,7 @@
   import { wsSend } from "../lib/ws";
   import type { Track, AlbumGroup } from "@pneuma/shared";
 
-  let searchBar: SearchBar;
+  let searchBar = $state<SearchBar | undefined>();
 
   async function searchFn(query: string) {
     const [tracks, albums] = await Promise.all([

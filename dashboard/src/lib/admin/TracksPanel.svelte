@@ -3,6 +3,7 @@
   import { apiFetch, currentUser } from "../api";
   import { libraryVersion, scanRunning, scanResult } from "../ws";
   import { formatDuration, storageKeys } from "@pneuma/shared";
+  import { SortButton } from "@pneuma/ui";
 
   interface Track {
     id: string;
@@ -50,18 +51,18 @@
     return AUDIO_EXTS.has(name.slice(dot).toLowerCase());
   }
 
-  let tracks: Track[] = [];
-  let loading = false;
-  let searchQuery = "";
-  let sortKey: SortKey = "title";
-  let sortDir: SortDir = "asc";
+  let tracks: Track[] = $state([]);
+  let loading = $state(false);
+  let searchQuery = $state("");
+  let sortKey: SortKey = $state("title");
+  let sortDir: SortDir = $state("asc");
 
-  let selectedIds = new Set<string>();
-  let bulkDeleting = false;
+  let selectedIds = $state(new Set<string>());
+  let bulkDeleting = $state(false);
 
-  $: canUpload = $currentUser?.is_admin || $currentUser?.can_upload;
-  $: canEdit = $currentUser?.is_admin || $currentUser?.can_edit;
-  $: canDelete = $currentUser?.is_admin || $currentUser?.can_delete;
+  let canUpload = $derived($currentUser?.is_admin || $currentUser?.can_upload);
+  let canEdit = $derived($currentUser?.is_admin || $currentUser?.can_edit);
+  let canDelete = $derived($currentUser?.is_admin || $currentUser?.can_delete);
 
   const STORAGE_KEY = storageKeys.adminTracksPanel;
 
@@ -96,69 +97,64 @@
     }
   }
 
-  $: (sortKey, sortDir, searchQuery, persistState());
-
-  // Filter tracks based on searchQuery, sortKey, and sortDir.
-  $: filteredTracks = searchQuery.trim()
-    ? tracks.filter(
-        (t) =>
-          t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          t.album_artist?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          t.album_name?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : tracks;
-
-  // Sort the filtered tracks based on sortKey and sortDir.
-  $: sortedTracks = [...filteredTracks].sort((a, b) => {
-    let cmp = 0;
-    switch (sortKey) {
-      case "title":
-        cmp = (a.title || "").localeCompare(b.title || "", undefined, {
-          sensitivity: "base"
-        });
-        break;
-      case "album_artist":
-        cmp = (a.album_artist || "").localeCompare(
-          b.album_artist || "",
-          undefined,
-          { sensitivity: "base" }
-        );
-        break;
-      case "album_name":
-        cmp = (a.album_name || "").localeCompare(
-          b.album_name || "",
-          undefined,
-          { sensitivity: "base" }
-        );
-        break;
-      case "duration_ms":
-        cmp = (a.duration_ms ?? 0) - (b.duration_ms ?? 0);
-        break;
-    }
-    return sortDir === "desc" ? -cmp : cmp;
+  $effect(() => {
+    sortKey;
+    sortDir;
+    searchQuery;
+    persistState();
   });
 
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) {
-      sortDir = sortDir === "asc" ? "desc" : "asc";
-    } else {
-      sortKey = key;
-      sortDir = "asc";
-    }
-  }
+  // Filter tracks based on searchQuery, sortKey, and sortDir.
+  let filteredTracks = $derived(
+    searchQuery.trim()
+      ? tracks.filter(
+          (t) =>
+            t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            t.album_artist?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            t.album_name?.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : tracks
+  );
 
-  function sortIndicator(key: SortKey): string {
-    if (sortKey !== key) return "";
-    return sortDir === "asc" ? " ↑" : " ↓";
-  }
+  // Sort the filtered tracks based on sortKey and sortDir.
+  let sortedTracks = $derived(
+    [...filteredTracks].sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "title":
+          cmp = (a.title || "").localeCompare(b.title || "", undefined, {
+            sensitivity: "base"
+          });
+          break;
+        case "album_artist":
+          cmp = (a.album_artist || "").localeCompare(
+            b.album_artist || "",
+            undefined,
+            { sensitivity: "base" }
+          );
+          break;
+        case "album_name":
+          cmp = (a.album_name || "").localeCompare(
+            b.album_name || "",
+            undefined,
+            { sensitivity: "base" }
+          );
+          break;
+        case "duration_ms":
+          cmp = (a.duration_ms ?? 0) - (b.duration_ms ?? 0);
+          break;
+      }
+      return sortDir === "desc" ? -cmp : cmp;
+    })
+  );
 
   onMount(() => {
     loadPersistedState();
     loadTracks();
   });
 
-  let _prevLibVer: number | undefined;
-  $: {
+  let _prevLibVer: number | undefined = $state();
+  $effect(() => {
     const v = $libraryVersion;
 
     // prevent repetitive reloads when libraryVersion changes rapidly (e.g. during bulk upload)
@@ -166,7 +162,7 @@
       loadTracks();
 
     _prevLibVer = v;
-  }
+  });
 
   async function loadTracks() {
     loading = true;
@@ -178,10 +174,10 @@
     }
   }
 
-  let editingTrack: Track | null = null;
-  let editTitle = "";
-  let editArtist = "";
-  let editAlbum = "";
+  let editingTrack: Track | null = $state(null);
+  let editTitle = $state("");
+  let editArtist = $state("");
+  let editAlbum = $state("");
 
   function startEdit(t: Track) {
     editingTrack = t;
@@ -216,8 +212,9 @@
     if (r.ok) await loadTracks();
   }
 
-  $: allSelected =
-    sortedTracks.length > 0 && sortedTracks.every((t) => selectedIds.has(t.id));
+  let allSelected = $derived(
+    sortedTracks.length > 0 && sortedTracks.every((t) => selectedIds.has(t.id))
+  );
 
   function toggleSelectAll() {
     if (allSelected) {
@@ -255,17 +252,17 @@
     if (fail > 0) alert(`Deleted ${ok}, failed ${fail}`);
   }
 
-  let fileInput: HTMLInputElement;
-  let folderInput: HTMLInputElement;
-  let dragOver = false;
+  let fileInput: HTMLInputElement | undefined = $state();
+  let folderInput: HTMLInputElement | undefined = $state();
+  let dragOver = $state(false);
 
-  let uploadQueue: UploadItem[] = [];
-  let uploadActive = false;
-  let uploadCancelled = false;
-  let uploadDone = false;
+  let uploadQueue: UploadItem[] = $state([]);
+  let uploadActive = $state(false);
+  let uploadCancelled = $state(false);
+  let uploadDone = $state(false);
 
   // show upload stats
-  $: uploadStats = {
+  let uploadStats = $derived({
     total: uploadQueue.length,
     done: uploadQueue.filter((i) => i.status === "done").length,
     duplicate: uploadQueue.filter((i) => i.status === "duplicate").length,
@@ -274,7 +271,7 @@
     pending: uploadQueue.filter(
       (i) => i.status === "pending" || i.status === "uploading"
     ).length
-  };
+  });
 
   function handleFileInput() {
     if (fileInput?.files?.length) {
@@ -497,11 +494,13 @@
 
   // Auto-clear scan result after 8 seconds
   const timeoutMs = 8000;
-  let scanResultTimer: ReturnType<typeof setTimeout> | undefined;
-  $: if ($scanResult) {
-    if (scanResultTimer) clearTimeout(scanResultTimer);
-    scanResultTimer = setTimeout(() => scanResult.set(null), timeoutMs);
-  }
+  let scanResultTimer: ReturnType<typeof setTimeout> | undefined = $state();
+  $effect(() => {
+    if ($scanResult) {
+      if (scanResultTimer) clearTimeout(scanResultTimer);
+      scanResultTimer = setTimeout(() => scanResult.set(null), timeoutMs);
+    }
+  });
 
   onDestroy(() => {
     if (scanResultTimer) clearTimeout(scanResultTimer);
@@ -534,14 +533,14 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <div
   class="panel"
   class:drag-over={dragOver}
-  on:dragover={handleDragOver}
-  on:dragleave={handleDragLeave}
-  on:drop={handleDrop}
+  ondragover={handleDragOver}
+  ondragleave={handleDragLeave}
+  ondrop={handleDrop}
   role="region"
 >
   <div class="actions-bar">
@@ -558,12 +557,12 @@
         accept="audio/*"
         multiple
         bind:this={fileInput}
-        on:change={handleFileInput}
+        onchange={handleFileInput}
         style="display:none"
       />
       <button
         class="action-btn"
-        on:click={() => fileInput?.click()}
+        onclick={() => fileInput?.click()}
         disabled={uploadActive}
       >
         Upload Files
@@ -574,12 +573,12 @@
         webkitdirectory
         multiple
         bind:this={folderInput}
-        on:change={handleFolderInput}
+        onchange={handleFolderInput}
         style="display:none"
       />
       <button
         class="action-btn"
-        on:click={() => folderInput?.click()}
+        onclick={() => folderInput?.click()}
         disabled={uploadActive}
       >
         Upload Folder
@@ -587,7 +586,7 @@
     {/if}
 
     {#if $currentUser?.is_admin}
-      <button class="action-btn" on:click={triggerScan} disabled={$scanRunning}>
+      <button class="action-btn" onclick={triggerScan} disabled={$scanRunning}>
         {$scanRunning ? "Scanning..." : "Scan"}
       </button>
     {/if}
@@ -595,7 +594,7 @@
     {#if canDelete && selectedIds.size > 0}
       <button
         class="action-btn danger-btn"
-        on:click={bulkDelete}
+        onclick={bulkDelete}
         disabled={bulkDeleting}
       >
         {bulkDeleting ? "Deleting…" : `Delete ${selectedIds.size}`}
@@ -627,11 +626,10 @@
         </span>
         <div class="upload-actions">
           {#if uploadActive}
-            <button class="sm-btn danger" on:click={cancelUpload}>Cancel</button
-            >
+            <button class="sm-btn danger" onclick={cancelUpload}>Cancel</button>
           {/if}
           {#if !uploadActive}
-            <button class="sm-btn" on:click={clearUploadQueue}>Clear</button>
+            <button class="sm-btn" onclick={clearUploadQueue}>Clear</button>
           {/if}
         </div>
       </div>
@@ -722,24 +720,38 @@
                 <input
                   type="checkbox"
                   checked={allSelected}
-                  on:change={toggleSelectAll}
+                  onchange={toggleSelectAll}
                   title="Select all"
                 />
               </th>
             {/if}
-            <th class="sortable" on:click={() => toggleSort("title")}
-              >Title{sortIndicator("title")}</th
+            <th class="sortable"
+              ><SortButton
+                bind:currentField={sortKey}
+                bind:sortDir
+                field="title">Title</SortButton
+              ></th
             >
-            <th class="sortable" on:click={() => toggleSort("album_artist")}
-              >Artist{sortIndicator("album_artist")}</th
+            <th class="sortable"
+              ><SortButton
+                bind:currentField={sortKey}
+                bind:sortDir
+                field="album_artist">Artist</SortButton
+              ></th
             >
-            <th class="sortable" on:click={() => toggleSort("album_name")}
-              >Album{sortIndicator("album_name")}</th
+            <th class="sortable"
+              ><SortButton
+                bind:currentField={sortKey}
+                bind:sortDir
+                field="album_name">Album</SortButton
+              ></th
             >
-            <th
-              class="sortable col-dur"
-              on:click={() => toggleSort("duration_ms")}
-              >Duration{sortIndicator("duration_ms")}</th
+            <th class="sortable col-dur"
+              ><SortButton
+                bind:currentField={sortKey}
+                bind:sortDir
+                field="duration_ms">Duration</SortButton
+              ></th
             >
             {#if canEdit || canDelete}
               <th>Actions</th>
@@ -754,7 +766,7 @@
                   <input
                     type="checkbox"
                     checked={selectedIds.has(t.id)}
-                    on:change={() => toggleSelect(t.id)}
+                    onchange={() => toggleSelect(t.id)}
                   />
                 </td>
               {/if}
@@ -782,8 +794,8 @@
                 >
                 <td>{formatDuration(t.duration_ms)}</td>
                 <td class="action-cell">
-                  <button class="sm-btn save" on:click={saveEdit}>Save</button>
-                  <button class="sm-btn" on:click={cancelEdit}>Cancel</button>
+                  <button class="sm-btn save" onclick={saveEdit}>Save</button>
+                  <button class="sm-btn" onclick={cancelEdit}>Cancel</button>
                 </td>
               {:else}
                 <td class="truncate">{t.title}</td>
@@ -793,14 +805,14 @@
                 {#if canEdit || canDelete}
                   <td class="action-cell">
                     {#if canEdit}
-                      <button class="sm-btn" on:click={() => startEdit(t)}
+                      <button class="sm-btn" onclick={() => startEdit(t)}
                         >Edit</button
                       >
                     {/if}
                     {#if canDelete}
                       <button
                         class="sm-btn danger"
-                        on:click={() => deleteTrack(t.id)}>Delete</button
+                        onclick={() => deleteTrack(t.id)}>Delete</button
                       >
                     {/if}
                   </td>

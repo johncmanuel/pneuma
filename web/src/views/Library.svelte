@@ -27,34 +27,47 @@
     type AlbumGroup
   } from "@pneuma/shared";
   import TrackRow from "../components/TrackRow.svelte";
+  import { SortButton } from "@pneuma/ui";
   import { Music, Search, X } from "@lucide/svelte";
+
+  type SortField = "default" | "title" | "artist" | "duration";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
-  let albumFilter = "";
-  let trackListEl: HTMLDivElement;
-  let albumGridFilter = "";
+  let albumFilter = $state("");
+  let albumSortField: SortField = $state("default");
+  let albumSortDir: "asc" | "desc" = $state("asc");
 
-  let currentAlbumGroup: AlbumGroup | null = null;
-  let albumDetailTracks: Track[] = [];
-  let albumDetailLoading = false;
+  let trackListEl: HTMLDivElement | undefined = $state();
+  let albumGridFilter = $state("");
 
-  $: hasMore = $albumGroups.length < $albumGroupsTotal;
+  let currentAlbumGroup: AlbumGroup | null = $state(null);
+  let albumDetailTracks: Track[] = $state([]);
+  let albumDetailLoading = $state(false);
+
+  let hasMore = $derived($albumGroups.length < $albumGroupsTotal);
 
   // Load the selected album's tracks when the selected album changes
-  $: if ($selectedAlbum && !albumDetailLoading) {
-    const group = $albumGroups.find((g) => g.key === $selectedAlbum) ?? null;
-    if (group && (!currentAlbumGroup || currentAlbumGroup.key !== group.key)) {
-      loadAlbumDetail(group);
+  $effect(() => {
+    if ($selectedAlbum && !albumDetailLoading) {
+      const group = $albumGroups.find((g) => g.key === $selectedAlbum) ?? null;
+      if (
+        group &&
+        (!currentAlbumGroup || currentAlbumGroup.key !== group.key)
+      ) {
+        loadAlbumDetail(group);
+      }
     }
-  }
+  });
 
   // Clear album detail when deselecting
-  $: if (!$selectedAlbum) {
-    currentAlbumGroup = null;
-    albumDetailTracks = [];
-    albumFilter = "";
-  }
+  $effect(() => {
+    if (!$selectedAlbum) {
+      currentAlbumGroup = null;
+      albumDetailTracks = [];
+      albumFilter = "";
+    }
+  });
 
   async function loadAlbumDetail(group: AlbumGroup) {
     albumDetailLoading = true;
@@ -73,25 +86,45 @@
   }
 
   // filter the album's tracks based on the albumFilter input
-  $: filteredTracks = (() => {
-    if (!currentAlbumGroup) return [];
+  let filteredTracks = $derived(
+    (() => {
+      if (!currentAlbumGroup) return [];
 
-    const f = albumFilter.toLowerCase();
-    if (!f) return albumDetailTracks;
+      let list = albumDetailTracks;
+      const f = albumFilter.toLowerCase();
+      if (f) {
+        list = list.filter(
+          (t) =>
+            (t.title ?? "").toLowerCase().includes(f) ||
+            (t.artist_name ?? "").toLowerCase().includes(f)
+        );
+      }
 
-    return albumDetailTracks.filter(
-      (t) =>
-        (t.title ?? "").toLowerCase().includes(f) ||
-        (t.artist_name ?? "").toLowerCase().includes(f)
-    );
-  })();
+      return list.slice().sort((a, b) => {
+        if (albumSortField === "default")
+          return (a.track_number || 0) - (b.track_number || 0);
 
-  $: virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: filteredTracks.length,
-    getScrollElement: () => trackListEl,
-    estimateSize: () => 38,
-    overscan: 5
-  });
+        let cmp = 0;
+        if (albumSortField === "title")
+          cmp = (a.title || "").localeCompare(b.title || "");
+        else if (albumSortField === "artist")
+          cmp = (a.artist_name || "").localeCompare(b.artist_name || "");
+        else if (albumSortField === "duration")
+          cmp = (a.duration_ms || 0) - (b.duration_ms || 0);
+
+        return albumSortDir === "desc" ? -cmp : cmp;
+      });
+    })()
+  );
+
+  let virtualizer = $derived(
+    createVirtualizer<HTMLDivElement, HTMLDivElement>({
+      count: filteredTracks.length,
+      getScrollElement: () => trackListEl as HTMLDivElement,
+      estimateSize: () => 38,
+      overscan: 5
+    })
+  );
 
   onMount(() => {
     if ($albumGroups.length === 0) {
@@ -114,8 +147,8 @@
     loadAlbumGroupsPage(0);
   }
 
-  let gridScrollEl: HTMLDivElement;
-  let loadingMore = false;
+  let gridScrollEl: HTMLDivElement | undefined = $state();
+  let loadingMore = $state(false);
 
   function handleGridScroll() {
     if (loadingMore || !hasMore || !gridScrollEl) return;
@@ -199,7 +232,7 @@
     if (img) img.style.display = "none";
   }
 
-  let isScrolling = false;
+  let isScrolling = $state(false);
   let scrollTimer: ReturnType<typeof setTimeout>;
 
   function handleScroll() {
@@ -252,9 +285,24 @@
 
         <div class="track-headers hide-album">
           <span class="num">#</span>
-          <span>Title</span>
-          <span>Artist</span>
-          <span>Duration</span>
+          <SortButton
+            class="sortable"
+            bind:currentField={albumSortField}
+            bind:sortDir={albumSortDir}
+            field="title">Title</SortButton
+          >
+          <SortButton
+            class="sortable"
+            bind:currentField={albumSortField}
+            bind:sortDir={albumSortDir}
+            field="artist">Artist</SortButton
+          >
+          <SortButton
+            class="sortable"
+            bind:currentField={albumSortField}
+            bind:sortDir={albumSortDir}
+            field="duration">Duration</SortButton
+          >
         </div>
 
         {#if albumFilter && filteredTracks.length === 0}
@@ -279,10 +327,10 @@
                     hideAlbum={true}
                     active={$currentTrackId === filteredTracks[row.index]?.id}
                     playlists={$playlistsStore}
-                    onplay={(t) => t && playTrack(t)}
-                    onselect={() => {}}
-                    onaddtoqueue={(t) => t && addToQueue(t)}
-                    onaddtoplaylist={(t, id) => handleAddToPlaylist(t, id)}
+                    onPlay={(t) => t && playTrack(t)}
+                    onSelect={() => {}}
+                    onAddToQueue={(t) => t && addToQueue(t)}
+                    onAddToPlaylist={(t, id) => handleAddToPlaylist(t, id)}
                     onToggleFavorite={toggleFavoriteTrack}
                   />
                 </div>

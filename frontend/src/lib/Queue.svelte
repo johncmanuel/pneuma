@@ -13,19 +13,21 @@
   import { artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
 
-  $: queue = $playerState.queue ?? [];
-  $: currentIndex = $playerState.queueIndex ?? 0;
-  $: nowPlayingTrack = $playerState.track;
+  let queue = $derived($playerState.queue ?? []);
+  let currentIndex = $derived($playerState.queueIndex ?? 0);
+  let nowPlayingTrack = $derived($playerState.track);
 
   // track ID -> Track, used for queue resolution
   const trackCache = new Map<string, Track>();
-  let upNext: Track[] = [];
-  let resolving = false;
+  let upNext: Track[] = $state([]);
+  let resolving = $state(false);
 
   // When the queue changes, resolve any new IDs from the backend.
-  $: if (queue.length > 0 || currentIndex >= 0) {
-    resolveQueue(queue, currentIndex);
-  }
+  $effect(() => {
+    if (queue.length > 0 || currentIndex >= 0) {
+      resolveQueue(queue, currentIndex);
+    }
+  });
 
   async function resolveQueue(q: string[], idx: number) {
     const ids = q.slice(idx + 1);
@@ -125,7 +127,7 @@
 <aside class="queue-panel">
   <div class="queue-header">
     <h3>Queue</h3>
-    <button class="close-btn" on:click={close} title="Close">&times;</button>
+    <button class="close-btn" onclick={close} title="Close">&times;</button>
   </div>
 
   {#if nowPlayingTrack}
@@ -135,7 +137,7 @@
         <img
           src={artworkUrl(nowPlayingTrack.id)}
           alt=""
-          on:error={(e) => {
+          onerror={(e) => {
             // may find a better way to do this but this is temporary
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
@@ -158,7 +160,7 @@
       <p class="empty text-3">Nothing in queue</p>
     {:else}
       {#each upNext as track, i (track.id + "-" + i)}
-        <button class="queue-item" on:click={() => playFromQueue(track, i)}>
+        <button class="queue-item" onclick={() => playFromQueue(track, i)}>
           <div class="track-info">
             <span class="name truncate">{track.title}</span>
             <span class="artist truncate text-3"

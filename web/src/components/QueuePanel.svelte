@@ -7,17 +7,21 @@
   import { wsSend } from "../lib/ws";
   import { type Track, isLocalID } from "@pneuma/shared";
 
-  $: queue = ($playerState.queue ?? []).filter((id) => !isLocalID(id));
-  $: currentIndex = $playerState.queueIndex ?? 0;
-  $: nowPlayingTrack = $playerState.track;
+  let queue = $derived(
+    ($playerState.queue ?? []).filter((id) => !isLocalID(id))
+  );
+  let currentIndex = $derived($playerState.queueIndex ?? 0);
+  let nowPlayingTrack = $derived($playerState.track);
 
   const trackCache = new Map<string, Track>();
-  let upNext: Track[] = [];
-  let resolving = false;
+  let upNext: Track[] = $state([]);
+  let resolving = $state(false);
 
-  $: if (queue.length > 0 || currentIndex >= 0) {
-    resolveQueue(queue, currentIndex);
-  }
+  $effect(() => {
+    if (queue.length > 0 || currentIndex >= 0) {
+      resolveQueue(queue, currentIndex);
+    }
+  });
 
   async function resolveQueue(q: string[], idx: number) {
     const ids = q.slice(idx + 1);

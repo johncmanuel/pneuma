@@ -21,11 +21,11 @@
     isFavorite?: boolean;
     hideFavoriteIcon?: boolean;
     playlists?: PlaylistMenuItem[];
-    onplay?: (track: Track | null) => void;
-    onselect?: () => void;
-    onaddtoqueue?: (track: Track | null) => void;
-    onremove?: (track: Track | null) => void;
-    onaddtoplaylist?: (track: Track | null, playlistId: string) => void;
+    onPlay?: (track: Track | null) => void;
+    onSelect?: () => void;
+    onAddToQueue?: (track: Track | null) => void;
+    onRemove?: (track: Track | null) => void;
+    onAddToPlaylist?: (track: Track | null, playlistId: string) => void;
     onToggleFavorite?: (track: Track | null) => void;
   }
 
@@ -41,11 +41,11 @@
     isFavorite = false,
     hideFavoriteIcon = false,
     playlists = [],
-    onplay,
-    onselect,
-    onaddtoqueue,
-    onremove,
-    onaddtoplaylist,
+    onPlay,
+    onSelect,
+    onAddToQueue,
+    onRemove,
+    onAddToPlaylist,
     onToggleFavorite
   }: Props = $props();
 
@@ -80,17 +80,17 @@
   }
 
   function handleAddToQueue() {
-    onaddtoqueue?.(track);
+    onAddToQueue?.(track);
     showMenu = false;
   }
 
   function handleRemove() {
-    onremove?.(track);
+    onRemove?.(track);
     showMenu = false;
   }
 
   function handleAddToPlaylist(pl: PlaylistMenuItem) {
-    onaddtoplaylist?.(track, pl.id);
+    onAddToPlaylist?.(track, pl.id);
     showMenu = false;
     showPlaylistSub = false;
   }
@@ -114,8 +114,8 @@
   class:hide-album={hideAlbum}
   class:offline
   class:local-only={isLocal && disableLocal}
-  ondblclick={() => !isDisabled && onplay?.(track)}
-  onclick={() => onselect?.()}
+  ondblclick={() => !isDisabled && onPlay?.(track)}
+  onclick={() => onSelect?.()}
   oncontextmenu={onContext}
   disabled={isDisabled}
   title={isDisabled

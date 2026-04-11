@@ -8,7 +8,7 @@
 
   <ul class="nav-list">
     <li>
-      <button class="active" on:click={() => (window.location.href = "/player")}
+      <button class="active" onclick={() => (window.location.href = "/player")}
         >Player</button
       >
     </li>

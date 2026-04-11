@@ -15,10 +15,10 @@
 
   interface Props {
     activeView?: string;
-    onnavigate?: (id: string) => void;
+    onNavigate?: (id: string) => void;
   }
 
-  let { activeView = "library", onnavigate }: Props = $props();
+  let { activeView = "library", onNavigate }: Props = $props();
 
   const navItems = [
     { id: "library", label: "Library" },
@@ -87,7 +87,7 @@
       return;
     }
 
-    onnavigate?.(id);
+    onNavigate?.(id);
   }
 
   function handleRecentClick(item: { key: string }) {
@@ -112,6 +112,6 @@
   activeView={sidebarActiveView}
   {navItems}
   {recentItems}
-  onnavigate={handleNavClick}
+  onNavigate={handleNavClick}
   onRecentClick={handleRecentClick}
 />

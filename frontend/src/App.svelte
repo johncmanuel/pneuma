@@ -25,8 +25,8 @@
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
   import { Toasts } from "@pneuma/ui";
 
-  let wasConnected = false;
-  let searchBar: SearchBar;
+  let wasConnected = $state(false);
+  let searchBar: SearchBar | undefined = $state();
 
   onMount(async () => {
     await initApi();
@@ -39,14 +39,16 @@
 
   // Reactively connect/disconnect WS whenever connected state changes.
   // This covers: initial connect, autoReconnect success, and manual disconnect.
-  $: if ($connected && !wasConnected) {
-    wasConnected = true;
-    connectWS();
-    loadRemoteAlbumGroupsPage(0);
-  } else if (!$connected && wasConnected) {
-    wasConnected = false;
-    disconnectWS();
-  }
+  $effect(() => {
+    if ($connected && !wasConnected) {
+      wasConnected = true;
+      connectWS();
+      loadRemoteAlbumGroupsPage(0);
+    } else if (!$connected && wasConnected) {
+      wasConnected = false;
+      disconnectWS();
+    }
+  });
 
   function handleNavigate(view: string) {
     if (view === "favorites") {
@@ -80,27 +82,27 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} on:mouseup={handleMouseUp} />
+<svelte:window onkeydown={handleKeydown} onmouseup={handleMouseUp} />
 
 <div class="shell" class:panel-open={$activePanel !== null}>
   <div class="sidebar-area">
-    <Sidebar activeView={$currentView} onnavigate={handleNavigate} />
+    <Sidebar activeView={$currentView} onNavigate={handleNavigate} />
   </div>
 
   <header class="topbar">
     <div class="nav-history">
       <button
         class="nav-btn"
+        onclick={goBack}
         disabled={!$canGoBack}
-        on:click={goBack}
         title="Go back"
       >
         <ChevronLeft size={18} />
       </button>
       <button
         class="nav-btn"
+        onclick={goForward}
         disabled={!$canGoForward}
-        on:click={goForward}
         title="Go forward"
       >
         <ChevronRight size={18} />
@@ -147,6 +149,7 @@
       -apple-system,
       "Segoe UI",
       sans-serif;
+    user-select: none;
     overflow: hidden;
   }
 
