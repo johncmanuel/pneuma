@@ -149,6 +149,7 @@
       -apple-system,
       "Segoe UI",
       sans-serif;
+    user-select: none;
     overflow: hidden;
   }
 

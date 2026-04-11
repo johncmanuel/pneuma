@@ -27,11 +27,17 @@
     type AlbumGroup
   } from "@pneuma/shared";
   import TrackRow from "../components/TrackRow.svelte";
+  import { SortButton } from "@pneuma/ui";
   import { Music, Search, X } from "@lucide/svelte";
+
+  type SortField = "default" | "title" | "artist" | "duration";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
   let albumFilter = $state("");
+  let albumSortField: SortField = $state("default");
+  let albumSortDir: "asc" | "desc" = $state("asc");
+
   let trackListEl: HTMLDivElement | undefined = $state();
   let albumGridFilter = $state("");
 
@@ -84,14 +90,30 @@
     (() => {
       if (!currentAlbumGroup) return [];
 
+      let list = albumDetailTracks;
       const f = albumFilter.toLowerCase();
-      if (!f) return albumDetailTracks;
+      if (f) {
+        list = list.filter(
+          (t) =>
+            (t.title ?? "").toLowerCase().includes(f) ||
+            (t.artist_name ?? "").toLowerCase().includes(f)
+        );
+      }
 
-      return albumDetailTracks.filter(
-        (t) =>
-          (t.title ?? "").toLowerCase().includes(f) ||
-          (t.artist_name ?? "").toLowerCase().includes(f)
-      );
+      return list.slice().sort((a, b) => {
+        if (albumSortField === "default")
+          return (a.track_number || 0) - (b.track_number || 0);
+
+        let cmp = 0;
+        if (albumSortField === "title")
+          cmp = (a.title || "").localeCompare(b.title || "");
+        else if (albumSortField === "artist")
+          cmp = (a.artist_name || "").localeCompare(b.artist_name || "");
+        else if (albumSortField === "duration")
+          cmp = (a.duration_ms || 0) - (b.duration_ms || 0);
+
+        return albumSortDir === "desc" ? -cmp : cmp;
+      });
     })()
   );
 
@@ -263,9 +285,24 @@
 
         <div class="track-headers hide-album">
           <span class="num">#</span>
-          <span>Title</span>
-          <span>Artist</span>
-          <span>Duration</span>
+          <SortButton
+            class="sortable"
+            bind:currentField={albumSortField}
+            bind:sortDir={albumSortDir}
+            field="title">Title</SortButton
+          >
+          <SortButton
+            class="sortable"
+            bind:currentField={albumSortField}
+            bind:sortDir={albumSortDir}
+            field="artist">Artist</SortButton
+          >
+          <SortButton
+            class="sortable"
+            bind:currentField={albumSortField}
+            bind:sortDir={albumSortDir}
+            field="duration">Duration</SortButton
+          >
         </div>
 
         {#if albumFilter && filteredTracks.length === 0}

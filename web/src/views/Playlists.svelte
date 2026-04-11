@@ -34,6 +34,9 @@
     type PlaylistSummary
   } from "@pneuma/shared";
   import { generateRandomPlaylist } from "../lib/api";
+  import { SortButton } from "@pneuma/ui";
+
+  type SortField = "default" | "title" | "added_at" | "duration";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -88,17 +91,29 @@
   });
 
   let filter = $state("");
+  let sortField: SortField = $state("default");
+  let sortDir: "asc" | "desc" = $state("asc");
 
   let filteredItems = $derived(
-    $selectedPlaylistItems.filter((i) => {
-      if (!filter) return true;
-      const q = filter.toLowerCase();
-      return (
-        i.ref_title.toLowerCase().includes(q) ||
-        i.ref_album.toLowerCase().includes(q) ||
-        i.ref_album_artist.toLowerCase().includes(q)
-      );
-    })
+    $selectedPlaylistItems
+      .filter((i) => {
+        if (!filter) return true;
+        const q = filter.toLowerCase();
+        return i.ref_album_artist.toLowerCase().includes(q);
+      })
+      .sort((a, b) => {
+        if (sortField === "default") return a.position - b.position;
+
+        let cmp = 0;
+
+        if (sortField === "title") cmp = a.ref_title.localeCompare(b.ref_title);
+        else if (sortField === "added_at")
+          cmp = (a.added_at || "").localeCompare(b.added_at || "");
+        else if (sortField === "duration")
+          cmp = (a.ref_duration_ms || 0) - (b.ref_duration_ms || 0);
+
+        return sortDir === "desc" ? -cmp : cmp;
+      })
   );
 
   let virtualizer = $derived(
@@ -357,10 +372,25 @@
 
     <div class="track-headers">
       <span class="num">#</span>
-      <span>Title</span>
+      <SortButton
+        class="sortable"
+        bind:currentField={sortField}
+        bind:sortDir
+        field="title">Title</SortButton
+      >
       <span>Album</span>
-      <span>Date Added</span>
-      <span>Duration</span>
+      <SortButton
+        class="sortable"
+        bind:currentField={sortField}
+        bind:sortDir
+        field="added_at">Date Added</SortButton
+      >
+      <SortButton
+        class="sortable"
+        bind:currentField={sortField}
+        bind:sortDir
+        field="duration">Duration</SortButton
+      >
     </div>
 
     <div class="track-list" bind:this={trackListEl}>

@@ -24,7 +24,6 @@
     }
   }
 
-  // i'll keep the character arrows for now
   let indicator = $derived(
     currentField === field ? (sortDir === "asc" ? " ↑" : " ↓") : ""
   );

@@ -31,7 +31,7 @@
   import { connected, playlistArtUrl } from "../utils/api";
   import { Heart, Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "./TrackRow.svelte";
-  import SortButton from "./SortButton.svelte";
+  import { SortButton } from "@pneuma/ui";
   import "../assets/css/track-list.css";
   import { addToast, totalDuration, type Track } from "@pneuma/shared";
 

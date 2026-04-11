@@ -3,6 +3,7 @@
   import { apiFetch, currentUser } from "../api";
   import { libraryVersion, scanRunning, scanResult } from "../ws";
   import { formatDuration, storageKeys } from "@pneuma/shared";
+  import { SortButton } from "@pneuma/ui";
 
   interface Track {
     id: string;
@@ -146,20 +147,6 @@
       return sortDir === "desc" ? -cmp : cmp;
     })
   );
-
-  function toggleSort(key: SortKey) {
-    if (sortKey === key) {
-      sortDir = sortDir === "asc" ? "desc" : "asc";
-    } else {
-      sortKey = key;
-      sortDir = "asc";
-    }
-  }
-
-  function sortIndicator(key: SortKey): string {
-    if (sortKey !== key) return "";
-    return sortDir === "asc" ? " ↑" : " ↓";
-  }
 
   onMount(() => {
     loadPersistedState();
@@ -738,19 +725,33 @@
                 />
               </th>
             {/if}
-            <th class="sortable" onclick={() => toggleSort("title")}
-              >Title {sortIndicator("title")}</th
+            <th class="sortable"
+              ><SortButton
+                bind:currentField={sortKey}
+                bind:sortDir
+                field="title">Title</SortButton
+              ></th
             >
-            <th class="sortable" onclick={() => toggleSort("album_artist")}
-              >Artist{sortIndicator("album_artist")}</th
+            <th class="sortable"
+              ><SortButton
+                bind:currentField={sortKey}
+                bind:sortDir
+                field="album_artist">Artist</SortButton
+              ></th
             >
-            <th class="sortable" onclick={() => toggleSort("album_name")}
-              >Album{sortIndicator("album_name")}</th
+            <th class="sortable"
+              ><SortButton
+                bind:currentField={sortKey}
+                bind:sortDir
+                field="album_name">Album</SortButton
+              ></th
             >
-            <th
-              class="sortable col-dur"
-              onclick={() => toggleSort("duration_ms")}
-              >Duration{sortIndicator("duration_ms")}</th
+            <th class="sortable col-dur"
+              ><SortButton
+                bind:currentField={sortKey}
+                bind:sortDir
+                field="duration_ms">Duration</SortButton
+              ></th
             >
             {#if canEdit || canDelete}
               <th>Actions</th>
