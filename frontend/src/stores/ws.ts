@@ -24,7 +24,7 @@ import { RefreshPlaylistArtByRemoteID } from "../../wailsjs/go/desktop/App";
 export const serverDisconnected = writable(false);
 
 let socket: WebSocket | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+const reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let intentionalClose = false;
 
 export function connectWS() {
@@ -56,7 +56,7 @@ export function connectWS() {
     if (get(favoritesSyncEnabled)) {
       syncFavoritesFromServer()
         .then(() => loadPlaylists())
-        .catch((e: any) =>
+        .catch((e) =>
           console.warn("Failed to sync favorites on reconnect:", e)
         );
     }
@@ -106,7 +106,7 @@ export function connectWS() {
                 const selId = get(selectedPlaylistId);
                 if (selId) return selectPlaylist(selId);
               })
-              .catch((e: any) =>
+              .catch((e) =>
                 console.warn("Failed to refresh playlist art from server:", e)
               );
           }
@@ -124,7 +124,7 @@ export function connectWS() {
               const selId = get(selectedPlaylistId);
               if (selId) return selectPlaylist(selId);
             })
-            .catch((e: any) =>
+            .catch((e) =>
               console.warn("Failed to refresh playlists from server event:", e)
             );
           break;
@@ -136,7 +136,7 @@ export function connectWS() {
             currentTracks = v;
           })();
 
-          let trackObj =
+          const trackObj =
             currentTracks.find((t) => t.id === msg.payload.track_id) ?? null;
 
           // If track not in local store, fetch metadata from server

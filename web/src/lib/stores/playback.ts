@@ -42,15 +42,19 @@ export async function loadPlaybackState() {
       repeat: s.repeat ?? 0,
       shuffle: s.shuffle ?? false
     });
-  } catch {}
+  } catch (e) {
+    console.warn("Failed to load playback state:", e);
+  }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isLocalPayload(payload: any): boolean {
   const id: string | undefined = payload?.track_id;
   if (!id) return false;
   return isLocalID(id);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function handlePlaybackChanged(payload: any): boolean {
   if (!payload || typeof payload !== "object") return false;
 

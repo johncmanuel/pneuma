@@ -29,7 +29,9 @@ export const db = {
   async setRecentAlbum(album: RecentAlbum): Promise<void> {
     try {
       await SetRecentAlbum(album);
-    } catch {}
+    } catch (e) {
+      console.warn("Failed to save recent album:", e);
+    }
   },
 
   async getRecentPlaylists(): Promise<RecentPlaylist[]> {
@@ -43,12 +45,16 @@ export const db = {
   async setRecentPlaylist(playlist: RecentPlaylist): Promise<void> {
     try {
       await SetRecentPlaylist(playlist);
-    } catch {}
+    } catch (e) {
+      console.warn("Failed to save recent playlist:", e);
+    }
   },
 
   async clearAllRecent(): Promise<void> {
     try {
       await ClearAllRecent();
-    } catch {}
+    } catch (e) {
+      console.warn("Failed to clear recent records:", e);
+    }
   }
 };

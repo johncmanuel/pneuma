@@ -80,6 +80,7 @@ export function wsSend(type: string, payload: object) {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function handleMessage(msg: { type: string; payload: any }) {
   switch (msg.type) {
     case "playback.changed":
@@ -120,10 +121,16 @@ function handleMessage(msg: { type: string; payload: any }) {
       });
 
       // refresh the playlist view if selected
-      if (msg.type === "playlist.updated" && msg.payload?.id) {
+      if (
+        msg.type === "playlist.updated" &&
+        msg.payload &&
+        typeof msg.payload === "object" &&
+        "id" in msg.payload &&
+        typeof msg.payload.id === "string"
+      ) {
         const sel = get(selectedPlaylist);
         if (sel?.id === msg.payload.id) {
-          selectedPlaylist.set(msg.payload);
+          selectedPlaylist.set(msg.payload as typeof sel);
         }
       }
       break;

@@ -82,6 +82,7 @@ export function wsSend(type: string, payload: object) {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function handleMessage(msg: { type: string; payload: any }) {
   switch (msg.type) {
     case "track.added":

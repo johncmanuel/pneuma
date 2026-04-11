@@ -142,6 +142,10 @@ function trackID(track: PlaylistTrackInput): string {
   return "id" in track ? track.id : "";
 }
 
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 function buildLocalPlaylistItem(
   track: PlaylistTrackInput,
   isLocal: boolean,
@@ -636,7 +640,7 @@ export async function loadPlaylists() {
       );
       await hydrateLocalPlaylistsState();
     }
-  } catch (e: any) {
+  } catch (e) {
     console.error("loadPlaylists:", e);
   }
 }
@@ -649,8 +653,8 @@ export async function createPlaylist(name: string, description = "") {
       addToast(`Playlist "${name}" created`, "success");
       return pl.id;
     }
-  } catch (e: any) {
-    addToast(`Failed to create playlist: ${e}`, "error");
+  } catch (e) {
+    addToast(`Failed to create playlist: ${errorMessage(e)}`, "error");
   }
   return null;
 }
@@ -683,8 +687,8 @@ export async function deletePlaylist(id: string) {
       selectedPlaylist.set(null);
     }
     addToast("Playlist deleted", "success");
-  } catch (e: any) {
-    addToast(`Failed to delete playlist: ${e}`, "error");
+  } catch (e) {
+    addToast(`Failed to delete playlist: ${errorMessage(e)}`, "error");
   }
 }
 
@@ -709,7 +713,7 @@ export async function updatePlaylist(
     if (get(selectedPlaylistId) === id) {
       await selectPlaylist(id);
     }
-  } catch (e: any) {
+  } catch (e) {
     console.error("Failed to update playlist:", e);
     addToast(`Failed to update playlist`, "error");
   }
@@ -729,7 +733,7 @@ export async function selectPlaylist(id: string) {
       | LocalPlaylistItem[]
       | null;
     selectedPlaylistItems.set(items ?? []);
-  } catch (e: any) {
+  } catch (e) {
     console.error("selectPlaylist:", e);
   } finally {
     playlistsLoading.set(false);
@@ -773,7 +777,7 @@ export async function addTrackToPlaylist(
   try {
     const item = buildLocalPlaylistItem(track, isLocal, 0);
     await AddLocalPlaylistItem(playlistId, item);
-    addToast(`Added \"${track.title}\" to \"${playlistName}\"`, "success");
+    addToast(`Added "${track.title}" to "${playlistName}"`, "success");
 
     // Sync queue if this playlist is currently playing.
     if (playlistId === get(playingPlaylistId)) {
@@ -792,11 +796,8 @@ export async function addTrackToPlaylist(
     }
 
     await loadPlaylists();
-  } catch (_) {
-    addToast(
-      `Failed to add \"${track.title}\" to \"${playlistName}\"`,
-      "error"
-    );
+  } catch {
+    addToast(`Failed to add "${track.title}" to "${playlistName}"`, "error");
   }
 }
 
@@ -846,7 +847,7 @@ export async function addTracksToPlaylist(
       // Optimistically add to local list to catch same-batch duplicates.
       currentItems = [...currentItems, item];
       added++;
-    } catch (e: any) {
+    } catch (e) {
       console.error("addTracksToPlaylist: failed to add track", track.title, e);
     }
   }
@@ -896,8 +897,8 @@ export async function reorderPlaylistItems(
     }
 
     await loadPlaylists();
-  } catch (e: any) {
-    addToast(`Failed to reorder playlist: ${e}`, "error");
+  } catch (e) {
+    addToast(`Failed to reorder playlist: ${errorMessage(e)}`, "error");
   }
 }
 
@@ -943,8 +944,8 @@ export async function uploadPlaylist(playlistId: string) {
       await selectPlaylist(playlistId);
     }
     return remoteId;
-  } catch (e: any) {
-    addToast(`Failed to upload playlist: ${e}`, "error");
+  } catch (e) {
+    addToast(`Failed to upload playlist: ${errorMessage(e)}`, "error");
     return null;
   }
 }
@@ -1064,8 +1065,8 @@ export async function pickPlaylistArtwork(playlistId: string) {
     }
 
     addToast("Playlist artwork updated", "success");
-  } catch (e: any) {
-    addToast(`Failed to set artwork: ${e}`, "error");
+  } catch (e) {
+    addToast(`Failed to set artwork: ${errorMessage(e)}`, "error");
   }
 }
 
@@ -1094,8 +1095,8 @@ export async function generateRandomPlaylist(
       );
       return pl.id;
     }
-  } catch (e: any) {
-    addToast(`Failed to generate playlist: ${e}`, "error");
+  } catch (e) {
+    addToast(`Failed to generate playlist: ${errorMessage(e)}`, "error");
   }
   return null;
 }

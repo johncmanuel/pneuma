@@ -54,7 +54,9 @@ export async function loadRemoteAlbumGroupsPage(offset = 0, filter = "") {
     remoteAlbumGroups.set(data.groups ?? []);
     remoteAlbumGroupsTotal.set(data.total ?? 0);
     remoteAlbumGroupsOffset.set(data.offset ?? 0);
-  } catch {}
+  } catch (e) {
+    console.warn("Failed to load remote album groups:", e);
+  }
 }
 
 export async function loadMoreRemoteAlbumGroups(filter = "") {
@@ -82,7 +84,9 @@ export async function loadMoreRemoteAlbumGroups(filter = "") {
       ...(data.groups ?? [])
     ]);
     remoteAlbumGroupsOffset.set(nextOffset);
-  } catch {}
+  } catch (e) {
+    console.warn("Failed to load more remote album groups:", e);
+  }
 }
 
 export const tracksTotal = writable(0);

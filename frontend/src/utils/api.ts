@@ -164,11 +164,8 @@ export async function autoReconnect(onSuccess?: () => void) {
         stopAutoReconnect();
         onSuccess?.();
       }
-    } catch (e: any) {
-      if (
-        typeof e?.message === "string" &&
-        e.message.includes("session expired")
-      ) {
+    } catch (e) {
+      if (e instanceof Error && e.message.includes("session expired")) {
         clearSession();
         stopAutoReconnect();
       }

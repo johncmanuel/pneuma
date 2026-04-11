@@ -479,14 +479,26 @@ export async function scanLocalFolders() {
         )
     );
 
-    const cancelTrackListener = EventsOn("local:track:scanned", (data: any) => {
-      if (scanGeneration !== myGen) return;
-      scanProgress.set({
-        folder: data.folder,
-        done: data.done,
-        total: data.total
-      });
-    });
+    const cancelTrackListener = EventsOn(
+      "local:track:scanned",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (data: any) => {
+        if (scanGeneration !== myGen) return;
+        if (!data || typeof data !== "object") return;
+
+        const payload = data as {
+          folder?: string;
+          done?: number;
+          total?: number;
+        };
+
+        scanProgress.set({
+          folder: payload.folder ?? "",
+          done: payload.done ?? 0,
+          total: payload.total ?? 0
+        });
+      }
+    );
 
     for (const dir of effectiveDirs) {
       if (scanGeneration !== myGen) break;
