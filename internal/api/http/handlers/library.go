@@ -371,30 +371,8 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
 		// re-read tags from the temp file
-		if f, openErr := os.Open(tmpPath); openErr == nil {
-			if m, tagErr := tag.ReadFrom(f); tagErr == nil {
-				if m.Title() != "" {
-					existing.Title = m.Title()
-				}
-				existing.AlbumArtist = m.AlbumArtist()
-				if existing.AlbumArtist == "" {
-					existing.AlbumArtist = m.Artist()
-				}
-				if existing.AlbumArtist == "" {
-					existing.AlbumArtist = "__unorganized__"
-				}
-				existing.AlbumName = m.Album()
-				if existing.AlbumName == "" {
-					existing.AlbumName = "__unorganized__"
-				}
-				existing.Genre = m.Genre()
-				existing.Year = m.Year()
-				existing.TrackNumber, _ = m.Track()
-				existing.DiscNumber, _ = m.Disc()
-				existing.UpdatedAt = time.Now()
-			}
-			f.Close()
-		}
+		populateTrackFromTags(existing, tmpPath)
+		existing.UpdatedAt = time.Now()
 
 		finalPath := filepath.Join(h.uploadsDir, hash+ext)
 		existing.Path = finalPath
@@ -416,46 +394,14 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	now := time.Now()
 	info, _ := os.Stat(tmpPath)
 
-	title := strings.TrimSuffix(file.Filename, ext)
-	var albumArtist, albumName, genre string
-	var year, trackNumber, discNumber int
-	if f, openErr := os.Open(tmpPath); openErr == nil {
-		if m, tagErr := tag.ReadFrom(f); tagErr == nil {
-			if m.Title() != "" {
-				title = m.Title()
-			}
-			albumArtist = m.AlbumArtist()
-			if albumArtist == "" {
-				albumArtist = m.Artist()
-			}
-			albumName = m.Album()
-			genre = m.Genre()
-			year = m.Year()
-			trackNumber, _ = m.Track()
-			discNumber, _ = m.Disc()
-		}
-		f.Close()
-	}
-
-	if albumName == "" {
-		albumName = "__unorganized__"
-	}
-	if albumArtist == "" {
-		albumArtist = "__unorganized__"
-	}
-
 	finalPath := filepath.Join(h.uploadsDir, hash+ext)
 
 	t := &models.Track{
 		ID:               uuid.NewString(),
 		Path:             finalPath, // will be set to final by the queue worker
-		Title:            title,
-		AlbumArtist:      albumArtist,
-		AlbumName:        albumName,
-		Genre:            genre,
-		Year:             year,
-		TrackNumber:      trackNumber,
-		DiscNumber:       discNumber,
+		Title:            strings.TrimSuffix(file.Filename, ext),
+		AlbumArtist:      "__unorganized__",
+		AlbumName:        "__unorganized__",
 		Fingerprint:      hash,
 		FileSizeBytes:    info.Size(),
 		LastModified:     info.ModTime(),
@@ -463,6 +409,8 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
+
+	populateTrackFromTags(t, tmpPath)
 
 	if err := h.queue.Enqueue(ingestion.Job{
 		TmpPath:   tmpPath,
@@ -516,4 +464,30 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 
 	h.hub.Publish(string(models.EventTrackRemoved), track)
 	return c.NoContent(http.StatusNoContent)
+}
+
+func populateTrackFromTags(t *models.Track, tmpPath string) {
+	if f, openErr := os.Open(tmpPath); openErr == nil {
+		defer f.Close()
+		if m, tagErr := tag.ReadFrom(f); tagErr == nil {
+			if m.Title() != "" {
+				t.Title = m.Title()
+			}
+			t.AlbumArtist = m.AlbumArtist()
+			if t.AlbumArtist == "" {
+				t.AlbumArtist = m.Artist()
+			}
+			if t.AlbumArtist == "" {
+				t.AlbumArtist = "__unorganized__"
+			}
+			t.AlbumName = m.Album()
+			if t.AlbumName == "" {
+				t.AlbumName = "__unorganized__"
+			}
+			t.Genre = m.Genre()
+			t.Year = m.Year()
+			t.TrackNumber, _ = m.Track()
+			t.DiscNumber, _ = m.Disc()
+		}
+	}
 }

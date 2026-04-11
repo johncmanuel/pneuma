@@ -465,27 +465,29 @@
       return;
 
     const ctrl = e.ctrlKey || e.metaKey; // Ctrl on Linux/Win, Cmd on macOS
+    const isModifierFree = !ctrl && !e.altKey && !e.shiftKey;
+    const isOnlyCtrl = ctrl && !e.altKey && !e.shiftKey;
 
     // Space -> play/pause
-    if (e.code === "Space" && !ctrl && !e.altKey && !e.shiftKey) {
+    if (e.code === "Space" && isModifierFree) {
       e.preventDefault();
       togglePause();
       return;
     }
     // Ctrl/Cmd+S -> shuffle
-    if (ctrl && e.key === "s" && !e.altKey && !e.shiftKey) {
+    if (isOnlyCtrl && e.key === "s") {
       e.preventDefault();
       toggleShuffle();
       return;
     }
     // Ctrl/Cmd+R -> repeat
-    if (ctrl && e.key === "r" && !e.altKey && !e.shiftKey) {
+    if (isOnlyCtrl && e.key === "r") {
       e.preventDefault();
       toggleRepeat();
       return;
     }
     // Ctrl/Cmd+, -> open settings
-    if (ctrl && e.key === "," && !e.altKey && !e.shiftKey) {
+    if (isOnlyCtrl && e.key === ",") {
       e.preventDefault();
       currentView.set("settings");
       return;
@@ -497,19 +499,19 @@
       return;
     }
     // Left arrow -> previous track
-    if (e.code === "ArrowLeft" && !ctrl && !e.altKey && !e.shiftKey) {
+    if (e.code === "ArrowLeft" && isModifierFree) {
       e.preventDefault();
       skipPrev();
       return;
     }
     // Right arrow -> next track
-    if (e.code === "ArrowRight" && !ctrl && !e.altKey && !e.shiftKey) {
+    if (e.code === "ArrowRight" && isModifierFree) {
       e.preventDefault();
       skipNext();
       return;
     }
     // M -> mute/unmute
-    if ((e.key === "m" || e.key === "M") && !ctrl && !e.altKey && !e.shiftKey) {
+    if ((e.key === "m" || e.key === "M") && isModifierFree) {
       e.preventDefault();
       toggleMute();
       return;
