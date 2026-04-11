@@ -37,80 +37,89 @@
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
-  let showNewDialog = false;
-  let newName = "";
-  let newDesc = "";
+  let showNewDialog = $state(false);
+  let newName = $state("");
+  let newDesc = $state("");
 
-  let showGenerateDialog = false;
-  let generateName = "";
-  let generateDesc = "";
-  let generateDuration = 30;
-  let generateUseRemote = false;
-  let generating = false;
+  let showGenerateDialog = $state(false);
+  let generateName = $state("");
+  let generateDesc = $state("");
+  let generateDuration = $state(30);
+  let generateUseRemote = $state(false);
+  let generating = $state(false);
 
-  let editingId: string | null = null;
-  let editName = "";
-  let editDesc = "";
-  let trackListEl: HTMLDivElement;
-  let selectedIsFavorites = false;
+  let editingId: string | null = $state(null);
+  let editName = $state("");
+  let editDesc = $state("");
+  let trackListEl: HTMLDivElement | undefined = $state();
 
-  $: {
-    const selectedID =
-      $selectedPlaylist?.id ?? $selectedPlaylistId ?? $selectedPlaylistView;
+  let selectedIsFavorites = $derived(
+    (() => {
+      const selectedID =
+        $selectedPlaylist?.id ?? $selectedPlaylistId ?? $selectedPlaylistView;
 
-    selectedIsFavorites =
-      !!selectedID &&
-      (($favoritesPlaylistId != null && selectedID === $favoritesPlaylistId) ||
-        isFavoritesPlaylist($selectedPlaylist));
-  }
+      return (
+        !!selectedID &&
+        (($favoritesPlaylistId != null &&
+          selectedID === $favoritesPlaylistId) ||
+          isFavoritesPlaylist($selectedPlaylist))
+      );
+    })()
+  );
 
-  console.log("selectedIsFavorites", selectedIsFavorites);
-
-  $: if ($selectedPlaylistView) {
-    selectPlaylist($selectedPlaylistView);
-  } else {
-    selectedPlaylistId.set(null);
-    selectedPlaylist.set(null);
-    selectedPlaylistItems.set([]);
-  }
-
-  let filter = "";
-  type SortField = "default" | "title" | "added_at" | "duration";
-  let sortField: SortField = "default";
-  let sortDir: "asc" | "desc" = "asc";
-
-  $: virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: filteredItems.length,
-    getScrollElement: () => trackListEl,
-    estimateSize: () => 38,
-    overscan: 5
+  $effect(() => {
+    if ($selectedPlaylistView) {
+      selectPlaylist($selectedPlaylistView);
+    } else {
+      selectedPlaylistId.set(null);
+      selectedPlaylist.set(null);
+      selectedPlaylistItems.set([]);
+    }
   });
 
-  $: filteredItems = $selectedPlaylistItems
-    .filter((i) => {
-      if (!filter) return true;
-      const q = filter.toLowerCase();
-      return (
-        i.ref_title.toLowerCase().includes(q) ||
-        i.ref_album.toLowerCase().includes(q) ||
-        i.ref_album_artist.toLowerCase().includes(q)
-      );
+  let filter = $state("");
+  type SortField = "default" | "title" | "added_at" | "duration";
+  let sortField: SortField = $state("default");
+  let sortDir: "asc" | "desc" = $state("asc");
+
+  let filteredItems = $derived(
+    $selectedPlaylistItems
+      .filter((i) => {
+        if (!filter) return true;
+        const q = filter.toLowerCase();
+        return (
+          i.ref_title.toLowerCase().includes(q) ||
+          i.ref_album.toLowerCase().includes(q) ||
+          i.ref_album_artist.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        if (sortField === "default") return a.position - b.position;
+
+        let cmp = 0;
+
+        if (sortField === "title") cmp = a.ref_title.localeCompare(b.ref_title);
+        else if (sortField === "added_at")
+          cmp = a.added_at.localeCompare(b.added_at);
+        else if (sortField === "duration")
+          cmp = a.ref_duration_ms - b.ref_duration_ms;
+
+        return sortDir === "desc" ? -cmp : cmp;
+      })
+  );
+
+  let virtualizer = $derived(
+    createVirtualizer<HTMLDivElement, HTMLDivElement>({
+      count: filteredItems.length,
+      getScrollElement: () => trackListEl as HTMLDivElement,
+      estimateSize: () => 38,
+      overscan: 5
     })
-    .sort((a, b) => {
-      if (sortField === "default") return a.position - b.position;
+  );
 
-      let cmp = 0;
-
-      if (sortField === "title") cmp = a.ref_title.localeCompare(b.ref_title);
-      else if (sortField === "added_at")
-        cmp = a.added_at.localeCompare(b.added_at);
-      else if (sortField === "duration")
-        cmp = a.ref_duration_ms - b.ref_duration_ms;
-
-      return sortDir === "desc" ? -cmp : cmp;
-    });
-
-  $: visiblePlaylists = $playlists.filter((pl) => !isFavoritesPlaylist(pl));
+  let visiblePlaylists = $derived(
+    $playlists.filter((pl) => !isFavoritesPlaylist(pl))
+  );
 
   function itemToTrack(item: PlaylistItem): Track {
     const id =
@@ -218,7 +227,7 @@
     generateUseRemote = false;
   }
 
-  let syncingFavorites = false;
+  let syncingFavorites = $state(false);
 
   async function handleForceSync() {
     syncingFavorites = true;
@@ -272,7 +281,7 @@
         <button
           class="detail-art"
           class:favorites-art={selectedIsFavorites}
-          on:click={() => {
+          onclick={() => {
             if (selectedIsFavorites) return;
             if ($selectedPlaylistId) pickPlaylistArtwork($selectedPlaylistId);
           }}
@@ -283,7 +292,7 @@
             <img
               src={playlistArtUrl($selectedPlaylist.artwork_path)}
               alt=""
-              on:error={(e) => {
+              onerror={(e) => {
                 (e.currentTarget as HTMLImageElement).style.display = "none";
               }}
             />
@@ -304,17 +313,17 @@
             <input
               class="edit-input title-input"
               bind:value={editName}
-              on:keydown={(e) => e.key === "Enter" && saveEdit()}
+              onkeydown={(e) => e.key === "Enter" && saveEdit()}
             />
             <input
               class="edit-input desc-input"
               bind:value={editDesc}
               placeholder="Description"
-              on:keydown={(e) => e.key === "Enter" && saveEdit()}
+              onkeydown={(e) => e.key === "Enter" && saveEdit()}
             />
             <div class="edit-actions">
-              <button class="small-btn" on:click={saveEdit}>Save</button>
-              <button class="small-btn secondary" on:click={cancelEdit}
+              <button class="small-btn" onclick={saveEdit}>Save</button>
+              <button class="small-btn secondary" onclick={cancelEdit}
                 >Cancel</button
               >
             </div>
@@ -345,7 +354,7 @@
       <div class="detail-actions">
         <button
           class="action-btn primary"
-          on:click={() =>
+          onclick={() =>
             playPlaylist(
               $selectedPlaylistItems,
               0,
@@ -358,30 +367,30 @@
         {#if !selectedIsFavorites}
           <button
             class="action-btn"
-            on:click={() => startEdit($selectedPlaylist)}>Edit</button
+            onclick={() => startEdit($selectedPlaylist)}>Edit</button
           >
         {/if}
         {#if selectedIsFavorites && $connected}
           <button
             class="action-btn"
-            on:click={handleForceSync}
+            onclick={handleForceSync}
             disabled={syncingFavorites}
             >{syncingFavorites ? "Syncing..." : "Force Sync"}</button
           >
         {/if}
         {#if !selectedIsFavorites && $connected && !$selectedPlaylist.remote_playlist_id}
-          <button class="action-btn" on:click={handleUpload}
+          <button class="action-btn" onclick={handleUpload}
             >Upload to Server</button
           >
         {:else if !selectedIsFavorites && $connected && $selectedPlaylist.remote_playlist_id}
-          <button class="action-btn" on:click={handleUpload}
+          <button class="action-btn" onclick={handleUpload}
             >Sync to Server</button
           >
         {/if}
         {#if !selectedIsFavorites}
           <button
             class="action-btn danger"
-            on:click={() => {
+            onclick={() => {
               if (confirm("Delete this playlist?"))
                 deletePlaylist($selectedPlaylist.id);
             }}
@@ -468,10 +477,10 @@
     <div class="list-header">
       <h2>Playlists</h2>
       <div class="list-header-actions">
-        <button class="new-btn" on:click={() => (showGenerateDialog = true)}
+        <button class="new-btn" onclick={() => (showGenerateDialog = true)}
           >Generate Random</button
         >
-        <button class="new-btn" on:click={() => (showNewDialog = true)}
+        <button class="new-btn" onclick={() => (showNewDialog = true)}
           >+ New Playlist</button
         >
       </div>
@@ -484,18 +493,18 @@
           class="new-input"
           placeholder="Playlist name"
           bind:value={newName}
-          on:keydown={(e) => e.key === "Enter" && handleCreate()}
+          onkeydown={(e) => e.key === "Enter" && handleCreate()}
           autofocus
         />
         <input
           class="new-input"
           placeholder="Description (optional)"
           bind:value={newDesc}
-          on:keydown={(e) => e.key === "Enter" && handleCreate()}
+          onkeydown={(e) => e.key === "Enter" && handleCreate()}
         />
         <div class="new-actions">
-          <button class="small-btn" on:click={handleCreate}>Create</button>
-          <button class="small-btn secondary" on:click={handleCancelCreate}>
+          <button class="small-btn" onclick={handleCreate}>Create</button>
+          <button class="small-btn secondary" onclick={handleCancelCreate}>
             Cancel
           </button>
         </div>
@@ -509,14 +518,14 @@
           class="new-input"
           placeholder="Playlist name"
           bind:value={generateName}
-          on:keydown={(e) => e.key === "Enter" && handleGenerate()}
+          onkeydown={(e) => e.key === "Enter" && handleGenerate()}
           autofocus
         />
         <input
           class="new-input"
           placeholder="Description (optional)"
           bind:value={generateDesc}
-          on:keydown={(e) => e.key === "Enter" && handleGenerate()}
+          onkeydown={(e) => e.key === "Enter" && handleGenerate()}
         />
         <div class="generate-duration-row">
           <label class="generate-label" for="gen-duration">Duration</label>
@@ -558,7 +567,7 @@
         <div class="new-actions">
           <button
             class="small-btn"
-            on:click={handleGenerate}
+            onclick={handleGenerate}
             disabled={generating ||
               !generateName.trim() ||
               generateDuration < 1}
@@ -567,7 +576,7 @@
           </button>
           <button
             class="small-btn secondary"
-            on:click={handleCancelGenerate}
+            onclick={handleCancelGenerate}
             disabled={generating}
           >
             Cancel
@@ -583,13 +592,13 @@
     {:else}
       <div class="pl-grid">
         {#each visiblePlaylists as pl (pl.id)}
-          <button class="pl-card" on:click={() => openPlaylist(pl)}>
+          <button class="pl-card" onclick={() => openPlaylist(pl)}>
             <div class="pl-art">
               {#if pl.artwork_path}
                 <img
                   src={playlistArtUrl(pl.artwork_path)}
                   alt=""
-                  on:error={(e) => {
+                  onerror={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display =
                       "none";
                   }}

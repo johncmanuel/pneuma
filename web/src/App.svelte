@@ -26,8 +26,8 @@
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
   import { Toasts } from "@pneuma/ui";
 
-  let wasLoggedIn = false;
-  let searchBar: any = undefined;
+  let wasLoggedIn = $state(false);
+  let searchBar: any = $state(undefined);
 
   function handleKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -55,17 +55,19 @@
   });
 
   // Reactively connect/disconnect WS whenever auth state changes.
-  $: if ($loggedIn && !wasLoggedIn) {
-    wasLoggedIn = true;
-    connectWS();
-    loadPlaybackState();
-    loadAlbumGroupsPage(0);
-    loadPlaylists();
-    loadRecent();
-  } else if (!$loggedIn && wasLoggedIn) {
-    wasLoggedIn = false;
-    disconnectWS();
-  }
+  $effect(() => {
+    if ($loggedIn && !wasLoggedIn) {
+      wasLoggedIn = true;
+      connectWS();
+      loadPlaybackState();
+      loadAlbumGroupsPage(0);
+      loadPlaylists();
+      loadRecent();
+    } else if (!$loggedIn && wasLoggedIn) {
+      wasLoggedIn = false;
+      disconnectWS();
+    }
+  });
 
   function handleNavigate(view: string) {
     if (view === "favorites") {

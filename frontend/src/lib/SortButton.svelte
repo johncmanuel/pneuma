@@ -1,10 +1,15 @@
 <script lang="ts" generics="T">
-  export let currentField: T;
-  export let sortDir: "asc" | "desc";
-  export let field: T;
-
-  let className = "";
-  export { className as class };
+  let {
+    currentField = $bindable(),
+    sortDir = $bindable(),
+    field,
+    class: className = ""
+  }: {
+    currentField: T;
+    sortDir: "asc" | "desc";
+    field: T;
+    class?: string;
+  } = $props();
 
   function toggle() {
     if (currentField === field) {
@@ -16,8 +21,9 @@
   }
 
   // i'll keep the character arrows for now
-  $: indicator =
-    currentField === field ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+  let indicator = $derived(
+    currentField === field ? (sortDir === "asc" ? " ↑" : " ↓") : ""
+  );
 </script>
 
 <button class={className} onclick={toggle}>

@@ -28,9 +28,9 @@
   } from "@lucide/svelte";
   import { activePanel, toggleQueuePanel } from "../lib/stores/ui";
 
-  let audio: HTMLAudioElement;
-  let volume = 1;
-  let prevVolume = 1;
+  let audio: HTMLAudioElement = $state() as HTMLAudioElement;
+  let volume = $state(1);
+  let prevVolume = $state(1);
 
   const VOLUME_KEY = storageKeys.volume;
 
@@ -62,27 +62,27 @@
     setMediaSessionPlaybackState(null);
   });
 
-  let audioDurationMs = 0;
+  let audioDurationMs = $state(0);
 
-  let seeking = false;
-  let seekSyncTimer: ReturnType<typeof setTimeout> | null = null;
-  let currentAudioSrc = "";
+  let seeking = $state(false);
+  let seekSyncTimer: ReturnType<typeof setTimeout> | null = $state(null);
+  let currentAudioSrc = $state("");
 
-  let streamToken = "";
-  let streamTokenTimer: ReturnType<typeof setTimeout> | null = null;
-  let streamRetryCount = 0;
+  let streamToken = $state("");
+  let streamTokenTimer: ReturnType<typeof setTimeout> | null = $state(null);
+  let streamRetryCount = $state(0);
 
   const MAX_STREAM_RETRIES = 2;
 
-  let lastTrackId = "";
-  let lastPaused = true;
-  let rafId = 0;
-  let lastMediaMetadataKey = "";
+  let lastTrackId = $state("");
+  let lastPaused = $state(true);
+  let rafId = $state(0);
+  let lastMediaMetadataKey = $state("");
 
   // Position driven directly from audio.currentTime via requestAnimationFrame.
   // Decoupled from the Svelte store to avoid store-update-induced jitter:
   // onTimeUpdate fires every ~250ms which is too coarse for smooth seek bar.
-  let displayPosition = 0;
+  let displayPosition = $state(0);
 
   function startPositionLoop() {
     cancelAnimationFrame(rafId);
@@ -99,28 +99,35 @@
     cancelAnimationFrame(rafId);
   }
 
-  $: track = $playerState.track;
-  $: hasTrack = !!$playerState.trackId;
+  let track = $derived($playerState.track);
+  let hasTrack = $derived(!!$playerState.trackId);
 
   // define a key from the track metadata to determine when to update Media Session metadata.
-  $: mediaMetadataKey = track
-    ? `${track.id}|${track.title}|${track.artist_name}|${track.album_artist}|${track.album_name}`
-    : "";
-
-  $: if (
-    mediaMetadataKey &&
-    mediaMetadataKey !== lastMediaMetadataKey &&
+  let mediaMetadataKey = $derived(
     track
-  ) {
-    lastMediaMetadataKey = mediaMetadataKey;
-    setMediaSessionTrack(track);
-    updateMediaSessionMetadata(track, artworkUrl);
-  }
+      ? `${track.id}|${track.title}|${track.artist_name}|${track.album_artist}|${track.album_name}`
+      : ""
+  );
 
-  $: setMediaSessionPlaybackState(hasTrack ? $playerState.paused : null);
+  $effect(() => {
+    if (
+      mediaMetadataKey &&
+      mediaMetadataKey !== lastMediaMetadataKey &&
+      track
+    ) {
+      lastMediaMetadataKey = mediaMetadataKey;
+      setMediaSessionTrack(track);
+      updateMediaSessionMetadata(track, artworkUrl);
+    }
+  });
 
-  $: durationMs =
-    audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0);
+  $effect(() => {
+    setMediaSessionPlaybackState(hasTrack ? $playerState.paused : null);
+  });
+
+  let durationMs = $derived(
+    audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0)
+  );
 
   async function refreshToken() {
     streamToken = await getStreamToken();
@@ -136,59 +143,76 @@
   // Sync the audio element to the store's playback state.
   // Local/missing tracks are blocked by handlePlaybackChanged in playback.ts
   // before they reach the store, so this only handles remote tracks.
-  $: if (audio && $playerState.trackId) {
-    const trackChanged = $playerState.trackId !== lastTrackId;
-    const pausedChanged = $playerState.paused !== lastPaused;
+  $effect(() => {
+    if (audio && $playerState.trackId) {
+      const trackChanged = $playerState.trackId !== lastTrackId;
+      const pausedChanged = $playerState.paused !== lastPaused;
 
-    if (trackChanged) {
-      lastTrackId = $playerState.trackId;
-      lastPaused = $playerState.paused;
-      streamRetryCount = 0;
+      if (trackChanged) {
+        lastTrackId = $playerState.trackId;
+        lastPaused = $playerState.paused;
+        streamRetryCount = 0;
 
-      if (seekSyncTimer) {
-        clearTimeout(seekSyncTimer);
-        seekSyncTimer = null;
-      }
+        if (seekSyncTimer) {
+          clearTimeout(seekSyncTimer);
+          seekSyncTimer = null;
+        }
 
-      (async () => {
-        // Fetch track metadata if the store's track object is stale.
-        // Happens when playback.changed arrives from the server (skipNext,
-        // auto-advance, other client) which only carries track_id, not the
-        // full Track object.
-        if ($playerState.track?.id !== $playerState.trackId) {
-          try {
-            const res = await apiFetch(
-              `/api/library/tracks/${$playerState.trackId}`
-            );
-            if (res.ok) {
-              const t = await res.json();
-              playerState.update((s) =>
-                s.trackId === $playerState.trackId ? { ...s, track: t } : s
+        (async () => {
+          // Fetch track metadata if the store's track object is stale.
+          // Happens when playback.changed arrives from the server (skipNext,
+          // auto-advance, other client) which only carries track_id, not the
+          // full Track object.
+          if ($playerState.track?.id !== $playerState.trackId) {
+            try {
+              const res = await apiFetch(
+                `/api/library/tracks/${$playerState.trackId}`
+              );
+              if (res.ok) {
+                const t = await res.json();
+                playerState.update((s) =>
+                  s.trackId === $playerState.trackId ? { ...s, track: t } : s
+                );
+              }
+            } catch {
+              console.error(
+                "Failed to fetch track metadata for",
+                $playerState.trackId
               );
             }
-          } catch {
-            console.error(
-              "Failed to fetch track metadata for",
-              $playerState.trackId
-            );
           }
-        }
 
-        if (!streamToken) {
-          await refreshToken();
-          startTokenRefresh();
-        }
-        const url = streamUrl($playerState.trackId, streamToken);
+          if (!streamToken) {
+            await refreshToken();
+            startTokenRefresh();
+          }
+          const url = streamUrl($playerState.trackId, streamToken);
 
-        if (url) {
-          currentAudioSrc = url;
-          audio.src = url;
-          audio.currentTime = $playerState.positionMs / 1000;
-          displayPosition = $playerState.positionMs;
-          if (track) setMediaSessionTrack(track);
-        }
+          if (url) {
+            currentAudioSrc = url;
+            audio.src = url;
+            audio.currentTime = $playerState.positionMs / 1000;
+            displayPosition = $playerState.positionMs;
+            if (track) setMediaSessionTrack(track);
+          }
 
-        if (!$playerState.paused) {
+          if (!$playerState.paused) {
+            audio.play().catch((e) => {
+              if (e.name !== "AbortError") {
+                console.warn("Audio play failed", e);
+              }
+            });
+            startPositionLoop();
+          }
+        })();
+      } else if (pausedChanged) {
+        lastPaused = $playerState.paused;
+
+        if ($playerState.paused && !audio.paused) {
+          audio.pause();
+          stopPositionLoop();
+          displayPosition = audio.currentTime * 1000;
+        } else if (!$playerState.paused && audio.paused) {
           audio.play().catch((e) => {
             if (e.name !== "AbortError") {
               console.warn("Audio play failed", e);
@@ -196,47 +220,34 @@
           });
           startPositionLoop();
         }
-      })();
-    } else if (pausedChanged) {
-      lastPaused = $playerState.paused;
-
-      if ($playerState.paused && !audio.paused) {
-        audio.pause();
-        stopPositionLoop();
-        displayPosition = audio.currentTime * 1000;
-      } else if (!$playerState.paused && audio.paused) {
-        audio.play().catch((e) => {
-          if (e.name !== "AbortError") {
-            console.warn("Audio play failed", e);
-          }
-        });
-        startPositionLoop();
       }
     }
-  }
+  });
 
   // When the track is cleared
-  $: if (audio && !$playerState.trackId && currentAudioSrc) {
-    audio.pause();
-    audio.src = "";
+  $effect(() => {
+    if (audio && !$playerState.trackId && currentAudioSrc) {
+      audio.pause();
+      audio.src = "";
 
-    currentAudioSrc = "";
-    lastTrackId = "";
-    lastPaused = true;
-    displayPosition = 0;
+      currentAudioSrc = "";
+      lastTrackId = "";
+      lastPaused = true;
+      displayPosition = 0;
 
-    stopPositionLoop();
+      stopPositionLoop();
 
-    if (streamTokenTimer) {
-      clearInterval(streamTokenTimer);
-      streamTokenTimer = null;
+      if (streamTokenTimer) {
+        clearInterval(streamTokenTimer);
+        streamTokenTimer = null;
+      }
+
+      streamToken = "";
+      lastMediaMetadataKey = "";
+      setMediaSessionTrack(null);
+      setMediaSessionPlaybackState(null);
     }
-
-    streamToken = "";
-    lastMediaMetadataKey = "";
-    setMediaSessionTrack(null);
-    setMediaSessionPlaybackState(null);
-  }
+  });
 
   function togglePause() {
     if (!hasTrack) return;
@@ -376,7 +387,7 @@
     wsSend("playback.repeat", { mode: nextMode });
   }
 
-  $: repeatLabel = RepeatLabels[$playerState.repeat] ?? "Off";
+  let repeatLabel = $derived(RepeatLabels[$playerState.repeat] ?? "Off");
 
   function onSeekInput(e: Event) {
     seeking = true;

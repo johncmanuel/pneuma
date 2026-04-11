@@ -1,4 +1,4 @@
-<script lang="ts" context="module">
+<script lang="ts" module>
   export interface Track {
     id: string;
     path: string;
@@ -18,20 +18,26 @@
 </script>
 
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
   import { formatDuration } from "@pneuma/shared";
 
-  export let track: Track | null = null;
-  export let active: boolean = false;
-
-  const dispatch = createEventDispatcher();
+  let {
+    track = null,
+    active = false,
+    onplay,
+    onselect
+  }: {
+    track?: Track | null;
+    active?: boolean;
+    onplay?: () => void;
+    onselect?: () => void;
+  } = $props();
 </script>
 
 <button
   class="track-row"
   class:active
-  on:dblclick={() => dispatch("play")}
-  on:click={() => dispatch("select")}
+  ondblclick={() => onplay?.()}
+  onclick={() => onselect?.()}
 >
   <span class="num text-3">{track?.track_number || "-"}</span>
   <span class="title truncate">{track?.title ?? "Unknown"}</span>

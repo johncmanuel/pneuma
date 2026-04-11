@@ -6,18 +6,17 @@
 
   type Tab = "tracks" | "users" | "audit";
 
-  $: isAdmin = $currentUser?.is_admin ?? false;
-  $: hasAnyPerm =
+  let isAdmin = $derived($currentUser?.is_admin ?? false);
+  let hasAnyPerm = $derived(
     isAdmin ||
-    ($currentUser?.can_upload ?? false) ||
-    ($currentUser?.can_edit ?? false) ||
-    ($currentUser?.can_delete ?? false);
+      ($currentUser?.can_upload ?? false) ||
+      ($currentUser?.can_edit ?? false) ||
+      ($currentUser?.can_delete ?? false)
+  );
 
-  // Determine default tab
-  $: defaultTab = hasAnyPerm ? "tracks" : "tracks";
-  let activeTab: Tab = "tracks";
+  let activeTab: Tab = $state("tracks");
 
-  $: availableTabs = buildTabs($currentUser);
+  let availableTabs = $derived(buildTabs($currentUser));
 
   function buildTabs(user: typeof $currentUser): { id: Tab; label: string }[] {
     const tabs: { id: Tab; label: string }[] = [];
@@ -35,12 +34,14 @@
   }
 
   // Reset to first available tab when permissions change
-  $: if (
-    availableTabs.length > 0 &&
-    !availableTabs.find((t) => t.id === activeTab)
-  ) {
-    activeTab = availableTabs[0].id;
-  }
+  $effect(() => {
+    if (
+      availableTabs.length > 0 &&
+      !availableTabs.find((t) => t.id === activeTab)
+    ) {
+      activeTab = availableTabs[0].id;
+    }
+  });
 </script>
 
 <section>
@@ -56,7 +57,7 @@
         <button
           class="tab-btn"
           class:active={activeTab === tab.id}
-          on:click={() => {
+          onclick={() => {
             activeTab = tab.id;
           }}
         >

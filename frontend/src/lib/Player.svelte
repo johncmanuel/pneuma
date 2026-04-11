@@ -40,9 +40,9 @@
     List
   } from "@lucide/svelte";
 
-  let audio: HTMLAudioElement;
-  let volume = 1;
-  let prevVolume = 1; // last non-zero volume, restored on unmute
+  let audio: HTMLAudioElement = $state() as HTMLAudioElement;
+  let volume = $state(1);
+  let prevVolume = $state(1); // last non-zero volume, restored on unmute
 
   const VOLUME_KEY = storageKeys.volume;
 
@@ -70,90 +70,101 @@
     setMediaSessionPlaybackState(null);
   });
 
-  let audioDurationMs = 0; // actual duration from <audio> element
-  let seeking = false; // true while user is dragging seekbar
-  let seekSyncTimer: ReturnType<typeof setTimeout> | null = null;
+  let audioDurationMs = $state(0); // actual duration from <audio> element
+  let seeking = $state(false); // true while user is dragging seekbar
+  let seekSyncTimer: ReturnType<typeof setTimeout> | null = $state(null);
 
   // Track the URL we set on audio.src; don't compare against
   // audio.src directly because the browser normalizes percent-encoding
   // (e.g. %27 -> ') so the comparison never matches for paths with special
   // characters, causing a continuous src reset that prevents playback.
-  let currentAudioSrc = "";
-  let lastMediaMetadataKey = "";
+  let currentAudioSrc = $state("");
+  let lastMediaMetadataKey = $state("");
 
-  $: track = $playerState.track;
-  $: hasTrack = !!$playerState.trackId;
-  $: durationMs =
-    audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0);
+  let track = $derived($playerState.track);
+  let hasTrack = $derived(!!$playerState.trackId);
+  let durationMs = $derived(
+    audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0)
+  );
 
   // define a key from the track metadata to determine when to update Media Session metadata.
-  $: mediaMetadataKey = track
-    ? `${track.id}|${track.title}|${track.artist_name}|${track.album_artist}|${track.album_name}`
-    : "";
-
-  $: if (
-    mediaMetadataKey &&
-    mediaMetadataKey !== lastMediaMetadataKey &&
+  let mediaMetadataKey = $derived(
     track
-  ) {
-    lastMediaMetadataKey = mediaMetadataKey;
-    setMediaSessionTrack(track);
-    updateMediaSessionMetadata(track, artworkUrl);
-  }
+      ? `${track.id}|${track.title}|${track.artist_name}|${track.album_artist}|${track.album_name}`
+      : ""
+  );
 
-  $: setMediaSessionPlaybackState(hasTrack ? $playerState.paused : null);
+  $effect(() => {
+    if (
+      mediaMetadataKey &&
+      mediaMetadataKey !== lastMediaMetadataKey &&
+      track
+    ) {
+      lastMediaMetadataKey = mediaMetadataKey;
+      setMediaSessionTrack(track);
+      updateMediaSessionMetadata(track, artworkUrl);
+    }
+  });
+
+  $effect(() => {
+    setMediaSessionPlaybackState(hasTrack ? $playerState.paused : null);
+  });
 
   // Local tracks use their filesystem path as the ID; don't send WS events for them.
-  $: isLocal = isLocalID($playerState.trackId ?? "");
+  let isLocal = $derived(isLocalID($playerState.trackId ?? ""));
 
   // Store original queues for restoration when reconnected
-  let originalQueue: string[] = [];
-  let originalBaseQueue: string[] = [];
-  let wasConnected = true;
+  let originalQueue: string[] = $state([]);
+  let originalBaseQueue: string[] = $state([]);
+  let wasConnected = $state(true);
 
   // Filter queue when transitioning to disconnected, remove any offline (remote) tracks
-  $: if (wasConnected && !$connected) {
-    wasConnected = false;
-    const q = $playerState.queue;
-    const baseQ = $playerState.baseQueue;
+  $effect(() => {
+    if (wasConnected && !$connected) {
+      wasConnected = false;
+      const q = $playerState.queue;
+      const baseQ = $playerState.baseQueue;
 
-    if (q.length > 0) {
-      originalQueue = [...q];
-      originalBaseQueue = [...baseQ];
+      if (q.length > 0) {
+        originalQueue = [...q];
+        originalBaseQueue = [...baseQ];
 
-      const isOffline = (id: string) => isRemoteTrack(id);
-      const filteredQueue = q.filter((id) => !isOffline(id));
-      const filteredBaseQueue = baseQ.filter((id) => !isOffline(id));
+        const isOffline = (id: string) => isRemoteTrack(id);
+        const filteredQueue = q.filter((id) => !isOffline(id));
+        const filteredBaseQueue = baseQ.filter((id) => !isOffline(id));
 
-      // Adjust queueIndex if current position is now invalid
-      let newIndex = $playerState.queueIndex;
-      if (newIndex >= filteredQueue.length) {
-        newIndex = Math.max(0, filteredQueue.length - 1);
+        // Adjust queueIndex if current position is now invalid
+        let newIndex = $playerState.queueIndex;
+        if (newIndex >= filteredQueue.length) {
+          newIndex = Math.max(0, filteredQueue.length - 1);
+        }
+
+        playerState.update((s) => ({
+          ...s,
+          queue: filteredQueue,
+          baseQueue: filteredBaseQueue,
+          queueIndex: newIndex
+        }));
       }
-
-      playerState.update((s) => ({
-        ...s,
-        queue: filteredQueue,
-        baseQueue: filteredBaseQueue,
-        queueIndex: newIndex
-      }));
     }
-  }
+  });
 
   // Restore original queues when reconnected
-  $: if (!wasConnected && $connected) {
-    wasConnected = true;
-    if (originalQueue.length > 0) {
-      playerState.update((s) => ({
-        ...s,
-        queue: originalQueue,
-        baseQueue: originalBaseQueue,
-        queueIndex: 0
-      }));
-      originalQueue = [];
-      originalBaseQueue = [];
+  $effect(() => {
+    if (!wasConnected && $connected) {
+      wasConnected = true;
+      if (originalQueue.length > 0) {
+        playerState.update((s) => ({
+          ...s,
+          queue: originalQueue,
+          baseQueue: originalBaseQueue,
+          queueIndex: 0
+        }));
+        originalQueue = [];
+        originalBaseQueue = [];
+      }
     }
-  }
+  });
 
   const trackCache = new Map<string, Track>();
   const isLocalPath = isLocalID;
@@ -413,7 +424,7 @@
     if (!isLocal) wsSend("playback.repeat", { mode: nextMode });
   }
 
-  $: repeatLabel = RepeatLabels[$playerState.repeat] ?? "Off";
+  let repeatLabel = $derived(RepeatLabels[$playerState.repeat] ?? "Off");
 
   function onSeekInput(e: Event) {
     seeking = true;
@@ -519,45 +530,49 @@
   }
 
   // Sync HTML audio element when track changes
-  $: if (audio && $playerState.trackId) {
-    if (seekSyncTimer) {
-      clearTimeout(seekSyncTimer);
-      seekSyncTimer = null;
-    }
+  $effect(() => {
+    if (audio && $playerState.trackId) {
+      if (seekSyncTimer) {
+        clearTimeout(seekSyncTimer);
+        seekSyncTimer = null;
+      }
 
-    const url = streamUrl($playerState.trackId, $playerState.track?.path);
+      const url = streamUrl($playerState.trackId, $playerState.track?.path);
 
-    if (currentAudioSrc !== url && url) {
-      currentAudioSrc = url;
-      audio.src = url;
-      audio.currentTime = $playerState.positionMs / 1000;
-      if (track) setMediaSessionTrack(track);
-    }
+      if (currentAudioSrc !== url && url) {
+        currentAudioSrc = url;
+        audio.src = url;
+        audio.currentTime = $playerState.positionMs / 1000;
+        if (track) setMediaSessionTrack(track);
+      }
 
-    if (!$playerState.paused && !audio.seeking && audio.paused) {
-      audio.play().catch((e) => {
-        if (e.name !== "AbortError") {
-          console.warn("Audio play failed", e);
-        }
-      });
-    } else if ($playerState.paused && !audio.paused) {
-      audio.pause();
+      if (!$playerState.paused && !audio.seeking && audio.paused) {
+        audio.play().catch((e) => {
+          if (e.name !== "AbortError") {
+            console.warn("Audio play failed", e);
+          }
+        });
+      } else if ($playerState.paused && !audio.paused) {
+        audio.pause();
+      }
     }
-  }
+  });
 
   // When the track is forcefully cleared (e.g. file removed from disk),
   // stop and reset the audio element immediately. Maybe add a toast
   // saying the file is no longer available.
-  $: if (audio && !$playerState.trackId && currentAudioSrc) {
-    audio.pause();
-    audio.src = "";
+  $effect(() => {
+    if (audio && !$playerState.trackId && currentAudioSrc) {
+      audio.pause();
+      audio.src = "";
 
-    currentAudioSrc = "";
-    lastMediaMetadataKey = "";
+      currentAudioSrc = "";
+      lastMediaMetadataKey = "";
 
-    setMediaSessionTrack(null);
-    setMediaSessionPlaybackState(null);
-  }
+      setMediaSessionTrack(null);
+      setMediaSessionPlaybackState(null);
+    }
+  });
 
   function onEnded() {
     skipNext();
@@ -613,18 +628,18 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeyDown} />
+<svelte:window onkeydown={handleKeyDown} />
 
 <div class="player">
   <audio
     bind:this={audio}
-    on:timeupdate={onTimeUpdate}
-    on:ended={onEnded}
-    on:play={onAudioPlay}
-    on:pause={onAudioPause}
-    on:loadedmetadata={changeAudioDuration}
-    on:durationchange={changeAudioDuration}
-    on:error={onAudioError}
+    ontimeupdate={onTimeUpdate}
+    onended={onEnded}
+    onplay={onAudioPlay}
+    onpause={onAudioPause}
+    onloadedmetadata={changeAudioDuration}
+    ondurationchange={changeAudioDuration}
+    onerror={onAudioError}
     preload="metadata"
   ></audio>
   <div class="now-playing">
@@ -633,10 +648,10 @@
         <img
           src={artworkUrl(track.id)}
           alt={track.title}
-          on:error={(e) => {
+          onerror={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "none";
           }}
-          on:load={(e) => {
+          onload={(e) => {
             (e.currentTarget as HTMLImageElement).style.display = "";
           }}
         />
@@ -651,7 +666,7 @@
       {#if track}
         <button
           class="title truncate title-link"
-          on:click={jumpToAlbum}
+          onclick={jumpToAlbum}
           title="Go to album">{track.title}</button
         >
         <span class="artist truncate text-2"
@@ -668,18 +683,18 @@
       <button
         class="ctrl-btn"
         class:active-toggle={$playerState.shuffle}
-        on:click={toggleShuffle}
+        onclick={toggleShuffle}
         title="Shuffle"><Shuffle size={16} /></button
       >
       <button
         class="ctrl-btn"
-        on:click={skipPrev}
+        onclick={skipPrev}
         title="Previous"
         disabled={!hasTrack}><SkipBack size={16} /></button
       >
       <button
         class="play-btn"
-        on:click={togglePause}
+        onclick={togglePause}
         title={$playerState.paused ? "Play" : "Pause"}
         disabled={!hasTrack}
       >
@@ -691,14 +706,14 @@
       </button>
       <button
         class="ctrl-btn"
-        on:click={skipNext}
+        onclick={skipNext}
         title="Next"
         disabled={!hasTrack}><SkipForward size={16} /></button
       >
       <button
         class="ctrl-btn repeat-btn"
         class:active-toggle={$playerState.repeat !== RepeatModeEnum.Off}
-        on:click={toggleRepeat}
+        onclick={toggleRepeat}
         title="Repeat: {repeatLabel}"
       >
         <Repeat
@@ -716,8 +731,8 @@
         min="0"
         max={durationMs}
         value={$playerState.positionMs}
-        on:input={onSeekInput}
-        on:change={onSeekChange}
+        oninput={onSeekInput}
+        onchange={onSeekChange}
       />
       <span class="ts text-3">{formatDuration(durationMs)}</span>
     </div>
@@ -727,7 +742,7 @@
     <button
       class="ctrl-btn queue-toggle"
       class:active-toggle={$activePanel === "queue"}
-      on:click={toggleQueuePanel}
+      onclick={toggleQueuePanel}
       title="Queue"
     >
       <List size={18} />
@@ -750,7 +765,7 @@
       max="1"
       step="0.01"
       value={volume}
-      on:input={setVolume}
+      oninput={setVolume}
     />
   </div>
 </div>

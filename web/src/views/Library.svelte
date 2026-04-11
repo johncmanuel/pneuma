@@ -31,30 +31,37 @@
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
-  let albumFilter = "";
-  let trackListEl: HTMLDivElement;
-  let albumGridFilter = "";
+  let albumFilter = $state("");
+  let trackListEl: HTMLDivElement | undefined = $state();
+  let albumGridFilter = $state("");
 
-  let currentAlbumGroup: AlbumGroup | null = null;
-  let albumDetailTracks: Track[] = [];
-  let albumDetailLoading = false;
+  let currentAlbumGroup: AlbumGroup | null = $state(null);
+  let albumDetailTracks: Track[] = $state([]);
+  let albumDetailLoading = $state(false);
 
-  $: hasMore = $albumGroups.length < $albumGroupsTotal;
+  let hasMore = $derived($albumGroups.length < $albumGroupsTotal);
 
   // Load the selected album's tracks when the selected album changes
-  $: if ($selectedAlbum && !albumDetailLoading) {
-    const group = $albumGroups.find((g) => g.key === $selectedAlbum) ?? null;
-    if (group && (!currentAlbumGroup || currentAlbumGroup.key !== group.key)) {
-      loadAlbumDetail(group);
+  $effect(() => {
+    if ($selectedAlbum && !albumDetailLoading) {
+      const group = $albumGroups.find((g) => g.key === $selectedAlbum) ?? null;
+      if (
+        group &&
+        (!currentAlbumGroup || currentAlbumGroup.key !== group.key)
+      ) {
+        loadAlbumDetail(group);
+      }
     }
-  }
+  });
 
   // Clear album detail when deselecting
-  $: if (!$selectedAlbum) {
-    currentAlbumGroup = null;
-    albumDetailTracks = [];
-    albumFilter = "";
-  }
+  $effect(() => {
+    if (!$selectedAlbum) {
+      currentAlbumGroup = null;
+      albumDetailTracks = [];
+      albumFilter = "";
+    }
+  });
 
   async function loadAlbumDetail(group: AlbumGroup) {
     albumDetailLoading = true;
@@ -73,25 +80,29 @@
   }
 
   // filter the album's tracks based on the albumFilter input
-  $: filteredTracks = (() => {
-    if (!currentAlbumGroup) return [];
+  let filteredTracks = $derived(
+    (() => {
+      if (!currentAlbumGroup) return [];
 
-    const f = albumFilter.toLowerCase();
-    if (!f) return albumDetailTracks;
+      const f = albumFilter.toLowerCase();
+      if (!f) return albumDetailTracks;
 
-    return albumDetailTracks.filter(
-      (t) =>
-        (t.title ?? "").toLowerCase().includes(f) ||
-        (t.artist_name ?? "").toLowerCase().includes(f)
-    );
-  })();
+      return albumDetailTracks.filter(
+        (t) =>
+          (t.title ?? "").toLowerCase().includes(f) ||
+          (t.artist_name ?? "").toLowerCase().includes(f)
+      );
+    })()
+  );
 
-  $: virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: filteredTracks.length,
-    getScrollElement: () => trackListEl,
-    estimateSize: () => 38,
-    overscan: 5
-  });
+  let virtualizer = $derived(
+    createVirtualizer<HTMLDivElement, HTMLDivElement>({
+      count: filteredTracks.length,
+      getScrollElement: () => trackListEl as HTMLDivElement,
+      estimateSize: () => 38,
+      overscan: 5
+    })
+  );
 
   onMount(() => {
     if ($albumGroups.length === 0) {
@@ -114,8 +125,8 @@
     loadAlbumGroupsPage(0);
   }
 
-  let gridScrollEl: HTMLDivElement;
-  let loadingMore = false;
+  let gridScrollEl: HTMLDivElement | undefined = $state();
+  let loadingMore = $state(false);
 
   function handleGridScroll() {
     if (loadingMore || !hasMore || !gridScrollEl) return;
@@ -199,7 +210,7 @@
     if (img) img.style.display = "none";
   }
 
-  let isScrolling = false;
+  let isScrolling = $state(false);
   let scrollTimer: ReturnType<typeof setTimeout>;
 
   function handleScroll() {

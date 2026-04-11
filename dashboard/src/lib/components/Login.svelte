@@ -1,11 +1,11 @@
 <script lang="ts">
   import { login, register } from "../api";
 
-  let username = "";
-  let password = "";
-  let error = "";
-  let mode: "login" | "register" = "login";
-  let loading = false;
+  let username = $state("");
+  let password = $state("");
+  let error = $state("");
+  let mode: "login" | "register" = $state("login");
+  let loading = $state(false);
 
   async function handleSubmit() {
     error = "";
@@ -34,7 +34,12 @@
       {mode === "login" ? "Sign in to your server" : "Create an account"}
     </p>
 
-    <form on:submit|preventDefault={handleSubmit}>
+    <form
+      onsubmit={(e) => {
+        e.preventDefault();
+        handleSubmit();
+      }}
+    >
       <label>
         <span class="text-2">Username</span>
         <input type="text" bind:value={username} autocomplete="username" />
@@ -61,7 +66,7 @@
       {#if mode === "login"}
         Don't have an account? <button
           class="link-btn"
-          on:click={() => {
+          onclick={() => {
             mode = "register";
             error = "";
           }}>Register</button
@@ -69,7 +74,7 @@
       {:else}
         Already have an account? <button
           class="link-btn"
-          on:click={() => {
+          onclick={() => {
             mode = "login";
             error = "";
           }}>Sign In</button

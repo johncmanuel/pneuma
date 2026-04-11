@@ -64,15 +64,15 @@
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
-  let albumFilter = "";
-  let trackListEl: HTMLDivElement;
-  let albumGridFilter = "";
+  let albumFilter = $state("");
+  let trackListEl: HTMLDivElement | undefined = $state();
+  let albumGridFilter = $state("");
 
   type SortField = "default" | "title" | "artist" | "duration";
   type SortDir = "asc" | "desc";
 
-  let albumSortField: SortField = "default";
-  let albumSortDir: SortDir = "asc";
+  let albumSortField: SortField = $state("default");
+  let albumSortDir: SortDir = $state("asc");
 
   // Library UI representation of an album group (local or remote)
   interface AlbumGroup {
@@ -85,9 +85,9 @@
     firstLocalPath?: string; // for local art
   }
 
-  let currentAlbumGroup: AlbumGroup | null = null;
-  let albumDetailTracks: Track[] = [];
-  let albumDetailLoading = false;
+  let currentAlbumGroup: AlbumGroup | null = $state(null);
+  let albumDetailTracks: Track[] = $state([]);
+  let albumDetailLoading = $state(false);
 
   function localGroupsAsAlbumGroups(groups: LocalAlbumGroup[]): AlbumGroup[] {
     return (groups ?? []).map((g) => ({
@@ -114,36 +114,48 @@
   }
 
   // Display groups based on the current tab
-  $: displayedGroups =
+  let displayedGroups = $derived(
     $activeTab === "library"
       ? remoteGroupsAsAlbumGroups($remoteAlbumGroups)
-      : localGroupsAsAlbumGroups($localAlbumGroups);
-  $: isLoading = $activeTab === "library" ? $loading : $localLoading;
-  $: currentTotal =
-    $activeTab === "library" ? $remoteAlbumGroupsTotal : $localAlbumGroupsTotal;
-  $: hasMore = displayedGroups.length < currentTotal;
+      : localGroupsAsAlbumGroups($localAlbumGroups)
+  );
+  let isLoading = $derived($activeTab === "library" ? $loading : $localLoading);
+  let currentTotal = $derived(
+    $activeTab === "library" ? $remoteAlbumGroupsTotal : $localAlbumGroupsTotal
+  );
+  let hasMore = $derived(displayedGroups.length < currentTotal);
 
   // Load the selected album's tracks whenever the selected album changes
-  $: if ($selectedAlbum && !albumDetailLoading) {
-    const group = displayedGroups.find((g) => g.key === $selectedAlbum) ?? null;
-    if (group && (!currentAlbumGroup || currentAlbumGroup.key !== group.key)) {
-      loadAlbumDetail(group);
+  $effect(() => {
+    if ($selectedAlbum && !albumDetailLoading) {
+      const group =
+        displayedGroups.find((g) => g.key === $selectedAlbum) ?? null;
+      if (
+        group &&
+        (!currentAlbumGroup || currentAlbumGroup.key !== group.key)
+      ) {
+        loadAlbumDetail(group);
+      }
     }
-  }
+  });
 
   // Clear album detail when deselecting an album
-  $: if (!$selectedAlbum) {
-    currentAlbumGroup = null;
-    albumDetailTracks = [];
-    albumFilter = "";
-    albumSortField = "default";
-    albumSortDir = "asc";
-  }
+  $effect(() => {
+    if (!$selectedAlbum) {
+      currentAlbumGroup = null;
+      albumDetailTracks = [];
+      albumFilter = "";
+      albumSortField = "default";
+      albumSortDir = "asc";
+    }
+  });
 
   // Re-fetch the open local album's track list whenever a file change is detected.
-  $: if ($localChangeSeq && currentAlbumGroup?.isLocal) {
-    refreshCurrentAlbumDetail();
-  }
+  $effect(() => {
+    if ($localChangeSeq && currentAlbumGroup?.isLocal) {
+      refreshCurrentAlbumDetail();
+    }
+  });
 
   function getAlbumNameAndArtist(group: AlbumGroup): {
     albumName: string;
@@ -220,55 +232,63 @@
   }
 
   // Filtered + sorted tracks for album detail (client-side on the small album track set)
-  $: filteredAlbumDetailTracks = (() => {
-    if (!currentAlbumGroup) return [];
+  let filteredAlbumDetailTracks = $derived(
+    (() => {
+      if (!currentAlbumGroup) return [];
 
-    const f = albumFilter.toLowerCase();
-    let result = albumDetailTracks;
+      const f = albumFilter.toLowerCase();
+      let result = albumDetailTracks;
 
-    if (f) {
-      result = result.filter(
-        (t) =>
-          (t.title ?? "").toLowerCase().includes(f) ||
-          (t.artist_name ?? "").toLowerCase().includes(f)
-      );
-    }
+      if (f) {
+        result = result.filter(
+          (t) =>
+            (t.title ?? "").toLowerCase().includes(f) ||
+            (t.artist_name ?? "").toLowerCase().includes(f)
+        );
+      }
 
-    // sort priority (from highest to lowest):
-    // 1. disc number
-    // 2. track number
-    // 3. title
-    // 4. artist
-    // 5. duration
-    if (albumSortField !== "default") {
-      const dir = albumSortDir === "asc" ? 1 : -1;
+      // sort priority (from highest to lowest):
+      // 1. disc number
+      // 2. track number
+      // 3. title
+      // 4. artist
+      // 5. duration
+      if (albumSortField !== "default") {
+        const dir = albumSortDir === "asc" ? 1 : -1;
 
-      result = [...result].sort((a, b) => {
-        if (albumSortField === "title")
-          return dir * (a.title ?? "").localeCompare(b.title ?? "");
-        if (albumSortField === "artist")
-          return dir * (a.artist_name ?? "").localeCompare(b.artist_name ?? "");
-        if (albumSortField === "duration")
-          return dir * ((a.duration_ms ?? 0) - (b.duration_ms ?? 0));
-        return 0;
-      });
-    }
-    return result;
-  })();
+        result = [...result].sort((a, b) => {
+          if (albumSortField === "title")
+            return dir * (a.title ?? "").localeCompare(b.title ?? "");
+          if (albumSortField === "artist")
+            return (
+              dir * (a.artist_name ?? "").localeCompare(b.artist_name ?? "")
+            );
+          if (albumSortField === "duration")
+            return dir * ((a.duration_ms ?? 0) - (b.duration_ms ?? 0));
+          return 0;
+        });
+      }
+      return result;
+    })()
+  );
 
   // Album artwork for the detail header
-  $: selectedAlbumArtUrl = (() => {
-    if (!currentAlbumGroup) return "";
-    return getArtUrl(currentAlbumGroup);
-  })();
+  let selectedAlbumArtUrl = $derived(
+    (() => {
+      if (!currentAlbumGroup) return "";
+      return getArtUrl(currentAlbumGroup);
+    })()
+  );
 
   // Virtualized track list for album detail view
-  $: virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-    count: filteredAlbumDetailTracks.length,
-    getScrollElement: () => trackListEl,
-    estimateSize: () => 38,
-    overscan: 5
-  });
+  let virtualizer = $derived(
+    createVirtualizer<HTMLDivElement, HTMLDivElement>({
+      count: filteredAlbumDetailTracks.length,
+      getScrollElement: () => trackListEl as HTMLDivElement,
+      estimateSize: () => 38,
+      overscan: 5
+    })
+  );
 
   // On mount, load album groups.
   // Library is destroyed/re-created on every view switch (App.svelte uses {#if}),
@@ -316,8 +336,8 @@
     }
   }
 
-  let gridScrollEl: HTMLDivElement;
-  let loadingMore = false;
+  let gridScrollEl: HTMLDivElement | undefined = $state();
+  let loadingMore = $state(false);
 
   // implement infinite scroll
   function handleGridScroll() {
@@ -452,8 +472,9 @@
     pushNav({ albumKey: album.key });
   }
 
-  let albumCtxMenu: { group: AlbumGroup; x: number; y: number } | null = null;
-  let albumCtxPlaylistSub = false;
+  let albumCtxMenu: { group: AlbumGroup; x: number; y: number } | null =
+    $state(null);
+  let albumCtxPlaylistSub = $state(false);
 
   // Handle right-click context menu for albums
   function onAlbumContext(e: MouseEvent, album: AlbumGroup) {
@@ -523,7 +544,7 @@
     if (track) addToQueue(track);
   }
 
-  let isScrolling = false;
+  let isScrolling = $state(false);
   let scrollTimer: ReturnType<typeof setTimeout>;
 
   function handleScroll() {
@@ -540,14 +561,14 @@
     <button
       class="lib-tab"
       class:active={$activeTab === "library"}
-      on:click={() => switchTab("library")}
+      onclick={() => switchTab("library")}
     >
       Library
     </button>
     <button
       class="lib-tab"
       class:active={$activeTab === "local"}
-      on:click={() => switchTab("local")}
+      onclick={() => switchTab("local")}
     >
       Local Files
     </button>
@@ -562,7 +583,7 @@
               <img
                 src={selectedAlbumArtUrl}
                 alt={currentAlbumGroup.name}
-                on:error={hideImgOnError}
+                onerror={hideImgOnError}
                 loading="lazy"
                 decoding="async"
               />
@@ -620,7 +641,7 @@
             class="track-list"
             class:scrolling={isScrolling}
             bind:this={trackListEl}
-            on:scroll={handleScroll}
+            onscroll={handleScroll}
           >
             <div
               style="position: relative; width: 100%; height: {$virtualizer.getTotalSize()}px;"
@@ -655,23 +676,22 @@
       <div
         class="grid-scroll-wrapper"
         bind:this={gridScrollEl}
-        on:scroll={handleGridScroll}
+        onscroll={handleGridScroll}
       >
         <div class="toolbar">
           <h2>{$activeTab === "library" ? "Library" : "Local Albums"}</h2>
           <div class="toolbar-actions">
             {#if $activeTab === "library"}
-              <button on:click={scanLibrary} title="Rescan watch folders"
+              <button onclick={scanLibrary} title="Rescan watch folders"
                 ><RotateCcw size={14} /> Scan</button
               >
             {:else}
-              <button
-                on:click={handleAddFolder}
-                title="Add a local music folder">+ Add Folder</button
+              <button onclick={handleAddFolder} title="Add a local music folder"
+                >+ Add Folder</button
               >
               {#if $localFolders.length > 0}
                 <button
-                  on:click={() => scanLocalFolders()}
+                  onclick={() => scanLocalFolders()}
                   title="Rescan local folders"
                   ><RotateCcw size={14} /> Rescan</button
                 >
@@ -687,10 +707,10 @@
             class="album-grid-filter"
             placeholder="Search albums..."
             bind:value={albumGridFilter}
-            on:input={onAlbumGridFilterInput}
+            oninput={onAlbumGridFilterInput}
           />
           {#if albumGridFilter}
-            <button class="grid-filter-clear" on:click={clearAlbumGridFilter}
+            <button class="grid-filter-clear" onclick={clearAlbumGridFilter}
               ><X size={14} /></button
             >
           {/if}
@@ -703,7 +723,7 @@
                 {dir.split("/").pop() || dir}
                 <button
                   class="chip-remove"
-                  on:click={() => removeLocalFolder(dir)}
+                  onclick={() => removeLocalFolder(dir)}
                   title="Remove folder"><X size={14} /></button
                 >
               </span>
@@ -756,8 +776,8 @@
               <button
                 class="album-card"
                 class:unorganized={album.key === UNORGANIZED_KEY}
-                on:click={() => openAlbum(album)}
-                on:contextmenu={(e) => onAlbumContext(e, album)}
+                onclick={() => openAlbum(album)}
+                oncontextmenu={(e) => onAlbumContext(e, album)}
               >
                 <div
                   class="album-art"
@@ -767,7 +787,7 @@
                     <img
                       src={getArtUrl(album)}
                       alt={album.name}
-                      on:error={hideImgOnError}
+                      onerror={hideImgOnError}
                       loading="lazy"
                     />
                   {/if}
@@ -812,8 +832,8 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="album-ctx-sub-wrap"
-          on:mouseenter={() => (albumCtxPlaylistSub = true)}
-          on:mouseleave={() => (albumCtxPlaylistSub = false)}
+          onmouseenter={() => (albumCtxPlaylistSub = true)}
+          onmouseleave={() => (albumCtxPlaylistSub = false)}
         >
           <button class="has-sub"
             >Add all to playlist <ChevronRight size={12} /></button
@@ -821,7 +841,7 @@
           {#if albumCtxPlaylistSub}
             <div class="album-ctx-submenu">
               {#each visiblePlaylistsForAddMenu($playlists) as pl (pl.id)}
-                <button on:click={() => addAlbumToPlaylist(pl, grp)}
+                <button onclick={() => addAlbumToPlaylist(pl, grp)}
                   >{pl.name}</button
                 >
               {/each}

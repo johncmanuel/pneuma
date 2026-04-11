@@ -13,8 +13,8 @@
     created_at: string;
   }
 
-  let users: User[] = [];
-  let loading = false;
+  let users: User[] = $state([]);
+  let loading = $state(false);
 
   onMount(loadUsers);
 
@@ -80,7 +80,7 @@
                 <input
                   type="checkbox"
                   bind:checked={user.can_upload}
-                  on:change={() => updatePerms(user)}
+                  onchange={() => updatePerms(user)}
                   disabled={user.is_admin}
                 />
               </td>
@@ -88,7 +88,7 @@
                 <input
                   type="checkbox"
                   bind:checked={user.can_edit}
-                  on:change={() => updatePerms(user)}
+                  onchange={() => updatePerms(user)}
                   disabled={user.is_admin}
                 />
               </td>
@@ -96,7 +96,7 @@
                 <input
                   type="checkbox"
                   bind:checked={user.can_delete}
-                  on:change={() => updatePerms(user)}
+                  onchange={() => updatePerms(user)}
                   disabled={user.is_admin}
                 />
               </td>
@@ -105,7 +105,7 @@
                 {#if !user.is_admin}
                   <button
                     class="sm-btn danger"
-                    on:click={() => deleteUser(user.id, user.username)}
+                    onclick={() => deleteUser(user.id, user.username)}
                     >Delete</button
                   >
                 {/if}

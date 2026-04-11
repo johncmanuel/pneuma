@@ -101,14 +101,14 @@
       <p class="text-3 connected-status">
         Connected to <code>{$serverURL}</code>
       </p>
-      <button class="btn-danger" on:click={disconnect}>Disconnect</button>
+      <button class="btn-danger" onclick={disconnect}>Disconnect</button>
     {:else if $isReconnecting}
       <p class="text-3 reconnecting-status">
         <RotateCcw size={14} /> Reconnecting to server...
       </p>
       <button
         class="btn-danger"
-        on:click={() => {
+        onclick={() => {
           stopAutoReconnect();
         }}>Cancel</button
       >
@@ -130,10 +130,10 @@
           placeholder="Password"
           bind:value={connectPass}
           autocomplete="current-password"
-          on:keydown={(e) => e.key === "Enter" && connect()}
+          onkeydown={(e) => e.key === "Enter" && connect()}
         />
         <button
-          on:click={connect}
+          onclick={connect}
           disabled={connecting || !connectURL || !connectUser || !connectPass}
         >
           {connecting ? "Connecting..." : "Connect"}
@@ -151,7 +151,7 @@
       Thumbnail images are cached on disk. Clear the cache whenever issues with
       album artwork arise.
     </p>
-    <button on:click={handleArtworkCacheClear}>Clear Artwork Cache</button>
+    <button onclick={handleArtworkCacheClear}>Clear Artwork Cache</button>
     {#if cacheCleared}<p class="msg">Cache cleared.</p>{/if}
   </div>
 
@@ -160,7 +160,7 @@
     <p class="text-3">
       Clear all recently played albums and playlists from the sidebar.
     </p>
-    <button on:click={handleResetRecent}>Reset Recently Played</button>
+    <button onclick={handleResetRecent}>Reset Recently Played</button>
   </div>
 
   <div class="group">
@@ -171,7 +171,7 @@
       <input
         type="checkbox"
         checked={$favoritesSyncEnabled}
-        on:change={handleFavoritesSyncToggle}
+        onchange={handleFavoritesSyncToggle}
         disabled={changingFavoritesSync}
       />
     </label>
@@ -185,8 +185,10 @@
     </p>
     <p class="text-3">
       Source code available on <button
-        on:click|preventDefault={() =>
-          handleOpenUrl("https://github.com/johncmanuel/pneuma")}
+        onclick={(e) => {
+          e.preventDefault();
+          handleOpenUrl("https://github.com/johncmanuel/pneuma");
+        }}
         aria-label="GitHub repository"
         style="text-decoration: underline;"
       >

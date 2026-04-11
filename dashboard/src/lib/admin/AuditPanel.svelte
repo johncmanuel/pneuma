@@ -13,8 +13,8 @@
     created_at: string;
   }
 
-  let entries: AuditEntry[] = [];
-  let loading = false;
+  let entries: AuditEntry[] = $state([]);
+  let loading = $state(false);
 
   onMount(loadAudit);
 
