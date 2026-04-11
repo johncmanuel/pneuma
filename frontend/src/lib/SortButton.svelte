@@ -1,14 +1,18 @@
 <script lang="ts" generics="T">
+  import type { Snippet } from "svelte";
+
   let {
     currentField = $bindable(),
     sortDir = $bindable(),
     field,
-    class: className = ""
+    class: className = "",
+    children
   }: {
     currentField: T;
     sortDir: "asc" | "desc";
     field: T;
     class?: string;
+    children?: Snippet;
   } = $props();
 
   function toggle() {
@@ -27,7 +31,7 @@
 </script>
 
 <button class={className} onclick={toggle}>
-  <slot />{indicator}
+  {#if children}{@render children()}{/if}{indicator}
 </button>
 
 <style>
