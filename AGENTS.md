@@ -57,7 +57,12 @@ Some general styling guidelines:
 
 ### Formatting
 
-Run `bun fmt` to format TypeScript and Svelte code.
-Run `gofmt ./...` to format Go code.
+Run `bun fmt` to format TypeScript, Svelte, and Go code.
+
+Run them after finalizing changes.
+
+### Linting
+
+Run `bun lint` to lint TypeScript, Svelte, and Go code.
 
 Run them after finalizing changes.

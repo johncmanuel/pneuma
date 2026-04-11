@@ -220,9 +220,11 @@ volumes:
 
 ### Formatting
 
-Run `go fmt ./...` to format Go code.
+Run `bun fmt` to format TypeScript, Svelte, and Go code.
 
-Run `bun fmt` to format Svelte/TypeScript code.
+### Linting
+
+Run `bun lint` to lint TypeScript, Svelte, and Go code.
 
 ### Running sqlc
 
