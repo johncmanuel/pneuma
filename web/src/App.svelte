@@ -87,15 +87,15 @@
 {#if !$loggedIn}
   <div class="auth-shell">
     {#if $currentView === "register"}
-      <Register onswitch={() => pushNav({ view: "login" })} />
+      <Register onSwitch={() => pushNav({ view: "login" })} />
     {:else}
-      <Login onswitch={() => pushNav({ view: "register" })} />
+      <Login onSwitch={() => pushNav({ view: "register" })} />
     {/if}
   </div>
 {:else}
   <div class="shell" class:panel-open={$activePanel !== null}>
     <div class="sidebar-area">
-      <Sidebar activeView={$currentView} onnavigate={handleNavigate} />
+      <Sidebar activeView={$currentView} onNavigate={handleNavigate} />
     </div>
 
     <header class="topbar">

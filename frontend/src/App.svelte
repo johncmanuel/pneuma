@@ -86,7 +86,7 @@
 
 <div class="shell" class:panel-open={$activePanel !== null}>
   <div class="sidebar-area">
-    <Sidebar activeView={$currentView} onnavigate={handleNavigate} />
+    <Sidebar activeView={$currentView} onNavigate={handleNavigate} />
   </div>
 
   <header class="topbar">

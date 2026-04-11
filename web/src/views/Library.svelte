@@ -327,10 +327,10 @@
                     hideAlbum={true}
                     active={$currentTrackId === filteredTracks[row.index]?.id}
                     playlists={$playlistsStore}
-                    onplay={(t) => t && playTrack(t)}
-                    onselect={() => {}}
-                    onaddtoqueue={(t) => t && addToQueue(t)}
-                    onaddtoplaylist={(t, id) => handleAddToPlaylist(t, id)}
+                    onPlay={(t) => t && playTrack(t)}
+                    onSelect={() => {}}
+                    onAddToQueue={(t) => t && addToQueue(t)}
+                    onAddToPlaylist={(t, id) => handleAddToPlaylist(t, id)}
                     onToggleFavorite={toggleFavoriteTrack}
                   />
                 </div>

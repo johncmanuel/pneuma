@@ -17,7 +17,7 @@
     activeView?: string;
     navItems?: NavItem[];
     recentItems?: RecentItem[];
-    onnavigate?: (id: string) => void;
+    onNavigate?: (id: string) => void;
     onRecentClick?: (item: RecentItem) => void;
   }
 
@@ -25,7 +25,7 @@
     activeView = "library",
     navItems = [],
     recentItems = [],
-    onnavigate,
+    onNavigate,
     onRecentClick
   }: Props = $props();
 
@@ -41,7 +41,7 @@
       <li>
         <button
           class:active={activeView === item.id}
-          onclick={() => onnavigate?.(item.id)}
+          onclick={() => onNavigate?.(item.id)}
         >
           {item.label}
         </button>

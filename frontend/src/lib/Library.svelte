@@ -661,9 +661,9 @@
                     active={$currentTrackId ===
                       filteredAlbumDetailTracks[row.index]?.id}
                     disableLocal={false}
-                    onplay={handlePlay}
-                    onselect={() => {}}
-                    onaddtoqueue={handleQueue}
+                    onPlay={handlePlay}
+                    onSelect={() => {}}
+                    onAddToQueue={handleQueue}
                     onToggleFavorite={toggleFavoriteTrack}
                   />
                 </div>

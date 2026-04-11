@@ -18,7 +18,7 @@
     _source: "remote" | "local";
   }
 
-  let searchBar: SearchBar;
+  let searchBar = $state<SearchBar | undefined>();
 
   async function searchFn(query: string) {
     const [remoteResults, localResults, remoteAlbums, localAlbums] =
@@ -142,7 +142,9 @@
     searchBar?.focus();
   }
 
-  export const hasResults = () => searchBar?.hasResults?.() ?? false;
+  export function hasResults() {
+    return searchBar?.hasResults?.() ?? false;
+  }
 </script>
 
 <SearchBar

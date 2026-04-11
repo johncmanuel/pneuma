@@ -23,21 +23,21 @@
   let {
     track = null,
     active = false,
-    onplay,
-    onselect
+    onPlay,
+    onSelect
   }: {
     track?: Track | null;
     active?: boolean;
-    onplay?: () => void;
-    onselect?: () => void;
+    onPlay?: () => void;
+    onSelect?: () => void;
   } = $props();
 </script>
 
 <button
   class="track-row"
   class:active
-  ondblclick={() => onplay?.()}
-  onclick={() => onselect?.()}
+  ondblclick={() => onPlay?.()}
+  onclick={() => onSelect?.()}
 >
   <span class="num text-3">{track?.track_number || "-"}</span>
   <span class="title truncate">{track?.title ?? "Unknown"}</span>

@@ -24,14 +24,14 @@
   import { RotateCcw } from "@lucide/svelte";
   import { BrowserOpenURL } from "../../wailsjs/runtime";
 
-  let connectURL = "http://127.0.0.1:8989";
-  let connectUser = "";
-  let connectPass = "";
-  let connectErr = "";
-  let connecting = false;
+  let connectURL = $state("http://127.0.0.1:8989");
+  let connectUser = $state("");
+  let connectPass = $state("");
+  let connectErr = $state("");
+  let connecting = $state(false);
 
-  let cacheCleared = false;
-  let changingFavoritesSync = false;
+  let cacheCleared = $state(false);
+  let changingFavoritesSync = $state(false);
 
   async function connect() {
     connectErr = "";

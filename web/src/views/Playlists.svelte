@@ -420,11 +420,11 @@
                 isLocal={item.source === "local_ref"}
                 hideFavoriteIcon={selectedIsFavorites}
                 playlists={$playlists}
-                onplay={() => handlePlay(item)}
-                onselect={() => {}}
-                onaddtoqueue={() => {}}
-                onremove={() => handleRemove(item)}
-                onaddtoplaylist={(t, id) => handleAddToPlaylist(t, id)}
+                onPlay={() => handlePlay(item)}
+                onSelect={() => {}}
+                onAddToQueue={() => {}}
+                onRemove={() => handleRemove(item)}
+                onAddToPlaylist={(t, id) => handleAddToPlaylist(t, id)}
                 onToggleFavorite={toggleFavoriteTrack}
               />
             </div>

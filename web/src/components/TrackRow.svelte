@@ -15,11 +15,11 @@
     isLocal?: boolean;
     hideFavoriteIcon?: boolean;
     playlists?: PlaylistSummary[];
-    onplay?: (track: Track | null) => void;
-    onselect?: () => void;
-    onaddtoqueue?: (track: Track | null) => void;
-    onremove?: (track: Track | null) => void;
-    onaddtoplaylist?: (track: Track | null, playlistId: string) => void;
+    onPlay?: (track: Track | null) => void;
+    onSelect?: () => void;
+    onAddToQueue?: (track: Track | null) => void;
+    onRemove?: (track: Track | null) => void;
+    onAddToPlaylist?: (track: Track | null, playlistId: string) => void;
     onToggleFavorite?: (track: Track | null) => void;
   }
 
@@ -32,11 +32,11 @@
     isLocal,
     hideFavoriteIcon,
     playlists,
-    onplay,
-    onselect,
-    onaddtoqueue,
-    onremove,
-    onaddtoplaylist,
+    onPlay,
+    onSelect,
+    onAddToQueue,
+    onRemove,
+    onAddToPlaylist,
     onToggleFavorite
   }: Props = $props();
 
@@ -53,10 +53,10 @@
   {isFavorite}
   {hideFavoriteIcon}
   playlists={visiblePlaylistsForAddMenu(playlists ?? [])}
-  {onplay}
-  {onselect}
-  {onaddtoqueue}
-  {onremove}
-  {onaddtoplaylist}
+  {onPlay}
+  {onSelect}
+  {onAddToQueue}
+  {onRemove}
+  {onAddToPlaylist}
   {onToggleFavorite}
 />

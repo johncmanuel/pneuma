@@ -461,9 +461,9 @@
                 isFavorite={$favoriteTrackIDs.has(track.id)}
                 hideFavoriteIcon={selectedIsFavorites}
                 disableLocal={false}
-                onplay={() => handlePlay(item)}
-                onaddtoqueue={(t) => {}}
-                onremove={() => handleRemove(item)}
+                onPlay={() => handlePlay(item)}
+                onAddToQueue={(t) => {}}
+                onRemove={() => handleRemove(item)}
                 onToggleFavorite={toggleFavoriteTrack}
               />
             </div>
