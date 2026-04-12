@@ -65,4 +65,6 @@ Run them after finalizing changes.
 
 Run `bun lint` to lint TypeScript, Svelte, and Go code.
 
+Run `bun knip` to check for unused TypeScript and Svelte code, dependencies, and exports.
+
 Run them after finalizing changes.

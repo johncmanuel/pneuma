@@ -226,6 +226,8 @@ Run `bun fmt` to format TypeScript, Svelte, and Go code.
 
 Run `bun lint` to lint TypeScript, Svelte, and Go code.
 
+Run `bun knip` to check for unused TypeScript and Svelte code, dependencies, and exports.
+
 ### Running sqlc
 
 sqlc is used to generate Go code from SQL queries.
