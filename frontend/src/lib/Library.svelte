@@ -29,7 +29,7 @@
   import { totalDuration, shuffle, type Track } from "@pneuma/shared";
   import TrackRow from "./TrackRow.svelte";
   import { SortButton } from "@pneuma/ui";
-  import "../assets/css/track-list.css";
+  import "@pneuma/ui/css/track-list.css";
   import {
     serverFetch,
     artworkUrl,

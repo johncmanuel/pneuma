@@ -3,7 +3,8 @@
   "version": "0.0.1",
   "type": "module",
   "exports": {
-    ".": "./src/lib/index.ts"
+    ".": "./src/lib/index.ts",
+    "./css/*": "./src/css/*"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"

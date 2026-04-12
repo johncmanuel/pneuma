@@ -32,7 +32,7 @@
   import { Heart, Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "./TrackRow.svelte";
   import { SortButton } from "@pneuma/ui";
-  import "../assets/css/track-list.css";
+  import "@pneuma/ui/css/track-list.css";
   import { addToast, totalDuration, type Track } from "@pneuma/shared";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);

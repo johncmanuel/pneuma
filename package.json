@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@eslint/compat": "^2.0.5",
+    "@eslint/css": "^1.1.0",
     "@eslint/js": "^10.0.1",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@tsconfig/svelte": "^5.0.0",

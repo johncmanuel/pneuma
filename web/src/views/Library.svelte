@@ -563,12 +563,6 @@
     pointer-events: none;
   }
 
-  .track-list {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
   .album-detail-header {
     display: flex;
     flex-direction: row;
@@ -653,22 +647,5 @@
   .no-results {
     padding: 16px 8px;
     font-size: 13px;
-  }
-
-  .track-headers {
-    display: grid;
-    grid-template-columns: 32px 2fr 1fr 76px;
-    gap: 0 12px;
-    padding: 4px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-3);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .track-headers .num {
-    text-align: right;
   }
 </style>

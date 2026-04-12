@@ -35,6 +35,7 @@
   } from "@pneuma/shared";
   import { generateRandomPlaylist } from "../lib/api";
   import { SortButton } from "@pneuma/ui";
+  import "@pneuma/ui/css/track-list.css";
 
   type SortField = "default" | "title" | "added_at" | "duration";
 
@@ -893,28 +894,5 @@
   .loading-msg {
     padding: 20px 12px;
     text-align: center;
-  }
-
-  .track-headers {
-    display: grid;
-    grid-template-columns: 32px 2fr 1fr 1fr 76px;
-    gap: 0 12px;
-    padding: 4px 12px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-3);
-    border-bottom: 1px solid var(--border);
-  }
-
-  .track-headers .num {
-    text-align: right;
-  }
-
-  .track-list {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
   }
 </style>
