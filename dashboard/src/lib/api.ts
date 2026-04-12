@@ -145,13 +145,3 @@ export async function tryAutoAuth() {
     console.warn("Auto-auth refresh failed");
   }
 }
-
-export function streamUrl(trackId: string): string {
-  const token = get(authToken);
-  return `${apiBase()}/api/stream/tracks/${trackId}?token=${encodeURIComponent(token)}`;
-}
-
-export function artworkUrl(trackId: string): string {
-  const token = get(authToken);
-  return `${apiBase()}/api/library/tracks/${trackId}/art?token=${encodeURIComponent(token)}`;
-}
