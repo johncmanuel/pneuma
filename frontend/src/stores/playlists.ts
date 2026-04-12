@@ -45,7 +45,6 @@ import { connected, serverFetch } from "../utils/api";
 
 export type { LocalPlaylistSummary as PlaylistSummary } from "@pneuma/shared";
 export type { LocalPlaylistItem as PlaylistItem } from "@pneuma/shared";
-export type { PlaylistMenuItem } from "@pneuma/shared";
 
 export const playlists = writable<LocalPlaylistSummary[]>([]);
 
@@ -57,7 +56,7 @@ export const selectedPlaylist = writable<LocalPlaylistSummary | null>(null);
 
 export const playlistsLoading = writable(false);
 
-export const playingPlaylistId = writable<string | null>(null);
+const playingPlaylistId = writable<string | null>(null);
 
 export const favoriteTrackIDs = writable<Set<string>>(new Set());
 
@@ -381,10 +380,6 @@ export function isFavoritesPlaylist(
   playlist: LocalPlaylistSummary | null | undefined
 ) {
   return isFavoritesPlaylistShared(playlist);
-}
-
-export function isTrackFavorited(trackID: string): boolean {
-  return get(favoriteTrackIDs).has(trackID);
 }
 
 export function visiblePlaylistsForAddMenu(
@@ -866,7 +861,7 @@ export async function addTracksToPlaylist(
   addToast(parts.join(" · "), added > 0 ? "success" : "info");
 }
 
-export async function reorderPlaylistItems(
+async function reorderPlaylistItems(
   playlistId: string,
   items: LocalPlaylistItem[]
 ) {

@@ -3,15 +3,6 @@ import type { Track } from "@pneuma/shared";
 import { serverFetch, connected } from "../utils/api";
 import { get } from "svelte/store";
 
-export interface Album {
-  id: string;
-  title: string;
-  artist_id: string;
-  year: number;
-  artwork_id: string;
-  artist_name?: string;
-}
-
 /** Album group derived from the tracks table and is reliable regardless of albums table state. */
 export interface RemoteAlbumGroup {
   key: string; // "name|||artist" or "__unorganized__"
@@ -26,14 +17,13 @@ export interface RemoteAlbumGroup {
 export const UNORGANIZED_KEY = "__unorganized__";
 
 export const tracks = writable<Track[]>([]);
-export const albums = writable<Album[]>([]);
 export const loading = writable(false);
-export const searchResults = writable<Track[]>([]);
-export const albumSearchResults = writable<RemoteAlbumGroup[]>([]);
+const searchResults = writable<Track[]>([]);
+const albumSearchResults = writable<RemoteAlbumGroup[]>([]);
 
 export const remoteAlbumGroups = writable<RemoteAlbumGroup[]>([]);
 export const remoteAlbumGroupsTotal = writable(0);
-export const remoteAlbumGroupsOffset = writable(0);
+const remoteAlbumGroupsOffset = writable(0);
 
 const ALBUM_GROUP_PAGE_SIZE = 50;
 
@@ -89,36 +79,6 @@ export async function loadMoreRemoteAlbumGroups(filter = "") {
   }
 }
 
-export const tracksTotal = writable(0);
-export const tracksOffset = writable(0);
-export const albumsTotal = writable(0);
-export const albumsOffset = writable(0);
-
-const PAGE_SIZE = 50;
-
-/** Fetch the next page of albums and append. */
-export async function loadMoreAlbums(filter = "") {
-  if (!get(connected)) return;
-
-  const currentOffset = get(albumsOffset);
-  const total = get(albumsTotal);
-  const nextOffset = currentOffset + PAGE_SIZE;
-
-  if (nextOffset >= total) return;
-
-  const params = new URLSearchParams({
-    offset: String(nextOffset),
-    limit: String(PAGE_SIZE)
-  });
-
-  if (filter) params.set("filter", filter);
-
-  const r = await serverFetch(`/api/library/albums?${params}`);
-  const data = await r.json();
-  albums.update((existing) => [...existing, ...(data.albums ?? [])]);
-  albumsOffset.set(nextOffset);
-}
-
 /** Fetch tracks by IDs (for queue resolution). */
 export async function fetchTracksByIDs(ids: string[]): Promise<Track[]> {
   if (!get(connected) || ids.length === 0) return [];
@@ -170,14 +130,4 @@ export async function searchAlbumGroups(
     albumSearchResults.set([]);
     return [];
   }
-}
-
-export function clearSearch() {
-  searchResults.set([]);
-  albumSearchResults.set([]);
-}
-
-export async function triggerScan() {
-  if (!get(connected)) return;
-  await serverFetch("/api/library/scan", { method: "POST" });
 }

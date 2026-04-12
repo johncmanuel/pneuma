@@ -5,7 +5,7 @@ import { type AlbumGroup, type Track, isLocalID } from "@pneuma/shared";
 export const loading = writable(false);
 export const albumGroups = writable<AlbumGroup[]>([]);
 export const albumGroupsTotal = writable(0);
-export const PAGE_SIZE = 50;
+const PAGE_SIZE = 50;
 
 export async function loadAlbumGroupsPage(offset = 0, search = "") {
   loading.set(true);

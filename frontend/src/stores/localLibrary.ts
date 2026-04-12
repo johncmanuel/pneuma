@@ -22,7 +22,7 @@ import {
 } from "@pneuma/shared";
 import { playerState } from "./player";
 
-export interface LocalTrack {
+interface LocalTrack {
   path: string;
   title: string;
   artist: string;
@@ -57,7 +57,7 @@ localFolders.subscribe((v) => {
   }
 });
 
-export const localTracks = writable<LocalTrack[]>([]);
+const localTracks = writable<LocalTrack[]>([]);
 
 /** used for denoting when an initial load or full rescan is in progress. */
 export const localLoading = writable(false);
@@ -224,7 +224,7 @@ const ALBUM_PAGE_SIZE = 50;
 
 export const localAlbumGroups = writable<LocalAlbumGroup[]>([]);
 export const localAlbumGroupsTotal = writable(0);
-export const localAlbumGroupsOffset = writable(0);
+const localAlbumGroupsOffset = writable(0);
 export const localAlbumFilter = writable("");
 
 /** Load a page of local album groups from Go. */

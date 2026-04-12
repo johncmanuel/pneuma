@@ -135,10 +135,6 @@ async function refreshFavoritesState(nextPlaylists: PlaylistSummary[]) {
   await refreshFavoriteTrackIDsFromPlaylist(favorites?.id ?? null);
 }
 
-export function isTrackFavorited(trackId: string): boolean {
-  return get(favoriteTrackIDs).has(trackId);
-}
-
 export function isFavoritesPlaylist(
   playlist: PlaylistSummary | null | undefined
 ): boolean {
@@ -335,7 +331,7 @@ export async function updatePlaylist(
   }
 }
 
-export async function addTracksToPlaylist(playlistId: string, tracks: Track[]) {
+async function addTracksToPlaylist(playlistId: string, tracks: Track[]) {
   const existing =
     get(selectedPlaylist)?.id === playlistId
       ? get(selectedPlaylistItems)

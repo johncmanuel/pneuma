@@ -1,14 +1,14 @@
 import { writable } from "svelte/store";
 import { apiFetch } from "../api";
 
-export interface RecentAlbum {
+interface RecentAlbum {
   album_name: string;
   album_artist: string;
   first_track_id: string;
   played_at: string;
 }
 
-export interface RecentPlaylist {
+interface RecentPlaylist {
   playlist_id: string;
   name: string;
   artwork_path?: string;

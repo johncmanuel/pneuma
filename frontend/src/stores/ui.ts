@@ -1,13 +1,13 @@
 import { writable, derived, get } from "svelte/store";
 
-export type PanelName = "queue" | null;
+type PanelName = "queue" | null;
 
 export const activePanel = writable<PanelName>(null);
 
 /** The currently active main view (library | downloads | settings). */
 export const currentView = writable<string>("library");
 
-export function togglePanel(name: "queue") {
+function togglePanel(name: "queue") {
   activePanel.update((v) => (v === name ? null : name));
 }
 
@@ -20,16 +20,16 @@ export function closePanel() {
 }
 
 export type LibTab = "library" | "local";
-export type LocalSubTab = "albums";
+type LocalSubTab = "albums";
 
 export const activeTab = writable<LibTab>("library");
-export const localSubTab = writable<LocalSubTab>("albums");
+const localSubTab = writable<LocalSubTab>("albums");
 export const selectedAlbum = writable<string | null>(null);
 
 /** Currently selected playlist ID (drives the playlist detail view). */
 export const selectedPlaylistView = writable<string | null>(null);
 
-export interface NavState {
+interface NavState {
   view: string;
   tab: LibTab;
   subTab: LocalSubTab;

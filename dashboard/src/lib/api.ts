@@ -1,5 +1,7 @@
-import { derived, writable } from "svelte/store";
+import { writable, derived } from "svelte/store";
 import type { CurrentUser } from "@pneuma/shared";
+
+export type { UserClaims } from "@pneuma/shared";
 
 export const currentUser = writable<CurrentUser | null>(null);
 export const loggedIn = derived(currentUser, ($u) => Boolean($u));

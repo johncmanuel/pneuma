@@ -8,9 +8,9 @@ import {
   selectPlaylist
 } from "./stores/playlists";
 
-export const libraryVersion = writable(0);
-export const scanRunning = writable(false);
-export const scanResult = writable<{
+const libraryVersion = writable(0);
+const scanRunning = writable(false);
+const scanResult = writable<{
   added: number;
   updated: number;
   removed: number;
