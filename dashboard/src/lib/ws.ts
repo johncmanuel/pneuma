@@ -1,5 +1,5 @@
 import { writable, get } from "svelte/store";
-import { authToken, wsBase } from "./api";
+import { loggedIn, wsBase } from "./api";
 
 /**
  * Incremented every time the server reports a library mutation
@@ -20,8 +20,7 @@ let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function connectWS() {
-  const token = get(authToken);
-  if (!token) return;
+  if (!get(loggedIn)) return;
 
   // Prevent double-connect: if a socket is already open or connecting, stop the
   // connection
@@ -44,7 +43,7 @@ export function connectWS() {
   }
 
   const base = wsBase();
-  const url = `${base}/ws?token=${encodeURIComponent(token)}`;
+  const url = `${base}/ws`;
 
   const ws = new WebSocket(url);
   socket = ws;
@@ -61,7 +60,7 @@ export function connectWS() {
   ws.onclose = () => {
     if (socket !== ws) return;
     socket = null;
-    if (get(authToken)) {
+    if (get(loggedIn)) {
       reconnectTimer = setTimeout(connectWS, 3000);
     }
   };

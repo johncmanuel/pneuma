@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { playerState } from "../lib/stores/playback";
-  import { apiFetch, artworkUrl, getStreamToken, streamUrl } from "../lib/api";
+  import { apiFetch, artworkUrl, streamUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import {
     formatDuration,
@@ -55,7 +55,6 @@
   onDestroy(() => {
     stopPositionLoop();
 
-    if (streamTokenTimer) clearInterval(streamTokenTimer);
     if (seekSyncTimer) clearTimeout(seekSyncTimer);
 
     setMediaSessionTrack(null);
@@ -67,12 +66,6 @@
   let seeking = $state(false);
   let seekSyncTimer: ReturnType<typeof setTimeout> | null = $state(null);
   let currentAudioSrc = $state("");
-
-  let streamToken = $state("");
-  let streamTokenTimer: ReturnType<typeof setTimeout> | null = $state(null);
-  let streamRetryCount = $state(0);
-
-  const MAX_STREAM_RETRIES = 2;
 
   let lastTrackId = $state("");
   let lastPaused = $state(true);
@@ -129,17 +122,6 @@
     audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0)
   );
 
-  async function refreshToken() {
-    streamToken = await getStreamToken();
-  }
-
-  const TOKEN_REFRESH_TIMER_MS = 50_000;
-
-  function startTokenRefresh() {
-    if (streamTokenTimer) clearInterval(streamTokenTimer);
-    streamTokenTimer = setInterval(refreshToken, TOKEN_REFRESH_TIMER_MS);
-  }
-
   // Sync the audio element to the store's playback state.
   // Local/missing tracks are blocked by handlePlaybackChanged in playback.ts
   // before they reach the store, so this only handles remote tracks.
@@ -151,7 +133,6 @@
       if (trackChanged) {
         lastTrackId = $playerState.trackId;
         lastPaused = $playerState.paused;
-        streamRetryCount = 0;
 
         if (seekSyncTimer) {
           clearTimeout(seekSyncTimer);
@@ -182,11 +163,7 @@
             }
           }
 
-          if (!streamToken) {
-            await refreshToken();
-            startTokenRefresh();
-          }
-          const url = streamUrl($playerState.trackId, streamToken);
+          const url = streamUrl($playerState.trackId);
 
           if (url) {
             currentAudioSrc = url;
@@ -236,13 +213,6 @@
       displayPosition = 0;
 
       stopPositionLoop();
-
-      if (streamTokenTimer) {
-        clearInterval(streamTokenTimer);
-        streamTokenTimer = null;
-      }
-
-      streamToken = "";
       lastMediaMetadataKey = "";
       setMediaSessionTrack(null);
       setMediaSessionPlaybackState(null);
@@ -493,32 +463,6 @@
     setMediaSessionPlaybackState(hasTrack ? true : null);
   }
 
-  async function onAudioError() {
-    if (streamRetryCount >= MAX_STREAM_RETRIES) return;
-
-    streamRetryCount++;
-
-    const fresh = await getStreamToken();
-    if (!fresh) return;
-
-    streamToken = fresh;
-    const trackId = $playerState.trackId;
-    if (!trackId || !audio) return;
-
-    const url = streamUrl(trackId, streamToken);
-    currentAudioSrc = url;
-    audio.src = url;
-    audio.currentTime = $playerState.positionMs / 1000;
-
-    if (!$playerState.paused) {
-      audio.play().catch((e) => {
-        if (e.name !== "AbortError") {
-          console.warn("Audio retry play failed", e);
-        }
-      });
-    }
-  }
-
   function onTimeUpdate() {
     // The seek bar is driven by displayPosition from the rAF loop.
     const debounceMs = 5000;
@@ -550,7 +494,6 @@
     onended={onEnded}
     onplay={onAudioPlay}
     onpause={onAudioPause}
-    onerror={onAudioError}
     onloadedmetadata={changeAudioDuration}
     ondurationchange={changeAudioDuration}
     preload="metadata"

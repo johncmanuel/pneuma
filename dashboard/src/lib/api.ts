@@ -1,31 +1,13 @@
-import { writable, derived, get } from "svelte/store";
-import { decodeJWT, storageKeys } from "@pneuma/shared";
+import { writable, derived } from "svelte/store";
+import type { CurrentUser } from "@pneuma/shared";
 
-const TOKEN_KEY = storageKeys.token;
-
-const stored = localStorage.getItem(TOKEN_KEY);
-
-/** JWT token */
-export const authToken = writable(stored ?? "");
-
-export const loggedIn = derived(authToken, ($t) => $t.length > 0);
-
-// Persist token changes to localStorage
-authToken.subscribe((v) => {
-  if (v) localStorage.setItem(TOKEN_KEY, v);
-  else localStorage.removeItem(TOKEN_KEY);
-});
-
-/** Reactive current user decoded from the JWT. */
-export const currentUser = derived(authToken, ($t) =>
-  $t ? decodeJWT($t) : null
-);
+export const currentUser = writable<CurrentUser | null>(null);
+export const loggedIn = derived(currentUser, ($u) => Boolean($u));
 
 /**
  * API base URL.
- * In production, the web UI is served from the same origin as the API,
- * so use a relative path. During `vite dev` you can set
- * VITE_API_BASE to point at a running server (e.g. http://localhost:8989).
+ * In production, the dashboard UI is served from the same origin as the API,
+ * so use a relative path. During `vite dev` set VITE_API_BASE if needed.
  */
 function apiBase(): string {
   return (import.meta.env?.VITE_API_BASE as string) ?? "";
@@ -43,12 +25,8 @@ export async function apiFetch(
   path: string,
   init: RequestInit = {}
 ): Promise<Response> {
-  const token = get(authToken);
   const headers = new Headers(init.headers);
 
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-
-  // Don't set Content-Type for FormData, the browser adds the multipart boundary
   if (
     !headers.has("Content-Type") &&
     init.body &&
@@ -57,15 +35,34 @@ export async function apiFetch(
     headers.set("Content-Type", "application/json");
   }
 
-  const res = await fetch(`${apiBase()}${path}`, { ...init, headers });
+  const res = await fetch(`${apiBase()}${path}`, {
+    ...init,
+    credentials: "include",
+    headers
+  });
 
   if (res.status === 401) {
-    // log out if 401 returned, implying token is invalid/expired.
-    // This'll show the login form for the user afterwards
-    // authToken.set("");
-    logout();
+    currentUser.set(null);
   }
+
   return res;
+}
+
+async function hydrateCurrentUser(): Promise<boolean> {
+  const res = await apiFetch("/api/auth/me");
+  if (!res.ok) {
+    currentUser.set(null);
+    return false;
+  }
+
+  const data = (await res.json()) as { user?: CurrentUser };
+  if (!data.user) {
+    currentUser.set(null);
+    return false;
+  }
+
+  currentUser.set(data.user);
+  return true;
 }
 
 export async function login(
@@ -74,6 +71,7 @@ export async function login(
 ): Promise<string | null> {
   const res = await fetch(`${apiBase()}/api/auth/login`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password })
   });
@@ -83,8 +81,13 @@ export async function login(
     return data.message ?? "Login failed";
   }
 
-  const data = await res.json();
-  authToken.set(data.token);
+  const data = (await res.json()) as { user?: CurrentUser };
+  if (data.user) {
+    currentUser.set(data.user);
+  } else {
+    await hydrateCurrentUser();
+  }
+
   return null;
 }
 
@@ -94,6 +97,7 @@ export async function register(
 ): Promise<string | null> {
   const res = await fetch(`${apiBase()}/api/auth/register`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password })
   });
@@ -103,43 +107,41 @@ export async function register(
     return data.message ?? "Registration failed";
   }
 
-  const data = await res.json();
-  authToken.set(data.token);
+  const data = (await res.json()) as { user?: CurrentUser };
+  if (data.user) {
+    currentUser.set(data.user);
+  } else {
+    await hydrateCurrentUser();
+  }
+
   return null;
 }
 
-export function logout() {
-  authToken.set("");
-}
-
-/**
- * On startup, validate any stored token against the server by calling the
- * refresh endpoint. If valid, the server returns a new token, extending the
- * session (if, not obviously show the login form)
- * This means users stay logged in across browser sessions and server restarts
- * (provided the server's JWT secret is stable, which it is after first run).
- */
-export async function tryAutoAuth() {
-  const existing = get(authToken);
-  if (!existing) return;
-
-  // log out if token is malformed or missing expected claims. token can be this way via
-  // user tampering, token format changed, or a variety of other reasons.
-  const claims = decodeJWT(existing);
-  if (!claims || !claims.username) {
-    // authToken.set("");
-    logout();
-    return;
+export async function logout() {
+  try {
+    await fetch(`${apiBase()}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include"
+    });
+  } catch {
+    console.warn("Logout request failed");
   }
 
-  // attempt to refresh
+  currentUser.set(null);
+}
+
+/** On startup, refresh the cookie-backed session and hydrate the current user. */
+export async function tryAutoAuth() {
   try {
-    const res = await apiFetch("/api/auth/refresh", { method: "POST" });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.token) authToken.set(data.token);
+    const refreshed = await apiFetch("/api/auth/refresh", { method: "POST" });
+    if (!refreshed.ok) {
+      currentUser.set(null);
+      return;
     }
+
+    await hydrateCurrentUser();
   } catch {
     console.warn("Auto-auth refresh failed");
+    currentUser.set(null);
   }
 }

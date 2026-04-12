@@ -11,6 +11,15 @@ export interface UserClaims {
   exp: number;
 }
 
+export interface CurrentUser {
+  id: string;
+  username: string;
+  is_admin: boolean;
+  can_upload: boolean;
+  can_edit: boolean;
+  can_delete: boolean;
+}
+
 function parseJWTPart<T>(part: string): T | null {
   try {
     return JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/"))) as T;

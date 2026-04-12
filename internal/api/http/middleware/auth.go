@@ -9,8 +9,13 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// ContextKey is the echo context key used to store parsed JWT claims.
-const ContextKey = "user_claims"
+const (
+	// ContextKey is the echo context key used to store parsed JWT claims.
+	ContextKey = "user_claims"
+
+	// SessionCookieName is the HttpOnly cookie that stores the access token.
+	SessionCookieName = "pneuma_session"
+)
 
 // Claims represents the JWT claims embedded in every access token.
 type Claims struct {
@@ -28,9 +33,6 @@ const AccessTokenTTL = 24 * time.Hour
 
 // RefreshTokenTTL is the lifetime of a refresh token.
 const RefreshTokenTTL = 7 * 24 * time.Hour
-
-// StreamTokenTTL is the lifetime of a short-lived stream token.
-const StreamTokenTTL = 60 * time.Second
 
 // GenerateToken creates a signed JWT for the given user.
 func GenerateToken(secret, userID, username string, isAdmin, canUpload, canEdit, canDelete bool, ttl time.Duration) (string, error) {
@@ -57,6 +59,22 @@ func RequireAuth(secret string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			claims, err := extractClaims(c, secret)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusUnauthorized, "invalid or missing token")
+			}
+			c.Set(ContextKey, claims)
+			return next(c)
+		}
+	}
+}
+
+// RequireAuthWithQuery validates JWT from Authorization header, session cookie,
+// or token query parameter. This is intended only for endpoints that cannot
+// attach Authorization headers, such as the desktop client's (via <audio>) and WebSocket URL auth.
+func RequireAuthWithQuery(secret string) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			claims, err := ParseRequestClaimsWithQuery(c.Request(), secret)
 			if err != nil {
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid or missing token")
 			}
@@ -140,27 +158,65 @@ func ParseToken(secret, tokenStr string) (*Claims, error) {
 	return claims, nil
 }
 
-func extractClaims(c echo.Context, secret string) (*Claims, error) {
-	// check if token is in the Authorization header
-	auth := c.Request().Header.Get("Authorization")
-	tokenStr := ""
-
-	if strings.HasPrefix(auth, "Bearer ") {
-		tokenStr = auth[7:]
-	}
-
-	// if not in authorization header, check query param (mainly used for <audio> stream tokens)
-	if tokenStr == "" {
-		tokenStr = c.QueryParam("token")
-	}
-
+// ParseRequestClaims extracts and validates auth claims from an HTTP request.
+// Token sources are checked in this order:
+// 1. Authorization: Bearer <token>
+// 2. HttpOnly session cookie
+func ParseRequestClaims(r *http.Request, secret string) (*Claims, error) {
+	tokenStr := tokenFromRequest(r)
 	if tokenStr == "" {
 		return nil, echo.ErrUnauthorized
 	}
-
 	return ParseToken(secret, tokenStr)
 }
 
+// ParseRequestClaimsWithQuery validates claims from header/cookie or token query.
+func ParseRequestClaimsWithQuery(r *http.Request, secret string) (*Claims, error) {
+	tokenStr := tokenFromRequestWithQuery(r)
+	if tokenStr == "" {
+		return nil, echo.ErrUnauthorized
+	}
+	return ParseToken(secret, tokenStr)
+}
+
+// extractClaims is a helper function to extract claims from an echo context.
+func extractClaims(c echo.Context, secret string) (*Claims, error) {
+	return ParseRequestClaims(c.Request(), secret)
+}
+
+// tokenFromRequest extracts the token from the Authorization header or session cookie.
+func tokenFromRequest(r *http.Request) string {
+	return tokenFromHeaderOrCookie(r)
+}
+
+// tokenFromRequestWithQuery extracts the token from the Authorization header, session cookie, or token query parameter.
+func tokenFromRequestWithQuery(r *http.Request) string {
+	token := tokenFromHeaderOrCookie(r)
+	if token != "" {
+		return token
+	}
+
+	return strings.TrimSpace(r.URL.Query().Get("token"))
+}
+
+// tokenFromHeaderOrCookie extracts the token from the Authorization header or session cookie.
+func tokenFromHeaderOrCookie(r *http.Request) string {
+	auth := r.Header.Get("Authorization")
+	if strings.HasPrefix(auth, "Bearer ") {
+		token := strings.TrimSpace(auth[7:])
+		if token != "" {
+			return token
+		}
+	}
+
+	if cookie, err := r.Cookie(SessionCookieName); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+
+	return ""
+}
+
+// hasPerm checks if the given claims have the specified permission.
 func hasPerm(claims *Claims, perm string) bool {
 	switch perm {
 	case "can_upload":

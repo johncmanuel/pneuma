@@ -1,27 +1,10 @@
-import { writable, derived, get } from "svelte/store";
-import { decodeJWT, getOrCreateDeviceID, storageKeys } from "@pneuma/shared";
+import { writable, derived } from "svelte/store";
+import { getOrCreateDeviceID, type CurrentUser } from "@pneuma/shared";
 
-const TOKEN_KEY = storageKeys.token;
-
-const stored = localStorage.getItem(TOKEN_KEY);
-
-/** JWT token */
-export const authToken = writable(stored ?? "");
-
-export const loggedIn = derived(authToken, ($t) => $t.length > 0);
+export const currentUser = writable<CurrentUser | null>(null);
+export const loggedIn = derived(currentUser, ($u) => Boolean($u));
 
 export const deviceId = getOrCreateDeviceID();
-
-// Persist token changes to localStorage
-authToken.subscribe((v) => {
-  if (v) localStorage.setItem(TOKEN_KEY, v);
-  else localStorage.removeItem(TOKEN_KEY);
-});
-
-/** Reactive current user decoded from the JWT. */
-export const currentUser = derived(authToken, ($t) =>
-  $t ? decodeJWT($t) : null
-);
 
 function apiBase(): string {
   return (import.meta.env?.VITE_API_BASE as string) ?? "";
@@ -39,10 +22,8 @@ export async function apiFetch(
   path: string,
   init: RequestInit = {}
 ): Promise<Response> {
-  const token = get(authToken);
   const headers = new Headers(init.headers);
 
-  if (token) headers.set("Authorization", `Bearer ${token}`);
   headers.set("X-Device-ID", deviceId);
 
   // Don't set Content-Type for FormData, the browser adds the multipart boundary
@@ -54,12 +35,33 @@ export async function apiFetch(
     headers.set("Content-Type", "application/json");
   }
 
-  const res = await fetch(`${apiBase()}${path}`, { ...init, headers });
+  const res = await fetch(`${apiBase()}${path}`, {
+    ...init,
+    credentials: "include",
+    headers
+  });
 
   if (res.status === 401) {
-    logout();
+    currentUser.set(null);
   }
   return res;
+}
+
+async function hydrateCurrentUser(): Promise<boolean> {
+  const res = await apiFetch("/api/auth/me");
+  if (!res.ok) {
+    currentUser.set(null);
+    return false;
+  }
+
+  const data = (await res.json()) as { user?: CurrentUser };
+  if (!data.user) {
+    currentUser.set(null);
+    return false;
+  }
+
+  currentUser.set(data.user);
+  return true;
 }
 
 export async function login(
@@ -68,6 +70,7 @@ export async function login(
 ): Promise<string | null> {
   const res = await fetch(`${apiBase()}/api/auth/login`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password })
   });
@@ -77,8 +80,13 @@ export async function login(
     return data.message ?? "Login failed";
   }
 
-  const data = await res.json();
-  authToken.set(data.token);
+  const data = (await res.json()) as { user?: CurrentUser };
+  if (data.user) {
+    currentUser.set(data.user);
+  } else {
+    await hydrateCurrentUser();
+  }
+
   return null;
 }
 
@@ -88,6 +96,7 @@ export async function register(
 ): Promise<string | null> {
   const res = await fetch(`${apiBase()}/api/auth/register`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password })
   });
@@ -97,69 +106,61 @@ export async function register(
     return data.message ?? "Registration failed";
   }
 
-  const data = await res.json();
-  authToken.set(data.token);
+  const data = (await res.json()) as { user?: CurrentUser };
+  if (data.user) {
+    currentUser.set(data.user);
+  } else {
+    await hydrateCurrentUser();
+  }
+
   return null;
 }
 
-export function logout() {
-  authToken.set("");
+export async function logout() {
+  try {
+    await fetch(`${apiBase()}/api/auth/logout`, {
+      method: "POST",
+      credentials: "include"
+    });
+  } catch {
+    console.warn("Logout request failed");
+  }
+
+  currentUser.set(null);
 }
 
 /**
- * On startup, validate any stored token against the server by calling the
- * refresh endpoint. If valid, the server returns a new token, extending the
- * session.
+ * On startup, refresh the cookie-backed session and hydrate the current user.
  */
 export async function tryAutoAuth() {
-  const existing = get(authToken);
-  if (!existing) return;
-
-  // log out if token is malformed or missing expected claims
-  const claims = decodeJWT(existing);
-  if (!claims || !claims.username) {
-    logout();
-    return;
-  }
-
-  // attempt to refresh
   try {
-    const res = await apiFetch("/api/auth/refresh", { method: "POST" });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.token) authToken.set(data.token);
+    const refreshed = await apiFetch("/api/auth/refresh", { method: "POST" });
+    if (!refreshed.ok) {
+      currentUser.set(null);
+      return;
     }
+
+    await hydrateCurrentUser();
   } catch {
     console.warn("Auto-auth refresh failed");
+    currentUser.set(null);
   }
 }
 
-/** Short-lived stream token for <audio> elements (60s TTL). */
-export async function getStreamToken(): Promise<string> {
-  const res = await apiFetch("/api/auth/stream-token");
-  if (res.ok) {
-    const data = await res.json();
-    return data.token ?? "";
-  }
-  return "";
-}
-
-export function streamUrl(trackId: string, token: string): string {
+export function streamUrl(trackId: string): string {
   const base = apiBase();
-  return `${base}/api/stream/tracks/${trackId}?token=${encodeURIComponent(token)}`;
+  return `${base}/api/stream/tracks/${trackId}`;
 }
 
 export function artworkUrl(trackId: string): string {
-  const token = get(authToken);
   const base = apiBase();
-  return `${base}/api/library/tracks/${trackId}/art?token=${encodeURIComponent(token)}`;
+  return `${base}/api/library/tracks/${trackId}/art`;
 }
 
 export function playlistArtUrl(playlistId: string, cacheBust?: string): string {
-  const token = get(authToken);
   const base = apiBase();
-  const v = cacheBust ? `&v=${encodeURIComponent(cacheBust)}` : "";
-  return `${base}/api/playlists/${playlistId}/art?token=${encodeURIComponent(token)}${v}`;
+  const v = cacheBust ? `?v=${encodeURIComponent(cacheBust)}` : "";
+  return `${base}/api/playlists/${playlistId}/art${v}`;
 }
 
 export async function uploadPlaylistArtwork(

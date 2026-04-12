@@ -152,6 +152,7 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 	ext := strings.ToLower(filepath.Ext(track.Path))
 
 	c.Response().Header().Set("Content-Type", media.MimeFromExt(ext))
+	c.Response().Header().Set("Cache-Control", "private, no-store")
 	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
 
 	return nil
