@@ -18,7 +18,7 @@ export const serverURL = writable("");
 /** JWT token for the remote server. Empty when disconnected. */
 export const authToken = writable("");
 
-export const localPort = writable(0);
+const localPort = writable(0);
 
 export const isReconnecting = writable(false);
 
@@ -46,7 +46,7 @@ export function clearSession() {
   localStorage.removeItem(SESSION_KEY);
 }
 
-export function loadSession(): SavedSession | null {
+function loadSession(): SavedSession | null {
   const fromSession = sessionStorage.getItem(SESSION_KEY);
   if (fromSession) {
     try {
@@ -179,11 +179,6 @@ export function stopAutoReconnect() {
     reconnectInterval = null;
   }
   isReconnecting.set(false);
-}
-
-/** Base HTTP URL for the remote server, or empty string. */
-export function apiBase(): string {
-  return get(serverURL);
 }
 
 /** Base URL for the local streaming server. */

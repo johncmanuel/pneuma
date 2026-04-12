@@ -1,8 +1,6 @@
 import { writable, derived, get } from "svelte/store";
 import { decodeJWT, storageKeys } from "@pneuma/shared";
 
-export type { UserClaims } from "@pneuma/shared";
-
 const TOKEN_KEY = storageKeys.token;
 
 const stored = localStorage.getItem(TOKEN_KEY);

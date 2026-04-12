@@ -76,12 +76,6 @@ export function disconnectWS() {
   socket = null;
 }
 
-export function wsSend(type: string, payload: object) {
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type, payload }));
-  }
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function handleMessage(msg: { type: string; payload: any }) {
   switch (msg.type) {

@@ -3,7 +3,7 @@ import { artworkUrl, localBase } from "../utils/api";
 import { db } from "../utils/db";
 import type { desktop } from "../../wailsjs/go/models";
 
-export interface RecentAlbum {
+interface RecentAlbum {
   key: string;
   name: string;
   artist: string;
@@ -13,7 +13,7 @@ export interface RecentAlbum {
   playedAt?: number;
 }
 
-export interface RecentPlaylist {
+interface RecentPlaylist {
   id: string;
   name: string;
   artworkPath: string;

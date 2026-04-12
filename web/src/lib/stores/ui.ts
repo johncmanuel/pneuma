@@ -1,11 +1,11 @@
 import { writable, derived, get } from "svelte/store";
 
-export type PanelName = "queue" | null;
+type PanelName = "queue" | null;
 
 export const activePanel = writable<PanelName>(null);
 export const currentView = writable<string>("library");
 
-export function togglePanel(name: "queue") {
+function togglePanel(name: "queue") {
   activePanel.update((v) => (v === name ? null : name));
 }
 
@@ -23,7 +23,7 @@ export const selectedAlbum = writable<string | null>(null);
 /** Currently selected playlist ID (drives the playlist detail view). */
 export const selectedPlaylistView = writable<string | null>(null);
 
-export interface NavState {
+interface NavState {
   view: string;
   albumKey: string | null;
   playlistId: string | null;
