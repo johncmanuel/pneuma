@@ -224,7 +224,8 @@ export async function serverFetch(
  * Returns the stream URL for a track.
  * Local files (identified by path-style IDs) always stream through the local
  * HTTP server, even when connected to a remote server.
- * Remote tracks stream from the server with a JWT query param.
+ * Remote tracks stream from the server using a token query parameter because
+ * the desktop <audio> element cannot set Authorization headers.
  */
 export function streamUrl(trackId: string, localPath?: string): string {
   const p = get(localPort);
@@ -245,7 +246,7 @@ export function streamUrl(trackId: string, localPath?: string): string {
   const base = get(serverURL);
   const token = get(authToken);
   if (base && token) {
-    return `${base}/api/library/tracks/${trackId}/stream?token=${encodeURIComponent(token)}`;
+    return `${base}/api/stream/tracks/${trackId}?token=${encodeURIComponent(token)}`;
   }
 
   return "";

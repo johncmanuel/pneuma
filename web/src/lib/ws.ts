@@ -1,5 +1,5 @@
 import { writable, get } from "svelte/store";
-import { authToken, wsBase, deviceId } from "./api";
+import { loggedIn, wsBase, deviceId } from "./api";
 import { handlePlaybackChanged } from "./stores/playback";
 import {
   favoritesPlaylistId,
@@ -20,8 +20,7 @@ let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function connectWS() {
-  const token = get(authToken);
-  if (!token) return;
+  if (!get(loggedIn)) return;
 
   // Prevent double-connect
   if (
@@ -42,7 +41,7 @@ export function connectWS() {
   }
 
   const base = wsBase();
-  const url = `${base}/ws?token=${encodeURIComponent(token)}&device_id=${encodeURIComponent(deviceId)}`;
+  const url = `${base}/ws?device_id=${encodeURIComponent(deviceId)}`;
 
   const ws = new WebSocket(url);
   socket = ws;
@@ -59,7 +58,7 @@ export function connectWS() {
   ws.onclose = () => {
     if (socket !== ws) return;
     socket = null;
-    if (get(authToken)) {
+    if (get(loggedIn)) {
       reconnectTimer = setTimeout(connectWS, 3000);
     }
   };

@@ -60,12 +60,13 @@ func NewRouter(svc Services) *echo.Echo {
 	e.HidePort = true
 
 	e.Use(echomw.LoggerWithConfig(echomw.LoggerConfig{
-		Format: "[${time_rfc3339}] [HTTP]: ${method} ${uri}  ${status}  ${latency_human}  ${remote_ip}\n",
+		Format: "[${time_rfc3339}] [HTTP]: ${method} ${path}  ${status}  ${latency_human}  ${remote_ip}\n",
 	}))
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORS())
 	e.Use(echomw.RequestID())
 	e.Use(middleware.SecurityHeaders())
+	e.Use(middleware.RequireSameOriginForCookieAuth())
 
 	secret := svc.JWTSecret
 	authMW := middleware.RequireAuth(secret)
@@ -80,13 +81,17 @@ func NewRouter(svc Services) *echo.Echo {
 
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
 
-	// WebSocket: validate JWT from ?token= query param for user identity.
+	// WebSocket: validate JWT from Authorization/cookie/query token.
 	e.GET("/ws", func(c echo.Context) error {
-		var userID string
-		if tok := c.QueryParam("token"); tok != "" {
-			if claims, err := middleware.ParseToken(secret, tok); err == nil {
-				userID = claims.UserID
+		if middleware.IsCrossOrigin(c.Request()) {
+			if _, err := middleware.ParseRequestClaimsWithQuery(c.Request(), secret); err != nil {
+				return c.NoContent(http.StatusForbidden)
 			}
+		}
+
+		var userID string
+		if claims, err := middleware.ParseRequestClaimsWithQuery(c.Request(), secret); err == nil {
+			userID = claims.UserID
 		}
 		deviceID := c.QueryParam("device_id")
 		svc.Hub.ServeWS(c.Response(), c.Request(), userID, deviceID)
@@ -116,7 +121,8 @@ func NewRouter(svc Services) *echo.Echo {
 
 	auth.POST("/password", uh.ChangePassword, authMW, passwordRL)
 	auth.POST("/refresh", uh.Refresh, authMW)
-	auth.GET("/stream-token", uh.StreamToken, authMW)
+	auth.POST("/logout", uh.Logout)
+	auth.GET("/me", uh.Me, authMW)
 
 	// Admin
 	admin := e.Group("/api/admin", adminMW)
@@ -130,7 +136,6 @@ func NewRouter(svc Services) *echo.Echo {
 	lib.GET("/tracks", lh.ListTracks)
 	lib.GET("/tracks/:id", lh.GetTrack)
 	lib.GET("/tracks/:id/stream", lh.StreamTrack)
-	lib.GET("/tracks/:id/art", lh.ServeTrackArt)
 	lib.PATCH("/tracks/:id", lh.UpdateTrackMeta, middleware.RequirePerm(secret, "can_edit"))
 
 	uploadMaxMB := svc.UploadMaxMB
@@ -160,10 +165,12 @@ func NewRouter(svc Services) *echo.Echo {
 	pl.POST("/:id/artwork", plh.UploadPlaylistArt)
 	pl.GET("/:id/art", plh.ServePlaylistArt)
 
-	// Stream (supports query-param token for <audio> elements)
-	// This is an alternative stream endpoint that accepts ?token= for clients
-	// that cannot set Authorization headers (e.g., <audio src="">).
-	e.GET("/api/stream/tracks/:id", lh.StreamTrack, middleware.RequireAuth(secret))
+	// Stream endpoint for browser <audio> and authenticated clients.
+	e.GET("/api/stream/tracks/:id", lh.StreamTrack, middleware.RequireAuthWithQuery(secret))
+
+	// Track artwork endpoint supports query-token auth for clients that cannot
+	// attach Authorization headers on image requests.
+	e.GET("/api/library/tracks/:id/art", lh.ServeTrackArt, middleware.RequireAuthWithQuery(secret))
 
 	// Playback
 	play := e.Group("/api/playback", authMW)
