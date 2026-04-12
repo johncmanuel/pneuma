@@ -31,7 +31,7 @@
       error = result;
       addToast(result, "error");
     } else {
-      pushNav({ view: "home" });
+      pushNav({ view: "library" });
     }
 
     loading = false;
