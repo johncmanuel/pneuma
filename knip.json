@@ -1,0 +1,16 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "tags": ["-lintignore"],
+  "ignoreBinaries": ["go"],
+  "ignoreDependencies": ["@pneuma/shared", "@pneuma/ui"],
+  "workspaces": {
+    ".": {},
+    "web": {},
+    "dashboard": {},
+    "frontend": {
+      "ignore": ["wailsjs/**"]
+    },
+    "landing": {},
+    "packages/*": {}
+  }
+}
