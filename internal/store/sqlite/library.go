@@ -1,16 +1,12 @@
 // there are some queries that can't be expressed as static sqlc queries,
 // so we implement them manually here via database/sql.
 // these are mostly for track-derived album groups,
-// which require dynamic IN-lists or GROUP BY on expressions.
+// which require GROUP BY on expressions.
 
 package sqlite
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
-	"strings"
-	"time"
 
 	"pneuma/internal/models"
 )
@@ -18,30 +14,6 @@ import (
 // UnorganizedAlbum is the special album name for unorganized tracks.
 // Includes SQL single quotes for direct use in query concatenation.
 const UnorganizedAlbum = "'__unorganized__'"
-
-// TracksByIDs returns tracks for the given IDs (dynamic IN-list, cannot be expressed as a static sqlc query).
-func (s *Store) TracksByIDs(ctx context.Context, ids []string) ([]*models.Track, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
-
-	placeholders := strings.Repeat("?,", len(ids))
-	placeholders = placeholders[:len(placeholders)-1]
-
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
-	}
-
-	q := `SELECT ` + trackColumns + ` FROM tracks WHERE id IN (` + placeholders + `)`
-	rows, err := s.db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-
-	defer rows.Close()
-	return collectTracks(rows)
-}
 
 // These functions derive album groups directly from the tracks table using
 // GROUP BY, so they work even when the albums table is empty or incomplete.
@@ -121,74 +93,4 @@ func (s *Store) CountTrackAlbumGroups(ctx context.Context, filter string) (int, 
 			`SELECT COUNT(DISTINCT `+trackAlbumGroupKey+`) FROM tracks WHERE deleted_at IS NULL`).Scan(&n)
 	}
 	return n, err
-}
-
-// trackColumns is the shared column list for raw SQL queries against tracks.
-const trackColumns = `id,path,title,
-	COALESCE(album_artist,''),COALESCE(album_name,''),COALESCE(genre,''),COALESCE(year,0),
-	COALESCE(track_number,0),COALESCE(disc_number,0),COALESCE(duration_ms,0),COALESCE(bitrate_kbps,0),COALESCE(sample_rate_hz,0),
-	COALESCE(codec,''),COALESCE(file_size_bytes,0),last_modified,COALESCE(fingerprint,''),
-	COALESCE(uploaded_by_user_id,''),deleted_at,created_at,updated_at`
-
-type scanner interface {
-	Scan(dest ...any) error
-}
-
-func scanTrack(row scanner) (*models.Track, error) {
-	var t models.Track
-	var deletedAt sql.NullString
-
-	err := row.Scan(
-		&t.ID, &t.Path, &t.Title,
-		&t.AlbumArtist, &t.AlbumName, &t.Genre, &t.Year,
-		&t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.BitrateKbps,
-		&t.SampleRateHz, &t.Codec, &t.FileSizeBytes,
-		(*timeStr)(&t.LastModified), &t.Fingerprint,
-		&t.UploadedByUserID, &deletedAt,
-		(*timeStr)(&t.CreatedAt), (*timeStr)(&t.UpdatedAt),
-	)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("scanTrack: %w", err)
-	}
-
-	if deletedAt.Valid {
-		ts, _ := time.Parse(time.RFC3339, deletedAt.String)
-		t.DeletedAt = &ts
-	}
-	return &t, nil
-}
-
-func collectTracks(rows *sql.Rows) ([]*models.Track, error) {
-	var out []*models.Track
-
-	for rows.Next() {
-		t, err := scanTrack(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, t)
-	}
-	return out, rows.Err()
-}
-
-// timeStr implements sql.Scanner for RFC3339 strings → time.Time.
-type timeStr time.Time
-
-func (t *timeStr) Scan(src any) error {
-	switch v := src.(type) {
-	case string:
-		ts, err := time.Parse(time.RFC3339, v)
-		if err != nil {
-			return err
-		}
-		*t = timeStr(ts)
-	case nil:
-		*t = timeStr(time.Time{})
-	default:
-		return fmt.Errorf("timeStr: unexpected type %T", src)
-	}
-	return nil
 }

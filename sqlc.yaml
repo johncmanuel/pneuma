@@ -8,6 +8,15 @@ sql:
       go:
         package: "serverdb"
         out: "internal/store/sqlite/serverdb"
+        overrides:
+          - column: "users.is_admin"
+            go_type: "bool"
+          - column: "users.can_upload"
+            go_type: "bool"
+          - column: "users.can_edit"
+            go_type: "bool"
+          - column: "users.can_delete"
+            go_type: "bool"
 
   # Desktop database (mainly for caching)
   - engine: "sqlite"

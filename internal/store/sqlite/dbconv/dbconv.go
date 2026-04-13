@@ -17,12 +17,12 @@ func UserToModel(u serverdb.User) *models.User {
 		ID:           u.ID,
 		Username:     u.Username,
 		PasswordHash: u.PasswordHash,
-		IsAdmin:      u.IsAdmin != 0,
-		CanUpload:    u.CanUpload != 0,
-		CanEdit:      u.CanEdit != 0,
-		CanDelete:    u.CanDelete != 0,
-		CreatedAt:    parseTime(u.CreatedAt),
-		UpdatedAt:    parseTime(u.UpdatedAt),
+		IsAdmin:      u.IsAdmin,
+		CanUpload:    u.CanUpload,
+		CanEdit:      u.CanEdit,
+		CanDelete:    u.CanDelete,
+		CreatedAt:    ParseTime(u.CreatedAt),
+		UpdatedAt:    ParseTime(u.UpdatedAt),
 	}
 }
 
@@ -57,7 +57,7 @@ func AuditToModel(a serverdb.AuditLog) models.AuditEntry {
 		TargetType: a.TargetType,
 		TargetID:   a.TargetID,
 		Detail:     a.Detail.String,
-		CreatedAt:  parseTime(a.CreatedAt),
+		CreatedAt:  ParseTime(a.CreatedAt),
 	}
 }
 
@@ -80,11 +80,6 @@ func NullInt64(n int) sql.NullInt64 {
 	return sql.NullInt64{Int64: int64(n), Valid: true}
 }
 
-// NullFloat wraps a float64 in sql.NullFloat64.
-func NullFloat(f float64) sql.NullFloat64 {
-	return sql.NullFloat64{Float64: f, Valid: true}
-}
-
 // SessionByDeviceToModel converts a PlaybackSessionByDeviceRow to a domain model.
 func SessionByDeviceToModel(r serverdb.PlaybackSessionByDeviceRow) *models.PlaybackSession {
 	ps := &models.PlaybackSession{
@@ -96,7 +91,7 @@ func SessionByDeviceToModel(r serverdb.PlaybackSessionByDeviceRow) *models.Playb
 		RepeatMode: int(r.RepeatMode.Int64),
 		Shuffle:    r.Shuffle.Int64 != 0,
 		Playing:    r.Playing.Int64 != 0,
-		UpdatedAt:  parseTime(r.UpdatedAt),
+		UpdatedAt:  ParseTime(r.UpdatedAt),
 	}
 	if r.QueueJson.Valid {
 		if err := json.Unmarshal([]byte(r.QueueJson.String), &ps.Queue); err != nil {
@@ -135,6 +130,24 @@ type trackRow struct {
 	UpdatedAt        string
 }
 
+type trackRows interface {
+	serverdb.ListTracksRow |
+		serverdb.ListTracksPageRow |
+		serverdb.ListTracksByIDsRow |
+		serverdb.SearchTracksRow |
+		serverdb.ListTracksByAlbumNameRow |
+		serverdb.ListTracksByAlbumNameAndArtistRow |
+		serverdb.ListTracksByAlbumUnorganizedRow
+}
+
+func tracksToModels[T trackRows](rows []T) []*models.Track {
+	out := make([]*models.Track, len(rows))
+	for i, r := range rows {
+		out[i] = trackToModel(trackRow(r))
+	}
+	return out
+}
+
 func trackToModel(r trackRow) *models.Track {
 	t := &models.Track{
 		ID:               r.ID,
@@ -151,14 +164,14 @@ func trackToModel(r trackRow) *models.Track {
 		SampleRateHz:     int(r.SampleRateHz),
 		Codec:            r.Codec,
 		FileSizeBytes:    r.FileSizeBytes,
-		LastModified:     parseTime(r.LastModified),
+		LastModified:     ParseTime(r.LastModified),
 		Fingerprint:      r.Fingerprint,
 		UploadedByUserID: r.UploadedByUserID,
-		CreatedAt:        parseTime(r.CreatedAt),
-		UpdatedAt:        parseTime(r.UpdatedAt),
+		CreatedAt:        ParseTime(r.CreatedAt),
+		UpdatedAt:        ParseTime(r.UpdatedAt),
 	}
 	if r.DeletedAt.Valid {
-		ts := parseTime(r.DeletedAt.String)
+		ts := ParseTime(r.DeletedAt.String)
 		t.DeletedAt = &ts
 	}
 	return t
@@ -174,51 +187,31 @@ func TrackDuplicateToModel(r serverdb.TrackDuplicateByMetaRow) *models.Track {
 }
 
 func ListTracksToModels(rows []serverdb.ListTracksRow) []*models.Track {
-	out := make([]*models.Track, len(rows))
-	for i, r := range rows {
-		out[i] = trackToModel(trackRow(r))
-	}
-	return out
+	return tracksToModels(rows)
 }
 
 func ListTracksPageToModels(rows []serverdb.ListTracksPageRow) []*models.Track {
-	out := make([]*models.Track, len(rows))
-	for i, r := range rows {
-		out[i] = trackToModel(trackRow(r))
-	}
-	return out
+	return tracksToModels(rows)
+}
+
+func ListTracksByIDsToModels(rows []serverdb.ListTracksByIDsRow) []*models.Track {
+	return tracksToModels(rows)
 }
 
 func SearchTracksToModels(rows []serverdb.SearchTracksRow) []*models.Track {
-	out := make([]*models.Track, len(rows))
-	for i, r := range rows {
-		out[i] = trackToModel(trackRow(r))
-	}
-	return out
+	return tracksToModels(rows)
 }
 
 func ListTracksByAlbumNameToModels(rows []serverdb.ListTracksByAlbumNameRow) []*models.Track {
-	out := make([]*models.Track, len(rows))
-	for i, r := range rows {
-		out[i] = trackToModel(trackRow(r))
-	}
-	return out
+	return tracksToModels(rows)
 }
 
 func ListTracksByAlbumNameAndArtistToModels(rows []serverdb.ListTracksByAlbumNameAndArtistRow) []*models.Track {
-	out := make([]*models.Track, len(rows))
-	for i, r := range rows {
-		out[i] = trackToModel(trackRow(r))
-	}
-	return out
+	return tracksToModels(rows)
 }
 
 func ListTracksByAlbumUnorganizedToModels(rows []serverdb.ListTracksByAlbumUnorganizedRow) []*models.Track {
-	out := make([]*models.Track, len(rows))
-	for i, r := range rows {
-		out[i] = trackToModel(trackRow(r))
-	}
-	return out
+	return tracksToModels(rows)
 }
 
 func WatchFolderToModel(wf serverdb.WatchFolder) *models.WatchFolder {
@@ -226,7 +219,7 @@ func WatchFolderToModel(wf serverdb.WatchFolder) *models.WatchFolder {
 		ID:        wf.ID,
 		Path:      wf.Path,
 		UserID:    wf.UserID,
-		CreatedAt: parseTime(wf.CreatedAt),
+		CreatedAt: ParseTime(wf.CreatedAt),
 	}
 }
 
@@ -245,29 +238,22 @@ func PlaylistToModel(p serverdb.Playlist) *models.Playlist {
 		Name:        p.Name,
 		Description: p.Description,
 		ArtworkPath: p.ArtworkPath,
-		CreatedAt:   parseTime(p.CreatedAt),
-		UpdatedAt:   parseTime(p.UpdatedAt),
+		CreatedAt:   ParseTime(p.CreatedAt),
+		UpdatedAt:   ParseTime(p.UpdatedAt),
 	}
 }
 
 func PlaylistRowToModel(r serverdb.ListPlaylistsByUserRow) *models.Playlist {
-	var dur int64
-	switch v := r.TotalDurationMs.(type) {
-	case int64:
-		dur = v
-	case float64:
-		dur = int64(v)
-	}
 	return &models.Playlist{
 		ID:          r.ID,
 		UserID:      r.UserID,
 		Name:        r.Name,
 		Description: r.Description,
 		ArtworkPath: r.ArtworkPath,
-		CreatedAt:   parseTime(r.CreatedAt),
-		UpdatedAt:   parseTime(r.UpdatedAt),
+		CreatedAt:   ParseTime(r.CreatedAt),
+		UpdatedAt:   ParseTime(r.UpdatedAt),
 		ItemCount:   int(r.ItemCount),
-		DurationMS:  dur,
+		DurationMS:  r.TotalDurationMs,
 	}
 }
 
@@ -289,8 +275,8 @@ func PlaylistItemToModel(r serverdb.ListPlaylistItemsRow) models.PlaylistItem {
 		RefAlbum:       r.RefAlbum,
 		RefAlbumArtist: r.RefAlbumArtist,
 		RefDurationMS:  r.RefDurationMs,
-		AddedAt:        parseTime(r.AddedAt),
-		Missing:        r.Missing != 0,
+		AddedAt:        ParseTime(r.AddedAt),
+		Missing:        r.Missing,
 	}
 }
 
@@ -302,12 +288,8 @@ func PlaylistItemsToModels(rows []serverdb.ListPlaylistItemsRow) []models.Playli
 	return out
 }
 
-// ParseTime parses an RFC3339 string into a time.Time (exported for use by desktop layer).
+// ParseTime parses an RFC3339 string into a time.Time.
 func ParseTime(s string) time.Time {
 	t, _ := time.Parse(time.RFC3339, s)
 	return t
-}
-
-func parseTime(s string) time.Time {
-	return ParseTime(s)
 }

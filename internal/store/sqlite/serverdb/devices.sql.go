@@ -74,6 +74,7 @@ func (q *Queries) ListUserDevices(ctx context.Context, userID string) ([]Device,
 }
 
 const upsertDevice = `-- name: UpsertDevice :exec
+
 INSERT INTO devices (
     id, user_id, name, created_at, last_active
 ) VALUES ( ?, ?, ?, ?, ?)
@@ -90,6 +91,7 @@ type UpsertDeviceParams struct {
 	LastActive string
 }
 
+// Keep the "name" field in here in case there are feature requests for device management
 func (q *Queries) UpsertDevice(ctx context.Context, arg UpsertDeviceParams) error {
 	_, err := q.db.ExecContext(ctx, upsertDevice,
 		arg.ID,
