@@ -25,8 +25,18 @@ DELETE FROM local_tracks WHERE path = ?;
 -- name: DeleteLocalTracksByPathPrefix :execrows
 DELETE FROM local_tracks WHERE path = ? OR path LIKE ?;
 
+-- name: DeleteLocalTracksByPaths :execrows
+DELETE FROM local_tracks
+WHERE path IN (sqlc.slice('paths'));
+
 -- name: ListPathsByFolder :many
 SELECT path FROM local_tracks WHERE folder = ?;
+
+-- name: ListLocalTracksByPaths :many
+SELECT path, folder, title, artist, album, album_artist, genre,
+       year, track_number, disc_number, duration_ms, has_artwork
+FROM local_tracks
+WHERE path IN (sqlc.slice('paths'));
 
 -- name: ListAllLocalTracks :many
 SELECT path, folder, title, artist, album, album_artist, genre,

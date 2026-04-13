@@ -11,5 +11,11 @@ ON CONFLICT (id) DO UPDATE SET
 -- name: GetPlaybackSession :one
 SELECT
     COALESCE(track_id, '') AS track_id,
-    position_ms, queue_json, queue_index, repeat_mode, shuffle, playing, updated_at
+    COALESCE(position_ms, 0) AS position_ms,
+    queue_json,
+    COALESCE(queue_index, 0) AS queue_index,
+    COALESCE(repeat_mode, 0) AS repeat_mode,
+    CAST(COALESCE(shuffle, 0) AS BOOLEAN) AS shuffle,
+    CAST(COALESCE(playing, 0) AS BOOLEAN) AS playing,
+    updated_at
 FROM playback_session WHERE id = 'current' LIMIT 1;

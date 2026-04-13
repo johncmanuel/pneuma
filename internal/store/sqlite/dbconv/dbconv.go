@@ -35,14 +35,6 @@ func UsersToModels(rows []serverdb.User) []*models.User {
 	return out
 }
 
-// BoolInt converts a Go bool to the int64 value stored in SQLite.
-func BoolInt(b bool) int64 {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 // FormatTime formats a time.Time as RFC3339-UTC for storage in SQLite TEXT columns.
 func FormatTime(t time.Time) string {
 	return t.UTC().Format(time.RFC3339)
@@ -86,11 +78,11 @@ func SessionByDeviceToModel(r serverdb.PlaybackSessionByDeviceRow) *models.Playb
 		ID:         r.ID,
 		UserID:     r.UserID,
 		TrackID:    r.TrackID,
-		PositionMS: r.PositionMs.Int64,
-		QueueIndex: int(r.QueueIndex.Int64),
-		RepeatMode: int(r.RepeatMode.Int64),
-		Shuffle:    r.Shuffle.Int64 != 0,
-		Playing:    r.Playing.Int64 != 0,
+		PositionMS: r.PositionMs,
+		QueueIndex: int(r.QueueIndex),
+		RepeatMode: int(r.RepeatMode),
+		Shuffle:    r.Shuffle,
+		Playing:    r.Playing,
 		UpdatedAt:  ParseTime(r.UpdatedAt),
 	}
 	if r.QueueJson.Valid {

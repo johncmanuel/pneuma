@@ -100,13 +100,6 @@ func (a *App) GetLocalPlaylists() ([]LocalPlaylistSummary, error) {
 
 	out := make([]LocalPlaylistSummary, len(rows))
 	for i, r := range rows {
-		var dur int64
-		switch v := r.TotalDurationMs.(type) {
-		case int64:
-			dur = v
-		case float64:
-			dur = int64(v)
-		}
 		out[i] = LocalPlaylistSummary{
 			ID:               r.ID,
 			Name:             r.Name,
@@ -114,7 +107,7 @@ func (a *App) GetLocalPlaylists() ([]LocalPlaylistSummary, error) {
 			ArtworkPath:      r.ArtworkPath,
 			RemotePlaylistID: r.RemotePlaylistID,
 			ItemCount:        int(r.ItemCount),
-			TotalDurationMS:  dur,
+			TotalDurationMS:  r.TotalDurationMs,
 			CreatedAt:        r.CreatedAt,
 			UpdatedAt:        r.UpdatedAt,
 		}

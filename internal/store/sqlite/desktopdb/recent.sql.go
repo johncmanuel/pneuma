@@ -172,7 +172,7 @@ type SetRecentAlbumParams struct {
 	Key            string
 	Name           string
 	Artist         string
-	IsLocal        int64
+	IsLocal        bool
 	FirstTrackID   sql.NullString
 	FirstLocalPath sql.NullString
 	PlayedAt       int64

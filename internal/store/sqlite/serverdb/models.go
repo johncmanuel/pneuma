@@ -35,8 +35,8 @@ type PlaybackSession struct {
 	QueueJson  sql.NullString
 	QueueIndex sql.NullInt64
 	RepeatMode sql.NullInt64
-	Shuffle    sql.NullInt64
-	Playing    sql.NullInt64
+	Shuffle    bool
+	Playing    bool
 	UpdatedAt  string
 }
 

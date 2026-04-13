@@ -16,12 +16,12 @@ SELECT
     device_id,
     user_id,
     COALESCE(track_id, '') AS track_id,
-    position_ms,
+    COALESCE(position_ms, 0) AS position_ms,
     queue_json,
-    queue_index,
-    repeat_mode,
-    shuffle,
-    playing,
+    COALESCE(queue_index, 0) AS queue_index,
+    COALESCE(repeat_mode, 0) AS repeat_mode,
+    CAST(COALESCE(shuffle, 0) AS BOOLEAN) AS shuffle,
+    CAST(COALESCE(playing, 0) AS BOOLEAN) AS playing,
     updated_at
 FROM playback_sessions
 WHERE device_id = ? LIMIT 1
@@ -32,12 +32,12 @@ type PlaybackSessionByDeviceRow struct {
 	DeviceID   string
 	UserID     string
 	TrackID    string
-	PositionMs sql.NullInt64
+	PositionMs int64
 	QueueJson  sql.NullString
-	QueueIndex sql.NullInt64
-	RepeatMode sql.NullInt64
-	Shuffle    sql.NullInt64
-	Playing    sql.NullInt64
+	QueueIndex int64
+	RepeatMode int64
+	Shuffle    bool
+	Playing    bool
 	UpdatedAt  string
 }
 
@@ -81,8 +81,8 @@ type UpsertPlaybackSessionParams struct {
 	QueueJson  sql.NullString
 	QueueIndex sql.NullInt64
 	RepeatMode sql.NullInt64
-	Shuffle    sql.NullInt64
-	Playing    sql.NullInt64
+	Shuffle    bool
+	Playing    bool
 	UpdatedAt  string
 }
 

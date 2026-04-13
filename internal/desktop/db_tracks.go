@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"pneuma/internal/store/sqlite"
-	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/desktopdb"
 )
 
@@ -78,7 +77,7 @@ func localTrackFromDB(row desktopdb.LocalTrack) LocalTrack {
 		TrackNumber: int(row.TrackNumber),
 		DiscNumber:  int(row.DiscNumber),
 		DurationMs:  row.DurationMs,
-		HasArtwork:  row.HasArtwork != 0,
+		HasArtwork:  row.HasArtwork,
 	}
 }
 
@@ -108,7 +107,7 @@ func (a *App) upsertLocalTrack(lt LocalTrack, folder string) error {
 		TrackNumber: int64(lt.TrackNumber),
 		DiscNumber:  int64(lt.DiscNumber),
 		DurationMs:  lt.DurationMs,
-		HasArtwork:  dbconv.BoolInt(lt.HasArtwork),
+		HasArtwork:  lt.HasArtwork,
 	})
 }
 
@@ -131,8 +130,8 @@ func (a *App) deleteLocalTrackByPath(path string) error {
 // pruneStaleLocalTracks removes rows for the given folder whose paths aren't in
 // livePaths. Returns the slice of deleted paths.
 //
-// NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
-// cannot be used to update this method.
+// This method combines sqlc ListPathsByFolder with DeleteLocalTracksByPaths
+// to remove stale rows in one pass.
 func (a *App) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}) ([]string, error) {
 	if a.dq == nil || len(livePaths) == 0 {
 		return nil, nil
@@ -145,27 +144,18 @@ func (a *App) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}
 
 	// find paths that are in stored but not in livePaths
 	// aka stale paths
-	var staleAny []any
 	var stalePaths []string
 	for _, p := range stored {
 		if _, exists := livePaths[p]; !exists {
-			staleAny = append(staleAny, p)
 			stalePaths = append(stalePaths, p)
 		}
 	}
 
-	if len(staleAny) == 0 {
+	if len(stalePaths) == 0 {
 		return nil, nil
 	}
 
-	ph := sqlPlaceholders(len(staleAny))
-
-	_, err = a.appDB.Exec(
-		`DELETE FROM local_tracks WHERE path IN (`+strings.Join(ph, ",")+`)`,
-		staleAny...,
-	)
-
-	if err != nil {
+	if _, err := a.dq.DeleteLocalTracksByPaths(context.Background(), stalePaths); err != nil {
 		return nil, err
 	}
 
@@ -346,28 +336,17 @@ func (a *App) searchLocalTracks(folders []string, query string) ([]LocalTrack, e
 }
 
 // getLocalTracksByPaths returns tracks for the given exact paths.
-// NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
-// cannot be used to update this method.
 func (a *App) getLocalTracksByPaths(paths []string) ([]LocalTrack, error) {
 	if a.dq == nil || len(paths) == 0 {
 		return nil, nil
 	}
 
-	args := make([]any, len(paths))
-	for i, p := range paths {
-		args[i] = p
-	}
-
-	in := strings.Join(sqlPlaceholders(len(paths)), ",")
-	q := `SELECT ` + localTrackCols + ` FROM local_tracks WHERE path IN (` + in + `)`
-
-	rows, err := a.appDB.Query(q, args...)
+	rows, err := a.dq.ListLocalTracksByPaths(context.Background(), paths)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	return scanLocalTrackRows(rows)
+	return localTracksFromDB(rows), nil
 }
 
 // getLocalAlbumGroups returns paginated album groups computed via SQL GROUP BY.
