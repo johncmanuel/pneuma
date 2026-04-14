@@ -247,16 +247,17 @@
     {/if}
   </main>
 
-  {#if $activePanel === "queue"}
-    <div class="panel-area">
+  <div class="panel-area" class:open={$activePanel !== null}>
+    {#if $activePanel === "queue"}
       <Queue />
-    </div>
-    <button
-      class="resize-handle panel-resize-handle"
-      onmousedown={startPanelResize}
-      title="Resize side panel"
-    ></button>
-  {/if}
+    {/if}
+  </div>
+  <button
+    class="resize-handle panel-resize-handle"
+    class:hidden={$activePanel === null}
+    onmousedown={startPanelResize}
+    title="Resize side panel"
+  ></button>
 
   <div class="player-wrapper">
     <DisconnectBanner />
@@ -282,13 +283,14 @@
     --app-sidebar-w: var(--sidebar-w);
     --app-sidebar-collapsed-w: 64px;
     --app-panel-w: 320px;
+    --app-panel-current-w: 0px;
     display: grid;
-    grid-template-columns: var(--app-sidebar-w) 1fr;
+    grid-template-columns: var(--app-sidebar-w) 1fr var(--app-panel-current-w);
     grid-template-rows: 48px 1fr auto;
     grid-template-areas:
-      "sidebar topbar"
-      "sidebar content"
-      "player  player";
+      "sidebar topbar panel"
+      "sidebar content panel"
+      "player  player player";
     height: 100vh;
     width: 100vw;
     position: relative;
@@ -303,19 +305,13 @@
   }
 
   .shell.sidebar-collapsed {
-    grid-template-columns: var(--app-sidebar-collapsed-w) 1fr;
+    grid-template-columns: var(--app-sidebar-collapsed-w) 1fr var(
+        --app-panel-current-w
+      );
   }
 
   .shell.panel-open {
-    grid-template-columns: var(--app-sidebar-w) 1fr var(--app-panel-w);
-    grid-template-areas:
-      "sidebar topbar  panel"
-      "sidebar content panel"
-      "player  player  player";
-  }
-
-  .shell.panel-open.sidebar-collapsed {
-    grid-template-columns: var(--app-sidebar-collapsed-w) 1fr var(--app-panel-w);
+    --app-panel-current-w: var(--app-panel-w);
   }
 
   .sidebar-area {
@@ -387,6 +383,17 @@
   .panel-area {
     grid-area: panel;
     overflow: hidden;
+    min-width: 0;
+    opacity: 0;
+    transform: translateX(8px);
+    transition:
+      opacity 0.12s ease,
+      transform 0.12s ease;
+  }
+
+  .panel-area.open {
+    opacity: 1;
+    transform: translateX(0);
   }
 
   .resize-handle {
@@ -424,7 +431,13 @@
   }
 
   .panel-resize-handle {
-    left: calc(100% - var(--app-panel-w));
+    left: calc(100% - var(--app-panel-current-w));
+    transition: opacity 0.12s ease;
+  }
+
+  .panel-resize-handle.hidden {
+    opacity: 0;
+    pointer-events: none;
   }
 
   .player-wrapper {
