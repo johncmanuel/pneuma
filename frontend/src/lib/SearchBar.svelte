@@ -13,6 +13,7 @@
   import { connected, serverFetch, artworkUrl, localBase } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { pushNav } from "../stores/ui";
+  import { setPlayingPlaylistContext } from "../stores/playlists";
 
   interface TaggedTrack extends Track {
     _source: "remote" | "local";
@@ -110,6 +111,8 @@
     const idx = albumTracks.findIndex((t) => t.id === track.id);
     const queue = albumTracks.slice(Math.max(0, idx)).map((t) => t.id);
     const baseQueue = albumTracks.map((t) => t.id);
+
+    setPlayingPlaylistContext(null);
 
     playerState.update((s) => ({
       ...s,

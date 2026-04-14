@@ -8,6 +8,7 @@
     currentView,
     pushNav
   } from "../stores/ui";
+  import { favoritesPlaylistId, playingPlaylistId } from "../stores/playlists";
   import {
     formatDuration,
     setupMediaSessionActions,
@@ -229,6 +230,31 @@
       subTab: "albums",
       albumKey
     });
+  }
+
+  function jumpFromNowPlaying() {
+    if (!track) return;
+
+    const isPlaylistView =
+      $currentView === "playlists" || $currentView === "favorites";
+
+    if (!isPlaylistView && $playingPlaylistId) {
+      const targetView =
+        $favoritesPlaylistId && $playingPlaylistId === $favoritesPlaylistId
+          ? "favorites"
+          : "playlists";
+
+      pushNav({
+        view: targetView,
+        tab: "library",
+        subTab: "albums",
+        playlistId: $playingPlaylistId,
+        albumKey: null
+      });
+      return;
+    }
+
+    jumpToAlbum();
   }
 
   function togglePause() {
@@ -666,8 +692,8 @@
       {#if track}
         <button
           class="title truncate title-link"
-          onclick={jumpToAlbum}
-          title="Go to album">{track.title}</button
+          onclick={jumpFromNowPlaying}
+          title="Go to song source">{track.title}</button
         >
         <span class="artist truncate text-2"
           >{track.artist_name || track.album_artist || "Unknown Artist"}</span

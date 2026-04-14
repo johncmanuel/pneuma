@@ -15,10 +15,17 @@
 
   interface Props {
     activeView?: string;
+    collapsed?: boolean;
+    onToggleCollapse?: () => void;
     onNavigate?: (id: string) => void;
   }
 
-  let { activeView = "library", onNavigate }: Props = $props();
+  let {
+    activeView = "library",
+    collapsed = false,
+    onToggleCollapse,
+    onNavigate
+  }: Props = $props();
 
   const navItems = [
     { id: "library", label: "Library" },
@@ -29,14 +36,7 @@
 
   let _authDeps = $derived([$serverURL, $authToken]);
 
-  let sidebarActiveView = $derived(
-    activeView === "playlists" &&
-      $selectedPlaylistView &&
-      $favoritesPlaylistId &&
-      $selectedPlaylistView === $favoritesPlaylistId
-      ? "favorites"
-      : activeView
-  );
+  let sidebarActiveView = $derived(activeView);
 
   $effect(() => {
     if (!_authDeps) return;
@@ -82,7 +82,7 @@
       const favoritesID =
         $favoritesPlaylistId ?? (await ensureFavoritesPlaylist());
       if (favoritesID) {
-        pushNav({ view: "playlists", playlistId: favoritesID, albumKey: null });
+        pushNav({ view: "favorites", playlistId: favoritesID, albumKey: null });
       }
       return;
     }
@@ -110,6 +110,8 @@
 
 <Sidebar
   activeView={sidebarActiveView}
+  {collapsed}
+  {onToggleCollapse}
   {navItems}
   {recentItems}
   onNavigate={handleNavClick}

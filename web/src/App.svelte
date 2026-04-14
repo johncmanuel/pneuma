@@ -21,13 +21,99 @@
   import SearchBar from "./components/SearchBar.svelte";
   import Library from "./views/Library.svelte";
   import Playlists from "./views/Playlists.svelte";
+  import Favorites from "./views/Favorites.svelte";
   import Login from "./views/Login.svelte";
   import Register from "./views/Register.svelte";
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
   import { ThemeToggle, Toasts } from "@pneuma/ui";
+  import { clamp as clampShared } from "@pneuma/shared";
 
   let wasLoggedIn = $state(false);
   let searchBar: any = $state(undefined);
+
+  const SIDEBAR_MIN_WIDTH = 180;
+  const SIDEBAR_MAX_WIDTH = 340;
+  const SIDEBAR_DEFAULT_WIDTH = 200;
+
+  const PANEL_MIN_WIDTH = 260;
+  const PANEL_MAX_WIDTH = 420;
+  const PANEL_DEFAULT_WIDTH = 320;
+
+  const sidebarWidthKey = "pneuma:web:sidebar-width";
+  const sidebarCollapsedKey = "pneuma:web:sidebar-collapsed";
+  const panelWidthKey = "pneuma:web:panel-width";
+
+  let sidebarWidth = $state(SIDEBAR_DEFAULT_WIDTH);
+  let sidebarCollapsed = $state(false);
+  let panelWidth = $state(PANEL_DEFAULT_WIDTH);
+  let isResizingLayout = $state(false);
+
+  let resizeMoveHandler: ((event: MouseEvent) => void) | null = $state(null);
+  let resizeUpHandler: (() => void) | null = $state(null);
+
+  function clearResizeListeners() {
+    if (resizeMoveHandler) {
+      window.removeEventListener("mousemove", resizeMoveHandler);
+      resizeMoveHandler = null;
+    }
+
+    if (resizeUpHandler) {
+      window.removeEventListener("mouseup", resizeUpHandler);
+      resizeUpHandler = null;
+    }
+  }
+
+  function beginHorizontalResize(
+    event: MouseEvent,
+    onDelta: (deltaX: number) => void
+  ) {
+    event.preventDefault();
+
+    const startX = event.clientX;
+    isResizingLayout = true;
+    clearResizeListeners();
+
+    resizeMoveHandler = (moveEvent: MouseEvent) => {
+      onDelta(moveEvent.clientX - startX);
+    };
+
+    resizeUpHandler = () => {
+      isResizingLayout = false;
+      clearResizeListeners();
+    };
+
+    window.addEventListener("mousemove", resizeMoveHandler);
+    window.addEventListener("mouseup", resizeUpHandler);
+  }
+
+  function startSidebarResize(event: MouseEvent) {
+    const startWidth = sidebarWidth;
+
+    beginHorizontalResize(event, (deltaX) => {
+      sidebarCollapsed = false;
+      sidebarWidth = clampShared(
+        startWidth + deltaX,
+        SIDEBAR_MIN_WIDTH,
+        SIDEBAR_MAX_WIDTH
+      );
+    });
+  }
+
+  function startPanelResize(event: MouseEvent) {
+    const startWidth = panelWidth;
+
+    beginHorizontalResize(event, (deltaX) => {
+      panelWidth = clampShared(
+        startWidth - deltaX,
+        PANEL_MIN_WIDTH,
+        PANEL_MAX_WIDTH
+      );
+    });
+  }
+
+  function toggleSidebar() {
+    sidebarCollapsed = !sidebarCollapsed;
+  }
 
   function handleKeydown(e: KeyboardEvent) {
     if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -47,11 +133,31 @@
   }
 
   onMount(async () => {
+    const rawSidebarWidth = Number(localStorage.getItem(sidebarWidthKey));
+    const rawPanelWidth = Number(localStorage.getItem(panelWidthKey));
+
+    sidebarWidth = Number.isFinite(rawSidebarWidth)
+      ? clampShared(rawSidebarWidth, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+      : SIDEBAR_DEFAULT_WIDTH;
+
+    panelWidth = Number.isFinite(rawPanelWidth)
+      ? clampShared(rawPanelWidth, PANEL_MIN_WIDTH, PANEL_MAX_WIDTH)
+      : PANEL_DEFAULT_WIDTH;
+
+    sidebarCollapsed = localStorage.getItem(sidebarCollapsedKey) === "1";
+
     await tryAutoAuth();
   });
 
   onDestroy(() => {
+    clearResizeListeners();
     disconnectWS();
+  });
+
+  $effect(() => {
+    localStorage.setItem(sidebarWidthKey, String(sidebarWidth));
+    localStorage.setItem(panelWidthKey, String(panelWidth));
+    localStorage.setItem(sidebarCollapsedKey, sidebarCollapsed ? "1" : "0");
   });
 
   // Reactively connect/disconnect WS whenever auth state changes.
@@ -70,10 +176,6 @@
   });
 
   function handleNavigate(view: string) {
-    if (view === "favorites") {
-      view = "playlists";
-    }
-
     pushNav({
       view: view,
       albumKey: null,
@@ -96,10 +198,29 @@
     {/if}
   </div>
 {:else}
-  <div class="shell" class:panel-open={$activePanel !== null}>
+  <div
+    class="shell"
+    class:panel-open={$activePanel !== null}
+    class:sidebar-collapsed={sidebarCollapsed}
+    class:is-resizing={isResizingLayout}
+    style="--app-sidebar-w: {sidebarWidth}px; --app-panel-w: {panelWidth}px;"
+  >
     <div class="sidebar-area">
-      <Sidebar activeView={$currentView} onNavigate={handleNavigate} />
+      <Sidebar
+        activeView={$currentView}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
+        onNavigate={handleNavigate}
+      />
     </div>
+
+    {#if !sidebarCollapsed}
+      <button
+        class="resize-handle sidebar-resize-handle"
+        onmousedown={startSidebarResize}
+        title="Resize sidebar"
+      ></button>
+    {/if}
 
     <header class="topbar">
       <div class="nav-history">
@@ -133,6 +254,8 @@
     <main class="content">
       {#if $currentView === "library"}
         <Library />
+      {:else if $currentView === "favorites"}
+        <Favorites />
       {:else if $currentView === "playlists"}
         <Playlists />
       {/if}
@@ -142,6 +265,11 @@
       <div class="panel-area">
         <QueuePanel />
       </div>
+      <button
+        class="resize-handle panel-resize-handle"
+        onmousedown={startPanelResize}
+        title="Resize side panel"
+      ></button>
     {/if}
 
     <div class="player-wrapper">
@@ -169,8 +297,11 @@
   }
 
   .shell {
+    --app-sidebar-w: var(--sidebar-w);
+    --app-sidebar-collapsed-w: 64px;
+    --app-panel-w: 320px;
     display: grid;
-    grid-template-columns: var(--sidebar-w) 1fr;
+    grid-template-columns: var(--app-sidebar-w) 1fr;
     grid-template-rows: 48px 1fr auto;
     grid-template-areas:
       "sidebar topbar"
@@ -178,14 +309,31 @@
       "player  player";
     height: 100vh;
     width: 100vw;
+    position: relative;
+  }
+
+  .shell:not(.is-resizing) {
+    transition: grid-template-columns 0.12s ease;
+  }
+
+  .shell.is-resizing {
+    user-select: none;
+  }
+
+  .shell.sidebar-collapsed {
+    grid-template-columns: var(--app-sidebar-collapsed-w) 1fr;
   }
 
   .shell.panel-open {
-    grid-template-columns: var(--sidebar-w) 1fr 320px;
+    grid-template-columns: var(--app-sidebar-w) 1fr var(--app-panel-w);
     grid-template-areas:
       "sidebar topbar  panel"
       "sidebar content panel"
       "player  player  player";
+  }
+
+  .shell.panel-open.sidebar-collapsed {
+    grid-template-columns: var(--app-sidebar-collapsed-w) 1fr var(--app-panel-w);
   }
 
   .sidebar-area {
@@ -193,6 +341,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    min-width: 0;
   }
 
   .topbar {
@@ -276,6 +425,44 @@
   .panel-area {
     grid-area: panel;
     overflow: hidden;
+  }
+
+  .resize-handle {
+    position: absolute;
+    top: 0;
+    bottom: var(--player-h);
+    width: 10px;
+    transform: translateX(-50%);
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: col-resize;
+    z-index: 30;
+  }
+
+  .resize-handle::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: var(--border);
+    opacity: 0.75;
+  }
+
+  .resize-handle:hover::after,
+  .shell.is-resizing .resize-handle::after {
+    background: var(--accent);
+    opacity: 1;
+  }
+
+  .sidebar-resize-handle {
+    left: var(--app-sidebar-w);
+  }
+
+  .panel-resize-handle {
+    left: calc(100% - var(--app-panel-w));
   }
 
   .player-wrapper {

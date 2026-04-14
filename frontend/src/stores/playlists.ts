@@ -58,6 +58,12 @@ export const playlistsLoading = writable(false);
 
 const playingPlaylistId = writable<string | null>(null);
 
+export { playingPlaylistId };
+
+export function setPlayingPlaylistContext(playlistId: string | null) {
+  playingPlaylistId.set(playlistId);
+}
+
 export const favoriteTrackIDs = writable<Set<string>>(new Set());
 
 export const favoritesPlaylistId = writable<string | null>(null);

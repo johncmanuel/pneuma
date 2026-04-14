@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { Music } from "@lucide/svelte";
+  import {
+    Heart,
+    LayoutDashboard,
+    ListMusic,
+    Music,
+    PanelLeftClose,
+    PanelLeftOpen,
+    Settings as SettingsIcon,
+    SquareLibrary
+  } from "@lucide/svelte";
 
   interface NavItem {
     id: string;
@@ -17,6 +26,8 @@
     activeView?: string;
     navItems?: NavItem[];
     recentItems?: RecentItem[];
+    collapsed?: boolean;
+    onToggleCollapse?: () => void;
     onNavigate?: (id: string) => void;
     onRecentClick?: (item: RecentItem) => void;
   }
@@ -25,6 +36,8 @@
     activeView = "library",
     navItems = [],
     recentItems = [],
+    collapsed = false,
+    onToggleCollapse,
     onNavigate,
     onRecentClick
   }: Props = $props();
@@ -32,28 +45,68 @@
   function hideImg(e: Event) {
     (e.currentTarget as HTMLImageElement).style.display = "none";
   }
+
+  const navIconById: Record<string, any> = {
+    library: SquareLibrary,
+    favorites: Heart,
+    playlists: ListMusic,
+    dashboard: LayoutDashboard,
+    __dashboard: LayoutDashboard,
+    settings: SettingsIcon
+  };
 </script>
 
-<nav>
-  <div class="logo">pneuma</div>
+<nav class:collapsed>
+  <div class="head-row">
+    {#if !collapsed}
+      <div class="logo">pneuma</div>
+    {/if}
+    <button
+      class="collapse-btn"
+      onclick={() => onToggleCollapse?.()}
+      title={collapsed ? "Show sidebar" : "Hide sidebar"}
+      aria-label={collapsed ? "Show sidebar" : "Hide sidebar"}
+    >
+      {#if collapsed}
+        <PanelLeftOpen size={18} />
+      {:else}
+        <PanelLeftClose size={16} />
+      {/if}
+    </button>
+  </div>
+
   <ul>
     {#each navItems as item}
       <li>
         <button
           class:active={activeView === item.id}
           onclick={() => onNavigate?.(item.id)}
+          title={collapsed ? item.label : undefined}
         >
-          {item.label}
+          {#if navIconById[item.id]}
+            {@const NavIcon = navIconById[item.id]}
+            <span class="nav-icon"><NavIcon size={18} /></span>
+          {/if}
+          {#if !collapsed}
+            <span class="nav-label">{item.label}</span>
+          {/if}
         </button>
       </li>
     {/each}
   </ul>
 
   {#if recentItems.length > 0}
-    <div class="section-label">Recently Played</div>
-    <div class="recent-list">
+    {#if !collapsed}
+      <div class="section-label">Recently Played</div>
+    {/if}
+    <div class="recent-list" class:collapsed-list={collapsed}>
       {#each recentItems as item (item.key)}
-        <button class="recent-item" onclick={() => onRecentClick?.(item)}>
+        <button
+          class="recent-item"
+          class:collapsed-item={collapsed}
+          onclick={() => onRecentClick?.(item)}
+          title={collapsed ? item.name : undefined}
+        >
           <div class="recent-art">
             {#if item.artworkUrl}
               <img
@@ -65,10 +118,12 @@
             {/if}
             <span class="recent-art-ph"><Music size={14} /></span>
           </div>
-          <div class="recent-info">
-            <span class="recent-name truncate">{item.name}</span>
-            <span class="recent-sub truncate text-3">{item.sub}</span>
-          </div>
+          {#if !collapsed}
+            <div class="recent-info">
+              <span class="recent-name truncate">{item.name}</span>
+              <span class="recent-sub truncate text-3">{item.sub}</span>
+            </div>
+          {/if}
         </button>
       {/each}
     </div>
@@ -88,12 +143,43 @@
     padding: 16px 0;
   }
 
+  .head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 0 12px 16px;
+  }
+
+  nav.collapsed .head-row {
+    justify-content: center;
+    padding: 0 8px 16px;
+  }
+
   .logo {
     font-size: 18px;
     font-weight: 700;
     color: var(--accent);
     letter-spacing: 2px;
-    padding: 0 16px 20px;
+  }
+
+  .collapse-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    color: var(--text-2);
+    cursor: pointer;
+    border: none;
+    flex-shrink: 0;
+  }
+
+  .collapse-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-1);
   }
 
   ul {
@@ -103,7 +189,9 @@
   }
 
   li button {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
     text-align: left;
     padding: 8px 16px;
@@ -113,6 +201,28 @@
     transition:
       background 0.1s,
       color 0.1s;
+  }
+
+  nav.collapsed li button {
+    justify-content: center;
+    padding: 6px 0;
+  }
+
+  .nav-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: currentColor;
+    flex-shrink: 0;
+  }
+
+  nav.collapsed .nav-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .nav-label {
+    min-width: 0;
   }
 
   li button:hover {
@@ -139,6 +249,12 @@
     gap: 1px;
   }
 
+  .recent-list.collapsed-list {
+    gap: 6px;
+    align-items: center;
+    padding: 0 6px;
+  }
+
   .recent-item {
     display: flex;
     align-items: center;
@@ -150,6 +266,11 @@
   }
   .recent-item:hover {
     background: var(--surface-hover);
+  }
+
+  .recent-item.collapsed-item {
+    justify-content: center;
+    padding: 4px;
   }
 
   .recent-art {
