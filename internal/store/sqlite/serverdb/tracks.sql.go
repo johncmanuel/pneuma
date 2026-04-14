@@ -8,6 +8,7 @@ package serverdb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const countTracks = `-- name: CountTracks :one
@@ -341,6 +342,98 @@ func (q *Queries) ListTracksByAlbumUnorganized(ctx context.Context) ([]ListTrack
 	var items []ListTracksByAlbumUnorganizedRow
 	for rows.Next() {
 		var i ListTracksByAlbumUnorganizedRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Path,
+			&i.Title,
+			&i.AlbumArtist,
+			&i.AlbumName,
+			&i.Genre,
+			&i.Year,
+			&i.TrackNumber,
+			&i.DiscNumber,
+			&i.DurationMs,
+			&i.BitrateKbps,
+			&i.SampleRateHz,
+			&i.Codec,
+			&i.FileSizeBytes,
+			&i.LastModified,
+			&i.Fingerprint,
+			&i.UploadedByUserID,
+			&i.DeletedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTracksByIDs = `-- name: ListTracksByIDs :many
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
+FROM tracks
+WHERE tracks.id IN (/*SLICE:ids*/?)
+`
+
+type ListTracksByIDsRow struct {
+	ID               string
+	Path             string
+	Title            string
+	AlbumArtist      string
+	AlbumName        string
+	Genre            string
+	Year             int64
+	TrackNumber      int64
+	DiscNumber       int64
+	DurationMs       int64
+	BitrateKbps      int64
+	SampleRateHz     int64
+	Codec            string
+	FileSizeBytes    int64
+	LastModified     string
+	Fingerprint      string
+	UploadedByUserID string
+	DeletedAt        sql.NullString
+	CreatedAt        string
+	UpdatedAt        string
+}
+
+func (q *Queries) ListTracksByIDs(ctx context.Context, ids []string) ([]ListTracksByIDsRow, error) {
+	query := listTracksByIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTracksByIDsRow
+	for rows.Next() {
+		var i ListTracksByIDsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Path,

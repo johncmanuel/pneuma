@@ -36,8 +36,8 @@ func (a *App) SavePlaybackSession(session LocalPlaybackSession) {
 		QueueJson:  sql.NullString{String: string(queueJSON), Valid: true},
 		QueueIndex: sql.NullInt64{Int64: int64(session.QueueIndex), Valid: true},
 		RepeatMode: sql.NullInt64{Int64: int64(session.RepeatMode), Valid: true},
-		Shuffle:    sql.NullInt64{Int64: dbconv.BoolInt(session.Shuffle), Valid: true},
-		Playing:    sql.NullInt64{Int64: dbconv.BoolInt(session.Playing), Valid: true},
+		Shuffle:    session.Shuffle,
+		Playing:    session.Playing,
 		UpdatedAt:  dbconv.FormatTime(time.Now()),
 	})
 }
@@ -64,12 +64,12 @@ func (a *App) LoadPlaybackSession() (LocalPlaybackSession, bool) {
 
 	return LocalPlaybackSession{
 		TrackID:    row.TrackID,
-		PositionMS: row.PositionMs.Int64,
+		PositionMS: row.PositionMs,
 		Queue:      queue,
-		QueueIndex: int(row.QueueIndex.Int64),
-		RepeatMode: int(row.RepeatMode.Int64),
-		Shuffle:    row.Shuffle.Int64 != 0,
-		Playing:    row.Playing.Int64 != 0,
+		QueueIndex: int(row.QueueIndex),
+		RepeatMode: int(row.RepeatMode),
+		Shuffle:    row.Shuffle,
+		Playing:    row.Playing,
 		UpdatedAt:  row.UpdatedAt,
 	}, true
 }

@@ -8,6 +8,19 @@ sql:
       go:
         package: "serverdb"
         out: "internal/store/sqlite/serverdb"
+        overrides:
+          - column: "users.is_admin"
+            go_type: "bool"
+          - column: "users.can_upload"
+            go_type: "bool"
+          - column: "users.can_edit"
+            go_type: "bool"
+          - column: "users.can_delete"
+            go_type: "bool"
+          - column: "playback_sessions.shuffle"
+            go_type: "bool"
+          - column: "playback_sessions.playing"
+            go_type: "bool"
 
   # Desktop database (mainly for caching)
   - engine: "sqlite"
@@ -17,3 +30,12 @@ sql:
       go:
         package: "desktopdb"
         out: "internal/store/sqlite/desktopdb"
+        overrides:
+          - column: "local_tracks.has_artwork"
+            go_type: "bool"
+          - column: "recent_albums.is_local"
+            go_type: "bool"
+          - column: "playback_session.shuffle"
+            go_type: "bool"
+          - column: "playback_session.playing"
+            go_type: "bool"

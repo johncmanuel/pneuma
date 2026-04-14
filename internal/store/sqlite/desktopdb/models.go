@@ -43,7 +43,7 @@ type LocalTrack struct {
 	TrackNumber int64
 	DiscNumber  int64
 	DurationMs  int64
-	HasArtwork  int64
+	HasArtwork  bool
 }
 
 type PlaybackSession struct {
@@ -53,8 +53,8 @@ type PlaybackSession struct {
 	QueueJson  sql.NullString
 	QueueIndex sql.NullInt64
 	RepeatMode sql.NullInt64
-	Shuffle    sql.NullInt64
-	Playing    sql.NullInt64
+	Shuffle    bool
+	Playing    bool
 	UpdatedAt  string
 }
 
@@ -62,7 +62,7 @@ type RecentAlbum struct {
 	Key            string
 	Name           string
 	Artist         string
-	IsLocal        int64
+	IsLocal        bool
 	FirstTrackID   sql.NullString
 	FirstLocalPath sql.NullString
 	PlayedAt       int64

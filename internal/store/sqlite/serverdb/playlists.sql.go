@@ -123,10 +123,9 @@ const listPlaylistItems = `-- name: ListPlaylistItems :many
 SELECT pi.playlist_id, pi.position, pi.source,
        COALESCE(pi.track_id, '') AS track_id,
        pi.ref_title, pi.ref_album, pi.ref_album_artist, pi.ref_duration_ms, pi.added_at,
-       CASE
-           WHEN pi.source = 'remote' AND (pi.track_id IS NULL OR t.id IS NULL OR t.deleted_at IS NOT NULL)
-           THEN 1 ELSE 0
-       END AS missing
+       CAST(
+           pi.source = 'remote' AND (pi.track_id IS NULL OR t.id IS NULL OR t.deleted_at IS NOT NULL)
+       AS BOOLEAN) AS missing
 FROM playlist_items pi
 LEFT JOIN tracks t ON t.id = pi.track_id
 WHERE pi.playlist_id = ?
@@ -143,7 +142,7 @@ type ListPlaylistItemsRow struct {
 	RefAlbumArtist string
 	RefDurationMs  int64
 	AddedAt        string
-	Missing        int64
+	Missing        bool
 }
 
 func (q *Queries) ListPlaylistItems(ctx context.Context, playlistID string) ([]ListPlaylistItemsRow, error) {
@@ -183,10 +182,10 @@ func (q *Queries) ListPlaylistItems(ctx context.Context, playlistID string) ([]L
 const listPlaylistsByUser = `-- name: ListPlaylistsByUser :many
 SELECT p.id, p.user_id, p.name, p.description, p.artwork_path, p.created_at, p.updated_at,
        COUNT(pi.playlist_id) AS item_count,
-       COALESCE(SUM(CASE
+       CAST(COALESCE(SUM(CASE
            WHEN pi.source = 'remote' THEN (SELECT COALESCE(t.duration_ms, 0) FROM tracks t WHERE t.id = pi.track_id)
            ELSE pi.ref_duration_ms
-       END), 0) AS total_duration_ms
+       END), 0) AS INTEGER) AS total_duration_ms
 FROM playlists p
 LEFT JOIN playlist_items pi ON pi.playlist_id = p.id
 WHERE p.user_id = ?
@@ -203,7 +202,7 @@ type ListPlaylistsByUserRow struct {
 	CreatedAt       string
 	UpdatedAt       string
 	ItemCount       int64
-	TotalDurationMs interface{}
+	TotalDurationMs int64
 }
 
 func (q *Queries) ListPlaylistsByUser(ctx context.Context, userID string) ([]ListPlaylistsByUserRow, error) {

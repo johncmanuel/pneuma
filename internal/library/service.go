@@ -99,7 +99,16 @@ func (s *Service) TrackByFingerprint(ctx context.Context, fp string) (*models.Tr
 
 // TracksByIDs returns tracks for the given IDs.
 func (s *Service) TracksByIDs(ctx context.Context, ids []string) ([]*models.Track, error) {
-	return s.store.TracksByIDs(ctx, ids)
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	rows, err := s.q.ListTracksByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	return dbconv.ListTracksByIDsToModels(rows), nil
 }
 
 // TracksByAlbum returns all tracks for a given album_name + album_artist, ordered by disc/track.

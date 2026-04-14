@@ -7,6 +7,7 @@ package desktopdb
 
 import (
 	"context"
+	"strings"
 )
 
 const allLocalTracksPage = `-- name: AllLocalTracksPage :many
@@ -104,6 +105,29 @@ func (q *Queries) DeleteLocalTracksByPathPrefix(ctx context.Context, arg DeleteL
 	return result.RowsAffected()
 }
 
+const deleteLocalTracksByPaths = `-- name: DeleteLocalTracksByPaths :execrows
+DELETE FROM local_tracks
+WHERE path IN (/*SLICE:paths*/?)
+`
+
+func (q *Queries) DeleteLocalTracksByPaths(ctx context.Context, paths []string) (int64, error) {
+	query := deleteLocalTracksByPaths
+	var queryParams []interface{}
+	if len(paths) > 0 {
+		for _, v := range paths {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:paths*/?", strings.Repeat(",?", len(paths))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:paths*/?", "NULL", 1)
+	}
+	result, err := q.db.ExecContext(ctx, query, queryParams...)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const listAllLocalTracks = `-- name: ListAllLocalTracks :many
 SELECT path, folder, title, artist, album, album_artist, genre,
        year, track_number, disc_number, duration_ms, has_artwork
@@ -113,6 +137,59 @@ ORDER BY folder, path
 
 func (q *Queries) ListAllLocalTracks(ctx context.Context) ([]LocalTrack, error) {
 	rows, err := q.db.QueryContext(ctx, listAllLocalTracks)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LocalTrack
+	for rows.Next() {
+		var i LocalTrack
+		if err := rows.Scan(
+			&i.Path,
+			&i.Folder,
+			&i.Title,
+			&i.Artist,
+			&i.Album,
+			&i.AlbumArtist,
+			&i.Genre,
+			&i.Year,
+			&i.TrackNumber,
+			&i.DiscNumber,
+			&i.DurationMs,
+			&i.HasArtwork,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLocalTracksByPaths = `-- name: ListLocalTracksByPaths :many
+SELECT path, folder, title, artist, album, album_artist, genre,
+       year, track_number, disc_number, duration_ms, has_artwork
+FROM local_tracks
+WHERE path IN (/*SLICE:paths*/?)
+`
+
+func (q *Queries) ListLocalTracksByPaths(ctx context.Context, paths []string) ([]LocalTrack, error) {
+	query := listLocalTracksByPaths
+	var queryParams []interface{}
+	if len(paths) > 0 {
+		for _, v := range paths {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:paths*/?", strings.Repeat(",?", len(paths))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:paths*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +339,7 @@ type UpsertLocalTrackParams struct {
 	TrackNumber int64
 	DiscNumber  int64
 	DurationMs  int64
-	HasArtwork  int64
+	HasArtwork  bool
 }
 
 func (q *Queries) UpsertLocalTrack(ctx context.Context, arg UpsertLocalTrackParams) error {

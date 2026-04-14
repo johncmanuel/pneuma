@@ -64,10 +64,10 @@ func (s *Service) Register(ctx context.Context, username, password string) (*mod
 		ID:           u.ID,
 		Username:     u.Username,
 		PasswordHash: u.PasswordHash,
-		IsAdmin:      dbconv.BoolInt(u.IsAdmin),
-		CanUpload:    dbconv.BoolInt(u.CanUpload),
-		CanEdit:      dbconv.BoolInt(u.CanEdit),
-		CanDelete:    dbconv.BoolInt(u.CanDelete),
+		IsAdmin:      u.IsAdmin,
+		CanUpload:    u.CanUpload,
+		CanEdit:      u.CanEdit,
+		CanDelete:    u.CanDelete,
 		CreatedAt:    dbconv.FormatTime(u.CreatedAt),
 		UpdatedAt:    dbconv.FormatTime(u.UpdatedAt),
 	}); err != nil {
@@ -137,9 +137,9 @@ func (s *Service) UpdatePermissions(ctx context.Context, userID string, canUploa
 		return err
 	}
 	return s.q.UpdateUserPermissions(ctx, serverdb.UpdateUserPermissionsParams{
-		CanUpload: dbconv.BoolInt(canUpload),
-		CanEdit:   dbconv.BoolInt(canEdit),
-		CanDelete: dbconv.BoolInt(canDelete),
+		CanUpload: canUpload,
+		CanEdit:   canEdit,
+		CanDelete: canDelete,
 		UpdatedAt: dbconv.FormatTime(time.Now()),
 		ID:        userID,
 	})

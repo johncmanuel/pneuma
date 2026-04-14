@@ -35,8 +35,8 @@ type PlaybackSession struct {
 	QueueJson  sql.NullString
 	QueueIndex sql.NullInt64
 	RepeatMode sql.NullInt64
-	Shuffle    sql.NullInt64
-	Playing    sql.NullInt64
+	Shuffle    bool
+	Playing    bool
 	UpdatedAt  string
 }
 
@@ -103,10 +103,10 @@ type User struct {
 	ID           string
 	Username     string
 	PasswordHash string
-	IsAdmin      int64
-	CanUpload    int64
-	CanEdit      int64
-	CanDelete    int64
+	IsAdmin      bool
+	CanUpload    bool
+	CanEdit      bool
+	CanDelete    bool
 	CreatedAt    string
 	UpdatedAt    string
 }

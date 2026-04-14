@@ -186,10 +186,10 @@ const listLocalPlaylists = `-- name: ListLocalPlaylists :many
 SELECT lp.id, lp.name, lp.description, lp.artwork_path, lp.remote_playlist_id,
        lp.created_at, lp.updated_at,
        COUNT(li.playlist_id) AS item_count,
-       COALESCE(SUM(CASE
+       CAST(COALESCE(SUM(CASE
            WHEN li.source = 'local_ref' THEN li.ref_duration_ms
            ELSE li.ref_duration_ms
-       END), 0) AS total_duration_ms
+       END), 0) AS INTEGER) AS total_duration_ms
 FROM local_playlists lp
 LEFT JOIN local_playlist_items li ON li.playlist_id = lp.id
 GROUP BY lp.id
@@ -205,7 +205,7 @@ type ListLocalPlaylistsRow struct {
 	CreatedAt        string
 	UpdatedAt        string
 	ItemCount        int64
-	TotalDurationMs  interface{}
+	TotalDurationMs  int64
 }
 
 func (q *Queries) ListLocalPlaylists(ctx context.Context) ([]ListLocalPlaylistsRow, error) {

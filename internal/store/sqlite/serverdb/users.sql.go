@@ -39,10 +39,10 @@ type CreateUserParams struct {
 	ID           string
 	Username     string
 	PasswordHash string
-	IsAdmin      int64
-	CanUpload    int64
-	CanEdit      int64
-	CanDelete    int64
+	IsAdmin      bool
+	CanUpload    bool
+	CanEdit      bool
+	CanDelete    bool
 	CreatedAt    string
 	UpdatedAt    string
 }
@@ -142,9 +142,9 @@ WHERE id = ?
 `
 
 type UpdateUserPermissionsParams struct {
-	CanUpload int64
-	CanEdit   int64
-	CanDelete int64
+	CanUpload bool
+	CanEdit   bool
+	CanDelete bool
 	UpdatedAt string
 	ID        string
 }

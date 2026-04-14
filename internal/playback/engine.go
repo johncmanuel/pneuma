@@ -394,8 +394,8 @@ func (e *Engine) persist(ctx context.Context, userID, deviceID string, s *State)
 		QueueJson:  sql.NullString{String: string(queueJSON), Valid: true},
 		QueueIndex: sql.NullInt64{Int64: int64(s.QueueIndex), Valid: true},
 		RepeatMode: sql.NullInt64{Int64: int64(s.Repeat), Valid: true},
-		Shuffle:    sql.NullInt64{Int64: dbconv.BoolInt(s.Shuffle), Valid: true},
-		Playing:    sql.NullInt64{Int64: dbconv.BoolInt(s.Playing), Valid: true},
+		Shuffle:    s.Shuffle,
+		Playing:    s.Playing,
 		UpdatedAt:  nowStr,
 	}); err != nil {
 		e.log.Error("persist session", "device", deviceID, "err", err)
