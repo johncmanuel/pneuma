@@ -39,6 +39,7 @@ Some general styling guidelines:
   - Use ternaries or early returns if possible. For ternaries, if the conditions are too long, define additional variables to ensure readability.
   - Use dot notations over bracket notation for readability.
   - Use `Boolean()` instead of `!!` for readability.
+  - Avoid empty blocks, especially in `try/catch` statements; use console.log or equivalent to fill in the blocks.
 - Go
   - Run `go vet ./...` when making changes to the codebase.
   - Always handle errors explicitly; never ignore them with `_` unless there's a deliberate, commented reason. Prefer early returns over nested `if` blocks.
@@ -68,3 +69,13 @@ Run `bun lint` to lint TypeScript, Svelte, and Go code.
 Run `bun knip` to check for unused TypeScript and Svelte code, dependencies, and exports.
 
 Run them after finalizing changes.
+
+### Chrome Devtools MCP
+
+To test changes for the web player and dashboard, start the server with `bun server`, then access the server at the default address: http://127.0.0.1:8989.
+
+The web player can be found at http://127.0.0.1:8989/player. The dashboard can be found at http://127.0.0.1:8989/dashboard.
+
+If the server is not available at the default address, look in the logs for `bun server` for the address.
+
+Ensure to properly close the server once finished.
