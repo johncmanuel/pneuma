@@ -27,6 +27,13 @@
     List
   } from "@lucide/svelte";
   import { activePanel, toggleQueuePanel } from "../lib/stores/ui";
+  import { currentView, pushNav } from "../lib/stores/ui";
+  import {
+    favoritesPlaylistId,
+    playingPlaylistId
+  } from "../lib/stores/playlists";
+
+  const UNORGANIZED_KEY = "__unorganized__";
 
   let audio: HTMLAudioElement = $state() as HTMLAudioElement;
   let volume = $state(1);
@@ -454,6 +461,46 @@
     skipNext();
   }
 
+  function jumpToAlbum() {
+    if (!track) return;
+
+    const albumName = track.album_name?.trim() ?? "";
+    const albumArtist = track.album_artist?.trim() ?? "";
+    const albumKey =
+      albumName && albumName !== UNORGANIZED_KEY
+        ? `${albumName}|||${albumArtist}`
+        : UNORGANIZED_KEY;
+
+    pushNav({
+      view: "library",
+      albumKey,
+      playlistId: null
+    });
+  }
+
+  function jumpFromNowPlaying() {
+    if (!track) return;
+
+    const isPlaylistView =
+      $currentView === "playlists" || $currentView === "favorites";
+
+    if (!isPlaylistView && $playingPlaylistId) {
+      const targetView =
+        $favoritesPlaylistId && $playingPlaylistId === $favoritesPlaylistId
+          ? "favorites"
+          : "playlists";
+
+      pushNav({
+        view: targetView,
+        playlistId: $playingPlaylistId,
+        albumKey: null
+      });
+      return;
+    }
+
+    jumpToAlbum();
+  }
+
   function onAudioPlay() {
     setMediaSessionPlaybackState(false);
     if (track) setMediaSessionTrack(track);
@@ -520,7 +567,13 @@
     </div>
     <div class="info">
       {#if track}
-        <span class="title truncate">{track.title}</span>
+        <button
+          class="title truncate title-link"
+          onclick={jumpFromNowPlaying}
+          title="Go to song source"
+        >
+          {track.title}
+        </button>
         <span class="artist truncate text-2"
           >{track.artist_name || track.album_artist || "Unknown Artist"}</span
         >
@@ -671,6 +724,19 @@
   .title {
     font-size: 13px;
     font-weight: 600;
+  }
+  .title-link {
+    cursor: pointer;
+    text-align: left;
+    padding: 0;
+    background: none;
+    border: none;
+    color: inherit;
+    font: inherit;
+    font-weight: 600;
+  }
+  .title-link:hover {
+    text-decoration: underline;
   }
   .artist {
     font-size: 12px;

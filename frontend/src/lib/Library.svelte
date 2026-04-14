@@ -49,6 +49,7 @@
     favoriteTrackIDs,
     toggleFavoriteTrack,
     visiblePlaylistsForAddMenu,
+    setPlayingPlaylistContext,
     type PlaylistSummary
   } from "../stores/playlists";
   import {
@@ -377,6 +378,8 @@
     }
 
     if (get(activeTab) === "local") {
+      setPlayingPlaylistContext(null);
+
       playerState.update((s) => {
         const finalQueue =
           s.shuffle && queueIds.length > 1
@@ -404,6 +407,8 @@
       currentShuffle && queueIds.length > 1
         ? [track.id, ...shuffle(queueIds.filter((id) => id !== track.id))]
         : queueIds;
+
+    setPlayingPlaylistContext(null);
 
     playerState.update((s) => ({
       ...s,
@@ -893,7 +898,7 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: 16px 16px 0 0;
+    padding: 16px 8px 0 0;
   }
 
   .album-detail-view {

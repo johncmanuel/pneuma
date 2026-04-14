@@ -4,6 +4,7 @@
   import { artworkUrl, apiFetch } from "../lib/api";
   import { pushNav } from "../lib/stores/ui";
   import { playerState } from "../lib/stores/playback";
+  import { setPlayingPlaylistContext } from "../lib/stores/playlists";
   import { wsSend } from "../lib/ws";
   import type { Track, AlbumGroup } from "@pneuma/shared";
 
@@ -47,6 +48,8 @@
 
     const idx = albumTracks.findIndex((t) => t.id === track.id);
     const queueIds = albumTracks.slice(Math.max(0, idx)).map((t) => t.id);
+
+    setPlayingPlaylistContext(null);
 
     playerState.update((s) => ({
       ...s,

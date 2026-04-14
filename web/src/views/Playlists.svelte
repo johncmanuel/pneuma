@@ -3,7 +3,7 @@
   import { createVirtualizer } from "@tanstack/svelte-virtual";
   import { derived } from "svelte/store";
   import {
-    isFavoritesPlaylist,
+    favoritesPlaylistId,
     playlists,
     selectedPlaylist,
     selectedPlaylistItems,
@@ -16,7 +16,8 @@
     itemToTrack,
     toggleFavoriteTrack,
     updatePlaylist,
-    handleAddToPlaylist
+    handleAddToPlaylist,
+    setPlayingPlaylistContext
   } from "../lib/stores/playlists";
   import { selectedPlaylistView, pushNav } from "../lib/stores/ui";
   import { playerState } from "../lib/stores/playback";
@@ -26,7 +27,7 @@
     recordRecentPlaylist,
     removeRecentPlaylist
   } from "../lib/stores/recent";
-  import { Heart, Music, SquarePen } from "@lucide/svelte";
+  import { Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "../components/TrackRow.svelte";
   import {
     totalDuration,
@@ -74,14 +75,23 @@
     }
   }
 
-  let selectedIsFavorites = $derived(isFavoritesPlaylist($selectedPlaylist));
-
   function triggerArtUpload() {
-    if (selectedIsFavorites) return;
     artInput?.click();
   }
 
   $effect(() => {
+    if (
+      $favoritesPlaylistId &&
+      $selectedPlaylistView === $favoritesPlaylistId
+    ) {
+      pushNav({
+        view: "favorites",
+        playlistId: $favoritesPlaylistId,
+        albumKey: null
+      });
+      return;
+    }
+
     if ($selectedPlaylistView) {
       selectPlaylist($selectedPlaylistView);
     } else {
@@ -127,7 +137,11 @@
   );
 
   let visiblePlaylists = $derived(
-    $playlists.filter((pl) => !isFavoritesPlaylist(pl))
+    $playlists.filter(
+      (pl) =>
+        pl.id !== $selectedPlaylistView &&
+        (!$favoritesPlaylistId || pl.id !== $favoritesPlaylistId)
+    )
   );
 
   let playlistDurationMS = $derived(
@@ -189,6 +203,8 @@
       recordRecentPlaylist({
         playlist_id: $selectedPlaylist.id
       });
+
+      setPlayingPlaylistContext($selectedPlaylist.id);
     }
 
     playerState.update((s) => ({
@@ -273,12 +289,11 @@
         />
         <button
           class="detail-art"
-          class:favorites-art={selectedIsFavorites}
           onclick={triggerArtUpload}
-          disabled={uploadingArt || selectedIsFavorites}
-          title={selectedIsFavorites ? "Favorites" : "Change artwork"}
+          disabled={uploadingArt}
+          title="Change artwork"
         >
-          {#if !selectedIsFavorites && $selectedPlaylist.artwork_path}
+          {#if $selectedPlaylist.artwork_path}
             <img
               src={playlistArtUrl(
                 $selectedPlaylist.id,
@@ -288,16 +303,10 @@
               onerror={hideImg}
             />
           {/if}
-          <span class="art-placeholder"
-            >{#if selectedIsFavorites}<Heart size={24} />{:else}<Music
-                size={24}
-              />{/if}</span
-          >
-          {#if !selectedIsFavorites}
-            <div class="art-overlay">
-              <SquarePen size={24} />
-            </div>
-          {/if}
+          <span class="art-placeholder"><Music size={24} /></span>
+          <div class="art-overlay">
+            <SquarePen size={24} />
+          </div>
         </button>
         <div class="detail-meta">
           {#if editingId === $selectedPlaylist.id}
@@ -320,7 +329,7 @@
             </div>
           {:else}
             <h1 class="detail-name">{$selectedPlaylist.name}</h1>
-            {#if !selectedIsFavorites && $selectedPlaylist.description}
+            {#if $selectedPlaylist.description}
               <p class="detail-desc">{$selectedPlaylist.description}</p>
             {/if}
             <p class="detail-info text-3">
@@ -344,23 +353,20 @@
         >
           Play
         </button>
-        {#if !selectedIsFavorites}
-          <button
-            class="action-btn"
-            onclick={() => startEdit($selectedPlaylist)}>Edit</button
-          >
-          <button
-            class="action-btn danger"
-            onclick={() => {
-              if (confirm("Delete this playlist?") && $selectedPlaylist) {
-                deletePlaylist($selectedPlaylist.id);
-                removeRecentPlaylist($selectedPlaylist.id);
-              }
-            }}
-          >
-            Delete
-          </button>
-        {/if}
+        <button class="action-btn" onclick={() => startEdit($selectedPlaylist)}
+          >Edit</button
+        >
+        <button
+          class="action-btn danger"
+          onclick={() => {
+            if (confirm("Delete this playlist?") && $selectedPlaylist) {
+              deletePlaylist($selectedPlaylist.id);
+              removeRecentPlaylist($selectedPlaylist.id);
+            }
+          }}
+        >
+          Delete
+        </button>
         <div class="filter-spacer"></div>
         <input
           type="text"
@@ -419,7 +425,7 @@
                 dateAdded={formatDate(item.added_at)}
                 showRemove={true}
                 isLocal={item.source === "local_ref"}
-                hideFavoriteIcon={selectedIsFavorites}
+                hideFavoriteIcon={false}
                 playlists={$playlists}
                 onPlay={() => handlePlay(item)}
                 onSelect={() => {}}
@@ -717,9 +723,6 @@
   .detail-art:disabled {
     cursor: default !important;
   }
-  .detail-art.favorites-art {
-    cursor: default !important;
-  }
   .detail-art img {
     position: absolute;
     inset: 0;
@@ -743,9 +746,6 @@
     opacity: 1;
   }
   .detail-art:disabled:hover .art-overlay {
-    opacity: 0;
-  }
-  .detail-art.favorites-art:hover .art-overlay {
     opacity: 0;
   }
 

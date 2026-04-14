@@ -6,19 +6,27 @@
     favoritesPlaylistId
   } from "../lib/stores/playlists";
   import { recentAlbums, recentPlaylists } from "../lib/stores/recent";
-  import { pushNav, selectedPlaylistView } from "../lib/stores/ui";
+  import { pushNav } from "../lib/stores/ui";
 
   interface Props {
     activeView?: string;
+    collapsed?: boolean;
+    onToggleCollapse?: () => void;
     onNavigate?: (id: string) => void;
   }
 
-  let { activeView = "library", onNavigate }: Props = $props();
+  let {
+    activeView = "library",
+    collapsed = false,
+    onToggleCollapse,
+    onNavigate
+  }: Props = $props();
 
   const baseNavItems = [
     { id: "library", label: "Library" },
     { id: "favorites", label: "Favorites" },
-    { id: "playlists", label: "Playlists" }
+    { id: "playlists", label: "Playlists" },
+    { id: "settings", label: "Settings" }
   ];
 
   let navItems = $derived(
@@ -27,14 +35,7 @@
       : baseNavItems
   );
 
-  let sidebarActiveView = $derived(
-    activeView === "playlists" &&
-      $selectedPlaylistView &&
-      $favoritesPlaylistId &&
-      $selectedPlaylistView === $favoritesPlaylistId
-      ? "favorites"
-      : activeView
-  );
+  let sidebarActiveView = $derived(activeView);
 
   let filteredRecentPlaylists = $derived(
     $recentPlaylists.filter(
@@ -76,7 +77,7 @@
       const favoritesID =
         $favoritesPlaylistId ?? (await ensureFavoritesPlaylist());
       if (favoritesID) {
-        pushNav({ view: "playlists", playlistId: favoritesID });
+        pushNav({ view: "favorites", playlistId: favoritesID });
       }
     } else {
       onNavigate?.(id);
@@ -97,6 +98,8 @@
 
 <Sidebar
   activeView={sidebarActiveView}
+  {collapsed}
+  {onToggleCollapse}
   {navItems}
   {recentItems}
   onNavigate={handleNavClick}
