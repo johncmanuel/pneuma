@@ -1,5 +1,4 @@
 // @ts-check
-
 import eslint from "@eslint/js";
 import { defineConfig, globalIgnores } from "eslint/config";
 import tseslint from "typescript-eslint";
@@ -11,19 +10,19 @@ import css from "@eslint/css";
 const gitignorePath = fileURLToPath(new URL(".gitignore", import.meta.url));
 
 export default defineConfig(
-  eslint.configs.recommended,
-  tseslint.configs.recommended,
   includeIgnoreFile(gitignorePath, "Imported .gitignore patterns"),
   globalIgnores(["frontend/wailsjs/"]),
-  [
-    {
-      files: ["**/*.css"],
-      language: "css/css",
-      plugins: { css },
-      extends: ["css/recommended"],
-      rules: {
-        "no-irregular-whitespace": "off"
-      }
+  {
+    files: ["**/*.{js,mjs,cjs,ts,mts,cts}"],
+    extends: [eslint.configs.recommended, tseslint.configs.recommended]
+  },
+  {
+    files: ["**/*.css"],
+    language: "css/css",
+    plugins: { css },
+    extends: ["css/recommended"],
+    rules: {
+      "no-irregular-whitespace": "off"
     }
-  ]
+  }
 );
