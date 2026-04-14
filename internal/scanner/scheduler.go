@@ -2,6 +2,9 @@ package scanner
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -74,6 +77,33 @@ func (sc *Scheduler) ScanPath(path string) {
 		return
 	}
 
+	f, err := os.Open(path)
+	if err != nil {
+		sc.log.Error("ScanPath open error", "path", path, "err", err)
+		return
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		sc.log.Error("ScanPath fingerprint error", "path", path, "err", err)
+		return
+	}
+
+	fingerprint := hex.EncodeToString(h.Sum(nil))
+
+	dup, err := sc.lib.TrackByFingerprint(ctx, fingerprint)
+	if err != nil {
+		sc.log.Error("ScanPath fingerprint lookup error", "path", path, "err", err)
+		return
+	}
+	if dup != nil && dup.DeletedAt == nil && dup.Path != path {
+		sc.log.Info("ScanPath skipping duplicate (fingerprint match)", "path", path, "existing", dup.Path)
+		return
+	}
+
+	track.Fingerprint = fingerprint
+
 	existing, err := sc.lib.TrackByPath(ctx, path)
 	if err != nil {
 		sc.log.Error("ScanPath db lookup error", "path", path, "err", err)
@@ -86,12 +116,6 @@ func (sc *Scheduler) ScanPath(path string) {
 		track.ID = existing.ID
 		track.CreatedAt = existing.CreatedAt
 		track.UploadedByUserID = existing.UploadedByUserID
-
-		// preserve the existing
-		// fingerprint to avoid clobbering upload-time SHA-256 values.
-		if track.Fingerprint == "" && existing.Fingerprint != "" {
-			track.Fingerprint = existing.Fingerprint
-		}
 
 		// preserve existing title if the parser fell back to the filename
 		// (e.g. hash filename for uploads)
@@ -145,7 +169,7 @@ func (sc *Scheduler) scan(ctx context.Context) {
 			if err != nil {
 				return nil
 			}
-			if existing != nil && !info.ModTime().After(existing.LastModified) {
+			if existing != nil && existing.Fingerprint != "" && !info.ModTime().After(existing.LastModified) {
 				return nil
 			}
 
@@ -155,6 +179,21 @@ func (sc *Scheduler) scan(ctx context.Context) {
 				return nil
 			}
 
+			f, err := os.Open(path)
+			if err != nil {
+				sc.log.Error("ScanPath open error", "path", path, "err", err)
+				return nil
+			}
+			defer f.Close()
+
+			h := sha256.New()
+			if _, err := io.Copy(h, f); err != nil {
+				sc.log.Error("ScanPath fingerprint error", "path", path, "err", err)
+				return nil
+			}
+
+			fingerprint := hex.EncodeToString(h.Sum(nil))
+			track.Fingerprint = fingerprint
 			isNew := existing == nil
 
 			// Preserve stable identity fields so the upsert matches on ID.
@@ -169,8 +208,13 @@ func (sc *Scheduler) scan(ctx context.Context) {
 				}
 			}
 
-			if dup, _ := sc.lib.DuplicateByMeta(ctx, track.Title, track.AlbumArtist, track.AlbumName, track.DurationMS, path); dup != nil {
-				sc.log.Info("skipping duplicate (metadata match)", "path", path, "existing", dup.Path)
+			dup, err := sc.lib.TrackByFingerprint(ctx, fingerprint)
+			if err != nil {
+				sc.log.Error("fingerprint lookup error in scan", "path", path, "err", err)
+				return nil
+			}
+			if dup != nil && dup.DeletedAt == nil && dup.Path != path {
+				sc.log.Info("skipping duplicate (fingerprint match)", "path", path, "existing", dup.Path)
 				return nil
 			}
 

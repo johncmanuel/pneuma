@@ -2,7 +2,11 @@ package scanner
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"io"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -81,6 +85,8 @@ func (w *Watcher) Start(ctx context.Context) {
 	}
 }
 
+// handleEvent processes a single fsnotify event, adding create/write events
+// to the pending map and handling deletes/renames immediately.
 func (w *Watcher) handleEvent(e fsnotify.Event) {
 	path := e.Name
 
@@ -103,6 +109,7 @@ func (w *Watcher) handleEvent(e fsnotify.Event) {
 	}
 }
 
+// flush processes pending file events that have been stable for at least 1 second.
 func (w *Watcher) flush(ctx context.Context) {
 	w.mu.Lock()
 	now := time.Now()
@@ -120,6 +127,7 @@ func (w *Watcher) flush(ctx context.Context) {
 	}
 }
 
+// ingestFile parses and stores a track, handling duplicates and errors.
 func (w *Watcher) ingestFile(ctx context.Context, path string) {
 	track, err := w.parser.ParseFile(ctx, path)
 	if err != nil {
@@ -127,21 +135,45 @@ func (w *Watcher) ingestFile(ctx context.Context, path string) {
 		return
 	}
 
+	f, err := os.Open(path)
+	if err != nil {
+		w.log.Error("ScanPath open error", "path", path, "err", err)
+		return
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		w.log.Error("ScanPath fingerprint error", "path", path, "err", err)
+		return
+	}
+
+	fingerprint := hex.EncodeToString(h.Sum(nil))
+
 	existing, err := w.lib.TrackByPath(ctx, path)
 	if err != nil {
 		w.log.Error("lookup failed", "path", path, "err", err)
 		return
 	}
+
 	isNew := existing == nil
 	if existing != nil {
 		track.ID = existing.ID
 		track.CreatedAt = existing.CreatedAt
+		track.UploadedByUserID = existing.UploadedByUserID
 	}
 
-	if dup, _ := w.lib.DuplicateByMeta(ctx, track.Title, track.AlbumArtist, track.AlbumName, track.DurationMS, path); dup != nil {
-		w.log.Info("skipping duplicate (metadata match)", "path", path, "existing", dup.Path)
+	dup, err := w.lib.TrackByFingerprint(ctx, fingerprint)
+	if err != nil {
+		w.log.Error("fingerprint lookup failed", "path", path, "err", err)
 		return
 	}
+	if dup != nil && dup.DeletedAt == nil && dup.Path != path {
+		w.log.Info("skipping duplicate (fingerprint match)", "path", path, "existing", dup.Path)
+		return
+	}
+
+	track.Fingerprint = fingerprint
 
 	if err := w.lib.UpsertTrack(ctx, track); err != nil {
 		w.log.Error("upsert failed", "path", path, "err", err)
@@ -155,6 +187,7 @@ func (w *Watcher) ingestFile(ctx context.Context, path string) {
 	}
 }
 
+// removeFile deletes a track by path and publishes an event.
 func (w *Watcher) removeFile(ctx context.Context, path string) {
 	if err := w.lib.RemoveByPath(ctx, path); err != nil {
 		w.log.Error("remove failed", "path", path, "err", err)
