@@ -4,6 +4,7 @@ export const storageKeys = {
   session: "pneuma_session",
   localFoldersPrefix: "pneuma_local_folders",
   volume: "pneuma_volume",
+  themeMode: "pneuma_theme_mode",
   adminTracksPanel: "pneuma_admin_tracks",
   favoritesSyncEnabled: "pneuma_favorites_sync_enabled"
 } as const;

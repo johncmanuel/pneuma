@@ -945,15 +945,15 @@
     font-weight: 600;
   }
   .badge.success {
-    background: rgba(74, 222, 128, 0.15);
-    color: var(--accent);
+    background: var(--success-soft);
+    color: var(--success);
   }
   .badge.warn {
-    background: rgba(250, 204, 21, 0.12);
-    color: #facc15;
+    background: var(--warning-soft);
+    color: var(--warning);
   }
   .badge.err {
-    background: rgba(248, 113, 113, 0.12);
+    background: var(--danger-soft);
     color: var(--danger);
   }
 
@@ -986,19 +986,19 @@
     flex-shrink: 0;
   }
   .detail-status.dup {
-    color: #facc15;
+    color: var(--warning);
   }
   .detail-status.err {
     color: var(--danger);
   }
   .detail-status.warn {
-    color: #facc15;
+    color: var(--warning);
   }
 
   .drop-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(15, 15, 15, 0.85);
+    background: var(--drop-overlay-bg);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1064,7 +1064,7 @@
     background: var(--surface-hover);
   }
   tr.selected {
-    background: rgba(74, 222, 128, 0.06);
+    background: var(--success-soft);
   }
 
   .action-cell {
@@ -1091,7 +1091,7 @@
     color: var(--danger);
   }
   .sm-btn.danger:hover {
-    background: rgba(248, 113, 113, 0.1);
+    background: var(--danger-soft);
   }
 
   .inline-input {

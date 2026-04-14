@@ -18,9 +18,9 @@
     justify-content: center;
     gap: 8px;
     padding: 6px 16px;
-    background: #3a100a;
-    border-top: 1px solid #7a2010;
-    color: #e06030;
+    background: var(--toast-error-bg);
+    border-top: 1px solid var(--toast-error-border);
+    color: var(--toast-error-text);
     font-size: 13px;
     font-weight: 500;
     z-index: 100;

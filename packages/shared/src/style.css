@@ -6,7 +6,110 @@
   padding: 0;
 }
 
-:root {
+:root,
+:root[data-theme="light"] {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #edf1f5;
+  --surface-hover: #e4eaf1;
+  --border: #d7dee8;
+
+  --accent: #37ab86;
+  --accent-dim: #2f9273;
+  --on-accent: #032318;
+  --on-accent-dim: #f5fffb;
+
+  --text-1: #101828;
+  --text-2: #4b5563;
+  --text-3: #6b7280;
+  --danger: #c9305d;
+  --warning: #b45309;
+  --success: #1f9d64;
+
+  --danger-soft: rgba(201, 48, 93, 0.12);
+  --warning-soft: rgba(180, 83, 9, 0.12);
+  --success-soft: rgba(31, 157, 100, 0.12);
+
+  --overlay-strong: rgba(15, 23, 42, 0.45);
+  --drop-overlay-bg: rgba(15, 23, 42, 0.72);
+  --shadow-pop: 0 8px 24px rgba(15, 23, 42, 0.18);
+  --shadow-toast: 0 4px 16px rgba(15, 23, 42, 0.16);
+
+  --toast-info-bg: var(--surface);
+  --toast-info-border: var(--border);
+  --toast-info-text: var(--text-1);
+  --toast-success-bg: #ebf9f1;
+  --toast-success-border: #bce8d1;
+  --toast-success-text: #166a44;
+  --toast-warning-bg: #fff4e5;
+  --toast-warning-border: #f4d8ad;
+  --toast-warning-text: #8c520c;
+  --toast-error-bg: #feecef;
+  --toast-error-border: #f4c1cd;
+  --toast-error-text: #912144;
+
+  --fg: var(--text-1);
+
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --sidebar-w: 200px;
+  --player-h: 90px;
+  --font:
+    -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu,
+    Cantarell, Helvetica Neue, sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #0f0f0f;
+    --surface: #171717;
+    --surface-2: #222222;
+    --surface-hover: #2a2a2a;
+    --border: #333333;
+
+    /* https://imagecolorpicker.com/color-code/4ff4bf */
+    --accent: #4ff4bf;
+    --accent-dim: #3fc399;
+    --on-accent: #032318;
+    --on-accent-dim: #f5fffb;
+
+    --text-1: #f0f0f0;
+    --text-2: #a0a0a0;
+    --text-3: #9ca3af;
+    --danger: #f44f84;
+    --warning: #e0b030;
+    --success: #6ddb6d;
+
+    --danger-soft: rgba(248, 113, 113, 0.12);
+    --warning-soft: rgba(250, 204, 21, 0.12);
+    --success-soft: rgba(74, 222, 128, 0.15);
+
+    --overlay-strong: rgba(0, 0, 0, 0.5);
+    --drop-overlay-bg: rgba(15, 15, 15, 0.85);
+    --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-toast: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+    --toast-info-bg: var(--surface);
+    --toast-info-border: var(--border);
+    --toast-info-text: var(--text-1);
+    --toast-success-bg: #1a3a1a;
+    --toast-success-border: #2d6a2d;
+    --toast-success-text: #6ddb6d;
+    --toast-warning-bg: #3a2e0a;
+    --toast-warning-border: #7a6010;
+    --toast-warning-text: #e0b030;
+    --toast-error-bg: #3a100a;
+    --toast-error-border: #7a2010;
+    --toast-error-text: #e06030;
+
+    --fg: var(--text-1);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
   --bg: #0f0f0f;
   --surface: #171717;
   --surface-2: #222222;
@@ -16,26 +119,47 @@
   /* https://imagecolorpicker.com/color-code/4ff4bf */
   --accent: #4ff4bf;
   --accent-dim: #3fc399;
+  --on-accent: #032318;
+  --on-accent-dim: #f5fffb;
 
   --text-1: #f0f0f0;
   --text-2: #a0a0a0;
   --text-3: #9ca3af;
   --danger: #f44f84;
-  --r-sm: 4px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --sidebar-w: 200px;
-  --player-h: 90px;
-  --font:
-    -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu,
-    Cantarell, Helvetica Neue, sans-serif;
+  --warning: #e0b030;
+  --success: #6ddb6d;
+
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --warning-soft: rgba(250, 204, 21, 0.12);
+  --success-soft: rgba(74, 222, 128, 0.15);
+
+  --overlay-strong: rgba(0, 0, 0, 0.5);
+  --drop-overlay-bg: rgba(15, 15, 15, 0.85);
+  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-toast: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  --toast-info-bg: var(--surface);
+  --toast-info-border: var(--border);
+  --toast-info-text: var(--text-1);
+  --toast-success-bg: #1a3a1a;
+  --toast-success-border: #2d6a2d;
+  --toast-success-text: #6ddb6d;
+  --toast-warning-bg: #3a2e0a;
+  --toast-warning-border: #7a6010;
+  --toast-warning-text: #e0b030;
+  --toast-error-bg: #3a100a;
+  --toast-error-border: #7a2010;
+  --toast-error-text: #e06030;
+
+  --fg: var(--text-1);
+  color-scheme: dark;
 }
 
 html,
 body {
   height: 100%;
   background: var(--bg);
-  color: var(--text-1);
+  color: var(--fg);
   font-family: var(--font);
   font-size: 14px;
   line-height: 1.5;

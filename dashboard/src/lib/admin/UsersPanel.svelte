@@ -171,7 +171,7 @@
   }
   .badge.admin {
     background: var(--accent-dim);
-    color: #000;
+    color: var(--on-accent-dim);
   }
   .badge.user {
     background: var(--surface-2);
@@ -189,6 +189,6 @@
     color: var(--danger);
   }
   .sm-btn.danger:hover {
-    background: rgba(248, 113, 113, 0.1);
+    background: var(--danger-soft);
   }
 </style>

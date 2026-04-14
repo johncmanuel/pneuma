@@ -257,10 +257,10 @@
   }
 
   .btn-danger {
-    color: #ef4444;
+    color: var(--danger);
   }
   .btn-danger:hover {
-    background: color-mix(in srgb, #ef4444 15%, transparent);
+    background: var(--danger-soft);
   }
 
   .msg {
@@ -269,7 +269,7 @@
     color: var(--accent);
   }
   .msg.error {
-    color: #ef4444;
+    color: var(--danger);
   }
 
   code {

@@ -24,7 +24,7 @@
   import Login from "./views/Login.svelte";
   import Register from "./views/Register.svelte";
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
-  import { Toasts } from "@pneuma/ui";
+  import { ThemeToggle, Toasts } from "@pneuma/ui";
 
   let wasLoggedIn = $state(false);
   let searchBar: any = $state(undefined);
@@ -86,6 +86,9 @@
 
 {#if !$loggedIn}
   <div class="auth-shell">
+    <div class="auth-theme">
+      <ThemeToggle />
+    </div>
     {#if $currentView === "register"}
       <Register onSwitch={() => pushNav({ view: "login" })} />
     {:else}
@@ -121,7 +124,10 @@
         <SearchBar bind:this={searchBar} />
       </div>
       <div class="topbar-spacer"></div>
-      <button class="sign-out-btn" onclick={logout}>Sign out</button>
+      <div class="topbar-actions">
+        <ThemeToggle />
+        <button class="sign-out-btn" onclick={logout}>Sign out</button>
+      </div>
     </header>
 
     <main class="content">
@@ -152,6 +158,14 @@
     align-items: center;
     justify-content: center;
     background: var(--bg);
+    position: relative;
+  }
+
+  .auth-theme {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 2;
   }
 
   .shell {
@@ -231,6 +245,12 @@
 
   .topbar-spacer {
     flex: 1;
+  }
+
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .sign-out-btn {

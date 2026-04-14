@@ -1198,7 +1198,7 @@
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     padding: 4px 0;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-pop);
     min-width: 180px;
   }
   .album-ctx-menu button {
@@ -1228,7 +1228,7 @@
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     padding: 4px 0;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-pop);
     min-width: 160px;
     max-height: 240px;
     overflow-y: auto;

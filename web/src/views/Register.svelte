@@ -140,7 +140,7 @@
 
   .submit-btn {
     background: var(--accent-dim);
-    color: #fff;
+    color: var(--on-accent-dim);
     padding: 10px;
     border-radius: var(--r-md);
     font-size: 14px;

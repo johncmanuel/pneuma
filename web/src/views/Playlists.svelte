@@ -574,7 +574,7 @@
     padding: 6px 14px;
     border-radius: var(--r-md);
     background: var(--accent-dim);
-    color: #fff;
+    color: var(--on-accent-dim);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
@@ -733,7 +733,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--overlay-strong);
     opacity: 0;
     transition: opacity 0.15s;
     color: var(--text-1);
@@ -803,7 +803,7 @@
 
   .action-btn.primary {
     background: var(--accent-dim);
-    color: #fff;
+    color: var(--on-accent-dim);
     border: none;
   }
 
@@ -816,7 +816,7 @@
   }
 
   .action-btn.danger:hover {
-    background: rgba(231, 76, 60, 0.1);
+    background: var(--danger-soft);
   }
 
   .action-btn:disabled {
@@ -850,7 +850,7 @@
     font-weight: 600;
     cursor: pointer;
     background: var(--accent-dim);
-    color: #fff;
+    color: var(--on-accent-dim);
     border: none;
   }
 

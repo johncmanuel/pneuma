@@ -5,6 +5,7 @@
   import Login from "./lib/components/Login.svelte";
   import Sidebar from "./lib/components/Sidebar.svelte";
   import Admin from "./pages/Admin.svelte";
+  import { ThemeToggle } from "@pneuma/ui";
 
   let ready = $state(false);
 
@@ -26,7 +27,10 @@
 </script>
 
 {#if !ready}
-  <div class="loading-screen"><p>Connecting...</p></div>
+  <div class="loading-screen">
+    <div class="overlay-theme"><ThemeToggle /></div>
+    <p>Connecting...</p>
+  </div>
 {:else if $loggedIn}
   <div class="shell">
     <div class="sidebar-area">
@@ -35,7 +39,10 @@
 
     <header class="topbar">
       <div class="topbar-spacer"></div>
-      <button class="sign-out-btn" onclick={logout}>Sign out</button>
+      <div class="topbar-actions">
+        <ThemeToggle />
+        <button class="sign-out-btn" onclick={logout}>Sign out</button>
+      </div>
     </header>
 
     <main class="content">
@@ -43,7 +50,10 @@
     </main>
   </div>
 {:else}
-  <Login />
+  <div class="login-shell">
+    <div class="overlay-theme"><ThemeToggle /></div>
+    <Login />
+  </div>
 {/if}
 
 <style>
@@ -54,6 +64,19 @@
     justify-content: center;
     color: var(--text-3);
     font-size: 14px;
+    position: relative;
+  }
+
+  .login-shell {
+    height: 100vh;
+    position: relative;
+  }
+
+  .overlay-theme {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 2;
   }
   .shell {
     display: grid;
@@ -85,6 +108,12 @@
 
   .topbar-spacer {
     flex: 1;
+  }
+
+  .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .sign-out-btn {

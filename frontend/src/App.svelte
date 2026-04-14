@@ -23,7 +23,7 @@
   import Settings from "./lib/Settings.svelte";
   import DisconnectBanner from "./lib/DisconnectBanner.svelte";
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
-  import { Toasts } from "@pneuma/ui";
+  import { ThemeToggle, Toasts } from "@pneuma/ui";
 
   let wasConnected = $state(false);
   let searchBar: SearchBar | undefined = $state();
@@ -111,6 +111,8 @@
     <div class="search-wrapper">
       <SearchBar bind:this={searchBar} />
     </div>
+    <div class="topbar-spacer"></div>
+    <ThemeToggle />
   </header>
 
   <main class="content">
@@ -144,11 +146,7 @@
     margin: 0;
     background: var(--bg);
     color: var(--fg);
-    font-family:
-      system-ui,
-      -apple-system,
-      "Segoe UI",
-      sans-serif;
+    font-family: var(--font);
     user-select: none;
     overflow: hidden;
   }
@@ -226,6 +224,10 @@
     position: relative;
     width: 100%;
     max-width: 420px;
+  }
+
+  .topbar-spacer {
+    flex: 1;
   }
 
   .content {

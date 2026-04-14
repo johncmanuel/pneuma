@@ -258,7 +258,7 @@
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     padding: 4px 0;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-pop);
     min-width: 160px;
   }
   .ctx-menu button {
@@ -280,10 +280,10 @@
     margin: 4px 0;
   }
   .ctx-danger {
-    color: #e74c3c !important;
+    color: var(--danger) !important;
   }
   .ctx-danger:hover {
-    background: rgba(231, 76, 60, 0.1) !important;
+    background: var(--danger-soft) !important;
   }
   .ctx-disabled {
     color: var(--text-3) !important;
@@ -308,7 +308,7 @@
     border: 1px solid var(--border);
     border-radius: var(--r-md);
     padding: 4px 0;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-pop);
     min-width: 160px;
     max-height: 240px;
     overflow-y: auto;

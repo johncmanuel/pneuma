@@ -702,7 +702,7 @@
 
   .play-btn {
     background: var(--accent);
-    color: #000;
+    color: var(--on-accent);
     border-radius: 50%;
     width: 34px;
     height: 34px;
