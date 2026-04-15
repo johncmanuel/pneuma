@@ -7,8 +7,8 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-3);
-  border-bottom: 1px solid var(--border);
+  color: var(--text-3, #6b7280);
+  border-bottom: 1px solid var(--border, #d7dee8);
 }
 
 .track-headers.hide-album {
@@ -21,7 +21,7 @@
 
 .track-headers .sortable {
   cursor: pointer;
-  color: var(--text-3);
+  color: var(--text-3, #6b7280);
   text-align: left;
   font-size: inherit;
   font-weight: inherit;
@@ -30,7 +30,7 @@
 }
 
 .track-headers .sortable:hover {
-  color: var(--text-1);
+  color: var(--text-1, #101828);
 }
 
 .track-list {
