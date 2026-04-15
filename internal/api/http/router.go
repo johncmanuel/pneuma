@@ -232,7 +232,10 @@ func NewRouter(svc Services) *echo.Echo {
 			fileServer.ServeHTTP(w, &r2)
 		}))
 
-		e.GET(prefix, spaHandler)
+		e.GET(prefix, func(c echo.Context) error {
+			return c.Redirect(http.StatusMovedPermanently, prefix+"/")
+		})
+		e.GET(prefix+"/", spaHandler)
 		e.GET(prefix+"/*", spaHandler)
 	}
 

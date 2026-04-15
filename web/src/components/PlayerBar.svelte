@@ -46,9 +46,18 @@
   let audio: HTMLAudioElement = $state() as HTMLAudioElement;
   let volume = $state(1);
   let prevVolume = $state(1);
+
   let mobilePlayerExpanded = $state(false);
   let sheetDragStartY = $state<number | null>(null);
   let sheetDragOffsetY = $state(0);
+
+  let miniArtistViewport: HTMLSpanElement | null = $state(null);
+  let miniArtistMeasureEl: HTMLSpanElement | null = $state(null);
+  let miniArtistUseMarquee = $state(false);
+  let miniArtistMarqueeDuration = $state(12);
+  let miniArtistTextWidth = $state(0);
+  let miniArtistMeasureRaf = 0;
+  let miniArtistResizeObserver: ResizeObserver | null = null;
 
   const VOLUME_KEY = storageKeys.volume;
 
@@ -68,10 +77,33 @@
       onPrev: () => skipPrev(),
       onNext: () => skipNext()
     });
+
+    miniArtistResizeObserver = new ResizeObserver(() => {
+      scheduleMiniArtistMeasure();
+    });
+
+    if (miniArtistViewport) {
+      miniArtistResizeObserver.observe(miniArtistViewport);
+    }
+
+    if ("fonts" in document) {
+      document.fonts.ready.then(() => {
+        scheduleMiniArtistMeasure();
+      });
+    }
+
+    scheduleMiniArtistMeasure();
   });
 
   onDestroy(() => {
     stopPositionLoop();
+
+    clearMiniArtistMeasureFrame();
+
+    if (miniArtistResizeObserver) {
+      miniArtistResizeObserver.disconnect();
+      miniArtistResizeObserver = null;
+    }
 
     if (seekSyncTimer) clearTimeout(seekSyncTimer);
 
@@ -146,11 +178,79 @@
       : 0
   );
 
+  let miniArtistLabel = $derived(
+    track?.artist_name || track?.album_artist || "Unknown Artist"
+  );
+
+  function clearMiniArtistMeasureFrame() {
+    if (!miniArtistMeasureRaf) return;
+
+    cancelAnimationFrame(miniArtistMeasureRaf);
+    miniArtistMeasureRaf = 0;
+  }
+
+  function measureMiniArtistOverflow() {
+    if (!mobileView || !track || !miniArtistViewport || !miniArtistMeasureEl) {
+      miniArtistUseMarquee = false;
+      miniArtistTextWidth = 0;
+      miniArtistMarqueeDuration = 12;
+      return;
+    }
+
+    const viewportWidth = miniArtistViewport.clientWidth;
+    const textWidth = miniArtistMeasureEl.scrollWidth;
+
+    miniArtistTextWidth = textWidth;
+
+    const overflow = textWidth - viewportWidth;
+    miniArtistUseMarquee = overflow > 8;
+
+    if (!miniArtistUseMarquee) {
+      miniArtistMarqueeDuration = 12;
+      return;
+    }
+
+    const gap = 24;
+    const speedPxPerSec = 22;
+    const travelDistance = textWidth + gap;
+    miniArtistMarqueeDuration = Math.max(
+      12,
+      Math.min(40, travelDistance / speedPxPerSec)
+    );
+  }
+
+  function scheduleMiniArtistMeasure() {
+    clearMiniArtistMeasureFrame();
+
+    miniArtistMeasureRaf = requestAnimationFrame(() => {
+      miniArtistMeasureRaf = 0;
+      measureMiniArtistOverflow();
+    });
+  }
+
   $effect(() => {
     if (!mobileView) {
       mobilePlayerExpanded = false;
       sheetDragStartY = null;
       sheetDragOffsetY = 0;
+    }
+  });
+
+  $effect(() => {
+    miniArtistLabel;
+    mobileView;
+    scheduleMiniArtistMeasure();
+  });
+
+  $effect(() => {
+    miniArtistViewport;
+
+    if (!miniArtistResizeObserver) return;
+
+    miniArtistResizeObserver.disconnect();
+
+    if (miniArtistViewport) {
+      miniArtistResizeObserver.observe(miniArtistViewport);
     }
   });
 
@@ -692,11 +792,32 @@
           <div class="mini-info">
             {#if track}
               <span class="mini-title truncate">{track.title}</span>
-              <span class="mini-artist truncate text-2"
-                >{track.artist_name ||
-                  track.album_artist ||
-                  "Unknown Artist"}</span
+              <span
+                bind:this={miniArtistViewport}
+                class="mini-artist text-2"
+                class:marquee={miniArtistUseMarquee}
+                aria-label={miniArtistLabel}
               >
+                {#if miniArtistUseMarquee}
+                  <span
+                    class="mini-artist-track"
+                    style="--mini-artist-duration: {miniArtistMarqueeDuration}s; --mini-artist-width: {miniArtistTextWidth}px;"
+                  >
+                    <span>{miniArtistLabel}</span>
+                    <span aria-hidden="true">{miniArtistLabel}</span>
+                  </span>
+                {:else}
+                  <span class="mini-artist-static truncate"
+                    >{miniArtistLabel}</span
+                  >
+                {/if}
+
+                <span
+                  bind:this={miniArtistMeasureEl}
+                  class="mini-artist-measure"
+                  aria-hidden="true">{miniArtistLabel}</span
+                >
+              </span>
             {:else}
               <span class="mini-title text-3">No track selected</span>
             {/if}
@@ -1215,7 +1336,8 @@
   }
 
   .mini-player {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
     min-width: 0;
@@ -1238,7 +1360,7 @@
   }
 
   .mini-main {
-    flex: 1;
+    width: 100%;
     min-width: 0;
     display: flex;
     align-items: center;
@@ -1298,31 +1420,101 @@
   }
 
   .mini-info {
-    flex: 1;
+    flex: 1 1 0;
+    width: 0;
     min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 1px;
+    overflow: hidden;
   }
 
   .mini-title {
     display: block;
+    width: 100%;
     max-width: 100%;
     font-size: 13px;
     font-weight: 600;
   }
 
   .mini-artist {
+    position: relative;
     display: block;
+    width: 100%;
     max-width: 100%;
+    min-width: 0;
     font-size: 11px;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .mini-artist-static {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .mini-artist-measure {
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .mini-artist-track {
+    --mini-artist-gap: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--mini-artist-gap);
+    min-width: max-content;
+  }
+
+  .mini-artist.marquee .mini-artist-track {
+    animation: mini-artist-marquee var(--mini-artist-duration, 12s) linear
+      infinite;
+    animation-delay: 2s;
+    animation-fill-mode: both;
+  }
+
+  .mini-artist.marquee {
+    --mini-artist-fade: 14px;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--mini-artist-fade),
+      #000 calc(100% - var(--mini-artist-fade)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--mini-artist-fade),
+      #000 calc(100% - var(--mini-artist-fade)),
+      transparent 100%
+    );
+  }
+
+  @keyframes mini-artist-marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(
+        calc(-1 * (var(--mini-artist-width, 0px) + var(--mini-artist-gap)))
+      );
+    }
   }
 
   .mini-actions {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 2px;
     flex-shrink: 0;
+    min-width: 44px;
     padding-right: 12px;
   }
 

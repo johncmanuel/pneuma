@@ -43,6 +43,11 @@
   } from "@lucide/svelte";
   import { ThemeToggle, Toasts } from "@pneuma/ui";
   import { clamp as clampShared } from "@pneuma/shared";
+  import {
+    applyPWAUpdate,
+    checkForPWAUpdate,
+    pwaUpdateAvailable
+  } from "./lib/pwa";
 
   let wasLoggedIn = $state(false);
   let searchBar: any = $state(undefined);
@@ -84,6 +89,13 @@
   let mobileQuery: MediaQueryList | null = $state(null);
   let mobileQueryHandler: ((event: MediaQueryListEvent) => void) | null =
     $state(null);
+  let updateOnlineHandler: (() => void) | null = $state(null);
+  let updateVisibilityHandler: (() => void) | null = $state(null);
+  let dismissedPWAUpdateNotice = $state(false);
+
+  let showPWAUpdateNotice = $derived(
+    $pwaUpdateAvailable && !dismissedPWAUpdateNotice
+  );
 
   function clearResizeListeners() {
     if (resizeMoveHandler) {
@@ -234,6 +246,22 @@
     }
   }
 
+  function dismissPWAUpdateNotice() {
+    dismissedPWAUpdateNotice = true;
+  }
+
+  function applyPendingPWAUpdate() {
+    applyPWAUpdate();
+  }
+
+  async function refreshPWAUpdateState() {
+    try {
+      await checkForPWAUpdate();
+    } catch {
+      console.info("PWA: update check skipped");
+    }
+  }
+
   onMount(async () => {
     const rawSidebarWidth = Number(localStorage.getItem(sidebarWidthKey));
     const rawPanelWidth = Number(localStorage.getItem(panelWidthKey));
@@ -261,7 +289,21 @@
 
     mobileQuery.addEventListener("change", mobileQueryHandler);
 
+    updateOnlineHandler = () => {
+      refreshPWAUpdateState();
+    };
+
+    updateVisibilityHandler = () => {
+      if (document.visibilityState === "visible") {
+        refreshPWAUpdateState();
+      }
+    };
+
+    window.addEventListener("online", updateOnlineHandler);
+    document.addEventListener("visibilitychange", updateVisibilityHandler);
+
     await tryAutoAuth();
+    refreshPWAUpdateState();
   });
 
   onDestroy(() => {
@@ -269,6 +311,14 @@
 
     if (mobileQuery && mobileQueryHandler) {
       mobileQuery.removeEventListener("change", mobileQueryHandler);
+    }
+
+    if (updateOnlineHandler) {
+      window.removeEventListener("online", updateOnlineHandler);
+    }
+
+    if (updateVisibilityHandler) {
+      document.removeEventListener("visibilitychange", updateVisibilityHandler);
     }
 
     disconnectWS();
@@ -283,6 +333,12 @@
   $effect(() => {
     if (isMobileView && $activePanel !== null) {
       mobileSidebarOpen = false;
+    }
+  });
+
+  $effect(() => {
+    if (!$pwaUpdateAvailable) {
+      dismissedPWAUpdateNotice = false;
     }
   });
 
@@ -503,6 +559,23 @@
 
     <Toasts />
   </div>
+{/if}
+
+{#if showPWAUpdateNotice}
+  <aside class="pwa-update-banner" role="status" aria-live="polite">
+    <div class="pwa-update-text">
+      <strong>Update available</strong>
+      <span>Reload now to get the latest mobile fixes.</span>
+    </div>
+    <div class="pwa-update-actions">
+      <button class="pwa-update-btn primary" onclick={applyPendingPWAUpdate}
+        >Update</button
+      >
+      <button class="pwa-update-btn" onclick={dismissPWAUpdateNotice}
+        >Later</button
+      >
+    </div>
+  </aside>
 {/if}
 
 <style>
@@ -747,6 +820,73 @@
     flex-direction: column;
   }
 
+  .pwa-update-banner {
+    position: fixed;
+    right: 16px;
+    bottom: calc(var(--player-h) + 16px);
+    z-index: 180;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: min(420px, calc(100vw - 24px));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 10px 12px;
+    box-shadow: var(--shadow-pop);
+  }
+
+  .pwa-update-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .pwa-update-text strong {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  .pwa-update-text span {
+    font-size: 12px;
+    color: var(--text-2);
+    line-height: 1.35;
+  }
+
+  .pwa-update-actions {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pwa-update-btn {
+    min-height: 30px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-1);
+    background: var(--surface-2);
+  }
+
+  .pwa-update-btn:hover {
+    background: var(--surface-hover);
+  }
+
+  .pwa-update-btn.primary {
+    background: var(--accent);
+    border-color: transparent;
+    color: var(--on-accent);
+  }
+
+  .pwa-update-btn.primary:hover {
+    filter: brightness(1.03);
+  }
+
   @media (max-width: 980px) {
     .auth-shell {
       align-items: flex-start;
@@ -892,6 +1032,29 @@
       background: var(--bg);
     }
 
+    .pwa-update-banner {
+      left: 10px;
+      right: 10px;
+      bottom: calc(env(safe-area-inset-bottom) + 84px);
+      width: auto;
+      max-width: none;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .pwa-update-actions {
+      width: 100%;
+      gap: 8px;
+    }
+
+    .pwa-update-btn {
+      flex: 1;
+      min-height: 36px;
+      text-align: center;
+    }
+
     .mobile-bottom-nav {
       grid-area: mobile-nav;
       display: grid;
@@ -960,6 +1123,11 @@
     .player-wrapper {
       padding-left: 8px;
       padding-right: 8px;
+    }
+
+    .pwa-update-banner {
+      left: 8px;
+      right: 8px;
     }
   }
 </style>
