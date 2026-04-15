@@ -3,17 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <meta
+      name="description"
+      content="pneuma web player: a self-hosted and local-first music streaming experience."
+    />
+    <meta name="application-name" content="pneuma" />
+
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="apple-mobile-web-app-title" content="pneuma" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <link rel="manifest" href="%BASE_URL%site.webmanifest?v=1" />
+
+    <link rel="shortcut icon" href="%BASE_URL%favicon.ico?v=1" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
+    <link
+      rel="icon"
+      type="image/png"
+      href="%BASE_URL%favicon-96x96.png?v=1"
+      sizes="96x96"
+    />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="%BASE_URL%apple-touch-icon.png?v=1"
+    />
+
+    <script type="module" src="./src/theme-init.ts"></script>
     <title>pneuma</title>
-    <script>
-      try {
-        const mode = localStorage.getItem("pneuma_theme_mode");
-        if (mode === "light" || mode === "dark") {
-          document.documentElement.setAttribute("data-theme", mode);
-        }
-      } catch {
-        console.warn("Could not set theme mode");
-      }
-    </script>
   </head>
   <body>
     <div id="app"></div>
