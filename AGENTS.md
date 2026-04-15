@@ -78,4 +78,6 @@ The web player can be found at http://127.0.0.1:8989/player. The dashboard can b
 
 If the server is not available at the default address, look in the logs for `bun server` for the address.
 
+If needed to log the data for `bun server`, ensure to place logs in `./tmp/`.
+
 Ensure to properly close the server once finished.
