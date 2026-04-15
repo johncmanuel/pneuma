@@ -38,12 +38,10 @@
     ".m4a",
     ".aac",
     ".wav",
-    ".aiff",
-    ".wma",
-    ".alac",
-    ".ape",
-    ".wv"
+    ".weba",
+    ".aiff"
   ]);
+  const AUDIO_ACCEPT = Array.from(AUDIO_EXTS).join(",");
 
   function isAudioFile(name: string): boolean {
     const dot = name.lastIndexOf(".");
@@ -554,7 +552,7 @@
     {#if canUpload}
       <input
         type="file"
-        accept="audio/*"
+        accept={AUDIO_ACCEPT}
         multiple
         bind:this={fileInput}
         onchange={handleFileInput}
