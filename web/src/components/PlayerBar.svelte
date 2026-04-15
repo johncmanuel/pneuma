@@ -28,7 +28,7 @@
     Music,
     List
   } from "@lucide/svelte";
-  import { activePanel, toggleQueuePanel } from "../lib/stores/ui";
+  import { activePanel, closePanel, toggleQueuePanel } from "../lib/stores/ui";
   import { currentView, pushNav } from "../lib/stores/ui";
   import {
     favoritesPlaylistId,
@@ -47,6 +47,8 @@
   let volume = $state(1);
   let prevVolume = $state(1);
   let mobilePlayerExpanded = $state(false);
+  let sheetDragStartY = $state<number | null>(null);
+  let sheetDragOffsetY = $state(0);
 
   const VOLUME_KEY = storageKeys.volume;
 
@@ -147,6 +149,16 @@
   $effect(() => {
     if (!mobileView) {
       mobilePlayerExpanded = false;
+      sheetDragStartY = null;
+      sheetDragOffsetY = 0;
+    }
+  });
+
+  $effect(() => {
+    if (mobileView && $activePanel !== null && mobilePlayerExpanded) {
+      mobilePlayerExpanded = false;
+      sheetDragStartY = null;
+      sheetDragOffsetY = 0;
     }
   });
 
@@ -434,6 +446,12 @@
     const isModifierFree = !ctrl && !e.altKey && !e.shiftKey;
     const isOnlyCtrl = ctrl && !e.altKey && !e.shiftKey;
 
+    if (e.key === "Escape" && mobileView && mobilePlayerExpanded) {
+      e.preventDefault();
+      closeMobilePlayer();
+      return;
+    }
+
     // Space -> play/pause
     if (e.code === "Space" && isModifierFree) {
       e.preventDefault();
@@ -485,15 +503,61 @@
   function toggleMobilePlayer() {
     if (!hasTrack) return;
 
-    mobilePlayerExpanded = !mobilePlayerExpanded;
+    if (mobilePlayerExpanded) {
+      mobilePlayerExpanded = false;
+      return;
+    }
+
+    closePanel();
+    mobilePlayerExpanded = true;
   }
 
   function closeMobilePlayer() {
     mobilePlayerExpanded = false;
+    sheetDragStartY = null;
+    sheetDragOffsetY = 0;
   }
 
   function onQueueToggle() {
+    if (mobileView && mobilePlayerExpanded) {
+      mobilePlayerExpanded = false;
+      sheetDragStartY = null;
+      sheetDragOffsetY = 0;
+    }
+
+    if (mobileView && $activePanel === "queue") {
+      closePanel();
+      return;
+    }
+
     toggleQueuePanel();
+  }
+
+  function onSheetDragStart(e: TouchEvent) {
+    if (!mobilePlayerExpanded) return;
+
+    sheetDragStartY = e.touches[0]?.clientY ?? null;
+    sheetDragOffsetY = 0;
+  }
+
+  function onSheetDragMove(e: TouchEvent) {
+    if (sheetDragStartY === null) return;
+
+    const currentY = e.touches[0]?.clientY ?? sheetDragStartY;
+    const deltaY = currentY - sheetDragStartY;
+    sheetDragOffsetY = deltaY > 0 ? Math.min(180, deltaY) : 0;
+  }
+
+  function finishSheetDrag() {
+    if (sheetDragStartY === null) return;
+
+    const shouldClose = sheetDragOffsetY > 88;
+    sheetDragStartY = null;
+    sheetDragOffsetY = 0;
+
+    if (shouldClose) {
+      closeMobilePlayer();
+    }
   }
 
   function jumpToAlbum() {
@@ -530,10 +594,19 @@
         playlistId: $playingPlaylistId,
         albumKey: null
       });
+
+      if (mobileView) {
+        closeMobilePlayer();
+      }
+
       return;
     }
 
     jumpToAlbum();
+
+    if (mobileView) {
+      closeMobilePlayer();
+    }
   }
 
   function onAudioPlay() {
@@ -654,7 +727,23 @@
           aria-label="Close now playing"
         ></button>
 
-        <section class="mobile-player-sheet" aria-label="Now Playing">
+        <section
+          class="mobile-player-sheet"
+          class:dragging={sheetDragStartY !== null}
+          style="transform: translateY({sheetDragOffsetY}px);"
+          aria-label="Now Playing"
+        >
+          <div
+            class="sheet-drag-zone"
+            role="presentation"
+            ontouchstart={onSheetDragStart}
+            ontouchmove={onSheetDragMove}
+            ontouchend={finishSheetDrag}
+            ontouchcancel={finishSheetDrag}
+          >
+            <span class="sheet-grabber" aria-hidden="true"></span>
+          </div>
+
           <div class="sheet-top">
             <button
               class="sheet-icon-btn"
@@ -1296,6 +1385,25 @@
       ),
       var(--bg);
     overflow-y: auto;
+    transition: transform 0.16s ease;
+  }
+
+  .mobile-player-sheet.dragging {
+    transition: none;
+  }
+
+  .sheet-drag-zone {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 2px 0 0;
+  }
+
+  .sheet-grabber {
+    width: 44px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.28);
   }
 
   .sheet-top {
