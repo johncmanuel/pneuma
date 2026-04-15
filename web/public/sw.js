@@ -1,3 +1,5 @@
+/* global URL, self, caches, fetch, console */
+
 const swVersion = "v1";
 const swKey = "pneuma-player-shell";
 const shellCacheName = `${swKey}-${swVersion}`;

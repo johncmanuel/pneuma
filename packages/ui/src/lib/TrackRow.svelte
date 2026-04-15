@@ -1,6 +1,6 @@
 <script lang="ts">
   import { formatDuration, portal } from "@pneuma/shared";
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { ChevronRight, Heart } from "@lucide/svelte";
   import type { Track } from "@pneuma/shared";
 
@@ -56,6 +56,10 @@
   let menuY = $state(0);
   let showPlaylistSub = $state(false);
   let closeMenuListener: (() => void) | null = $state(null);
+  let coarsePointer = $state(false);
+  let coarsePointerQuery: MediaQueryList | null = $state(null);
+  let coarsePointerHandler: ((event: MediaQueryListEvent) => void) | null =
+    $state(null);
 
   function onContext(e: MouseEvent) {
     e.preventDefault();
@@ -100,8 +104,32 @@
     showMenu = false;
   }
 
+  function handleClick() {
+    onSelect?.();
+
+    if (!isDisabled && coarsePointer) {
+      onPlay?.(track);
+    }
+  }
+
+  onMount(() => {
+    coarsePointerQuery = window.matchMedia("(pointer: coarse)");
+    coarsePointer = coarsePointerQuery.matches;
+
+    coarsePointerHandler = (event: MediaQueryListEvent) => {
+      coarsePointer = event.matches;
+    };
+
+    coarsePointerQuery.addEventListener("change", coarsePointerHandler);
+  });
+
   onDestroy(() => {
     showMenu = false;
+
+    if (coarsePointerQuery && coarsePointerHandler) {
+      coarsePointerQuery.removeEventListener("change", coarsePointerHandler);
+    }
+
     if (closeMenuListener) {
       window.removeEventListener("click", closeMenuListener);
     }
@@ -115,7 +143,7 @@
   class:offline
   class:local-only={isLocal && disableLocal}
   ondblclick={() => !isDisabled && onPlay?.(track)}
-  onclick={() => onSelect?.()}
+  onclick={handleClick}
   oncontextmenu={onContext}
   disabled={isDisabled}
   title={isDisabled

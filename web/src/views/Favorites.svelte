@@ -380,4 +380,81 @@
     padding: 20px 12px;
     text-align: center;
   }
+
+  @media (max-width: 980px) {
+    .header {
+      margin-bottom: 12px;
+    }
+
+    .hero {
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .cover {
+      width: 104px;
+      height: 104px;
+      border-radius: 10px;
+    }
+
+    h1 {
+      font-size: 20px;
+    }
+
+    .actions {
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .action-btn {
+      padding: 7px 12px;
+      font-size: 12px;
+    }
+
+    .filter-spacer {
+      display: none;
+    }
+
+    .filter-input {
+      width: 100%;
+      flex-basis: 100%;
+      margin-top: 2px;
+    }
+
+    .track-headers {
+      display: none;
+    }
+
+    .track-list :global(.track-row) {
+      grid-template-columns: 30px minmax(0, 1fr) 68px;
+      gap: 0 8px;
+      min-height: 40px;
+      padding: 8px 8px;
+    }
+
+    .track-list :global(.track-row .artist),
+    .track-list :global(.track-row .album) {
+      display: none;
+    }
+
+    .track-list :global(.track-row .title) {
+      font-size: 13px;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .hero {
+      align-items: center;
+    }
+
+    .cover {
+      width: 84px;
+      height: 84px;
+    }
+
+    h1 {
+      font-size: 18px;
+    }
+  }
 </style>

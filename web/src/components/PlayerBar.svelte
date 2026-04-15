@@ -20,6 +20,8 @@
     SkipForward,
     Shuffle,
     Repeat,
+    ChevronDown,
+    MonitorSpeaker,
     VolumeX,
     Volume1,
     Volume2,
@@ -35,9 +37,16 @@
 
   const UNORGANIZED_KEY = "__unorganized__";
 
+  interface Props {
+    mobileView?: boolean;
+  }
+
+  let { mobileView = false }: Props = $props();
+
   let audio: HTMLAudioElement = $state() as HTMLAudioElement;
   let volume = $state(1);
   let prevVolume = $state(1);
+  let mobilePlayerExpanded = $state(false);
 
   const VOLUME_KEY = storageKeys.volume;
 
@@ -128,6 +137,18 @@
   let durationMs = $derived(
     audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0)
   );
+
+  let miniProgressPercent = $derived(
+    durationMs > 0
+      ? Math.max(0, Math.min(100, (displayPosition / durationMs) * 100))
+      : 0
+  );
+
+  $effect(() => {
+    if (!mobileView) {
+      mobilePlayerExpanded = false;
+    }
+  });
 
   // Sync the audio element to the store's playback state.
   // Local/missing tracks are blocked by handlePlaybackChanged in playback.ts
@@ -461,6 +482,20 @@
     skipNext();
   }
 
+  function toggleMobilePlayer() {
+    if (!hasTrack) return;
+
+    mobilePlayerExpanded = !mobilePlayerExpanded;
+  }
+
+  function closeMobilePlayer() {
+    mobilePlayerExpanded = false;
+  }
+
+  function onQueueToggle() {
+    toggleQueuePanel();
+  }
+
   function jumpToAlbum() {
     if (!track) return;
 
@@ -534,7 +569,7 @@
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<div class="player">
+<div class="player" class:mobile={mobileView}>
   <audio
     bind:this={audio}
     ontimeupdate={onTimeUpdate}
@@ -545,132 +580,364 @@
     ondurationchange={changeAudioDuration}
     preload="metadata"
   ></audio>
-  <div class="now-playing">
-    <div class="art">
-      {#if track}
-        <img
-          src={artworkUrl(track.id)}
-          alt={track.title}
-          onerror={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
-          onload={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "";
-          }}
-        />
-        <div class="art-placeholder" style="position:absolute">
-          <Music size={16} />
-        </div>
-      {:else}
-        <div class="art-placeholder"><Music size={18} /></div>
-      {/if}
-    </div>
-    <div class="info">
-      {#if track}
-        <button
-          class="title truncate title-link"
-          onclick={jumpFromNowPlaying}
-          title="Go to song source"
-        >
-          {track.title}
-        </button>
-        <span class="artist truncate text-2"
-          >{track.artist_name || track.album_artist || "Unknown Artist"}</span
-        >
-      {:else}
-        <span class="text-3">No track selected</span>
-      {/if}
-    </div>
-  </div>
 
-  <div class="center">
-    <div class="controls">
-      <button
-        class="ctrl-btn"
-        class:active-toggle={$playerState.shuffle}
-        onclick={toggleShuffle}
-        title="Shuffle"><Shuffle size={16} /></button
-      >
-      <button
-        class="ctrl-btn"
-        onclick={skipPrev}
-        title="Previous"
-        disabled={!hasTrack}><SkipBack size={16} /></button
-      >
-      <button
-        class="play-btn"
-        onclick={togglePause}
-        title={$playerState.paused ? "Play" : "Pause"}
-        disabled={!hasTrack}
-      >
-        {#if $playerState.paused}
-          <Play size={16} />
-        {:else}
-          <Pause size={16} />
-        {/if}
-      </button>
-      <button
-        class="ctrl-btn"
-        onclick={skipNext}
-        title="Next"
-        disabled={!hasTrack}><SkipForward size={16} /></button
-      >
-      <button
-        class="ctrl-btn repeat-btn"
-        class:active-toggle={$playerState.repeat !== 0}
-        onclick={toggleRepeat}
-        title="Repeat: {repeatLabel}"
-      >
-        <Repeat size={16} />{#if $playerState.repeat === 2}<span
-            class="repeat-badge">1</span
-          >{/if}
-      </button>
+  {#if mobileView}
+    <div class="mobile-player-shell">
+      <div class="mini-player" class:disabled={!hasTrack}>
+        <span class="mini-progress-track" aria-hidden="true">
+          <span style="width: {miniProgressPercent}%;"></span>
+        </span>
+
+        <button
+          class="mini-main"
+          onclick={toggleMobilePlayer}
+          aria-label={hasTrack ? "Open now playing" : "No track selected"}
+          disabled={!hasTrack}
+        >
+          <div class="mini-art">
+            {#if track}
+              <img
+                src={artworkUrl(track.id)}
+                alt={track.title}
+                onerror={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
+                onload={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "";
+                }}
+              />
+              <div class="art-placeholder mini-art-placeholder">
+                <Music size={16} />
+              </div>
+            {:else}
+              <div class="art-placeholder mini-art-placeholder">
+                <Music size={18} />
+              </div>
+            {/if}
+          </div>
+
+          <div class="mini-info">
+            {#if track}
+              <span class="mini-title truncate">{track.title}</span>
+              <span class="mini-artist truncate text-2"
+                >{track.artist_name ||
+                  track.album_artist ||
+                  "Unknown Artist"}</span
+              >
+            {:else}
+              <span class="mini-title text-3">No track selected</span>
+            {/if}
+          </div>
+        </button>
+
+        <div class="mini-actions">
+          <button
+            class="mini-play-btn"
+            onclick={togglePause}
+            title={$playerState.paused ? "Play" : "Pause"}
+            aria-label={$playerState.paused ? "Play" : "Pause"}
+            disabled={!hasTrack}
+          >
+            {#if $playerState.paused}
+              <Play size={16} />
+            {:else}
+              <Pause size={16} />
+            {/if}
+          </button>
+        </div>
+      </div>
+
+      {#if mobilePlayerExpanded}
+        <button
+          class="mobile-player-backdrop"
+          onclick={closeMobilePlayer}
+          aria-label="Close now playing"
+        ></button>
+
+        <section class="mobile-player-sheet" aria-label="Now Playing">
+          <div class="sheet-top">
+            <button
+              class="sheet-icon-btn"
+              onclick={closeMobilePlayer}
+              title="Collapse player"
+              aria-label="Collapse player"
+            >
+              <ChevronDown size={22} />
+            </button>
+
+            <span class="sheet-label">Now Playing</span>
+
+            <button
+              class="sheet-icon-btn"
+              onclick={onQueueToggle}
+              title="Open queue"
+              aria-label="Open queue"
+            >
+              <List size={19} />
+            </button>
+          </div>
+
+          <div class="sheet-art-wrap">
+            <div class="sheet-art">
+              {#if track}
+                <img
+                  src={artworkUrl(track.id)}
+                  alt={track.title}
+                  onerror={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display =
+                      "none";
+                  }}
+                  onload={(e) => {
+                    (e.currentTarget as HTMLImageElement).style.display = "";
+                  }}
+                />
+                <div class="art-placeholder"><Music size={34} /></div>
+              {:else}
+                <div class="art-placeholder"><Music size={34} /></div>
+              {/if}
+            </div>
+          </div>
+
+          <div class="sheet-meta">
+            {#if track}
+              <button
+                class="sheet-title truncate title-link"
+                onclick={jumpFromNowPlaying}
+                title="Go to song source"
+              >
+                {track.title}
+              </button>
+              <span class="sheet-artist truncate text-2"
+                >{track.artist_name ||
+                  track.album_artist ||
+                  "Unknown Artist"}</span
+              >
+            {:else}
+              <span class="sheet-title text-3">No track selected</span>
+            {/if}
+          </div>
+
+          <div class="sheet-seek-row">
+            <span class="ts text-3">{formatDuration(displayPosition)}</span>
+            <input
+              type="range"
+              class="seek-bar"
+              min="0"
+              max={durationMs}
+              value={displayPosition}
+              oninput={onSeekInput}
+              onchange={onSeekChange}
+            />
+            <span class="ts text-3">{formatDuration(durationMs)}</span>
+          </div>
+
+          <div class="sheet-main-controls">
+            <button
+              class="ctrl-btn"
+              class:active-toggle={$playerState.shuffle}
+              onclick={toggleShuffle}
+              title="Shuffle"
+            >
+              <Shuffle size={20} />
+            </button>
+            <button
+              class="ctrl-btn"
+              onclick={skipPrev}
+              title="Previous"
+              disabled={!hasTrack}
+            >
+              <SkipBack size={23} />
+            </button>
+            <button
+              class="play-btn sheet-play-btn"
+              onclick={togglePause}
+              title={$playerState.paused ? "Play" : "Pause"}
+              disabled={!hasTrack}
+            >
+              {#if $playerState.paused}
+                <Play size={22} />
+              {:else}
+                <Pause size={22} />
+              {/if}
+            </button>
+            <button
+              class="ctrl-btn"
+              onclick={skipNext}
+              title="Next"
+              disabled={!hasTrack}
+            >
+              <SkipForward size={23} />
+            </button>
+            <button
+              class="ctrl-btn repeat-btn"
+              class:active-toggle={$playerState.repeat !== 0}
+              onclick={toggleRepeat}
+              title="Repeat: {repeatLabel}"
+            >
+              <Repeat size={20} />{#if $playerState.repeat === 2}<span
+                  class="repeat-badge">1</span
+                >{/if}
+            </button>
+          </div>
+
+          <div class="sheet-bottom-row">
+            <button class="sheet-pill" onclick={onQueueToggle}>
+              <List size={16} />
+              Queue
+            </button>
+
+            <div class="sheet-volume">
+              <span class="vol-icon"
+                >{#if volume === 0}
+                  <VolumeX size={17} />
+                {:else if volume < 0.4}
+                  <Volume1 size={17} />
+                {:else}
+                  <Volume2 size={17} />
+                {/if}</span
+              >
+              <input
+                type="range"
+                class="vol-bar"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volume}
+                oninput={setVolume}
+              />
+            </div>
+          </div>
+        </section>
+      {/if}
     </div>
-    <div class="seek-row">
-      <span class="ts text-3">{formatDuration(displayPosition)}</span>
+  {:else}
+    <div class="now-playing">
+      <div class="art">
+        {#if track}
+          <img
+            src={artworkUrl(track.id)}
+            alt={track.title}
+            onerror={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+            onload={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "";
+            }}
+          />
+          <div class="art-placeholder" style="position:absolute">
+            <Music size={16} />
+          </div>
+        {:else}
+          <div class="art-placeholder"><Music size={18} /></div>
+        {/if}
+      </div>
+      <div class="info">
+        {#if track}
+          <button
+            class="title truncate title-link"
+            onclick={jumpFromNowPlaying}
+            title="Go to song source"
+          >
+            {track.title}
+          </button>
+          <span class="artist truncate text-2"
+            >{track.artist_name || track.album_artist || "Unknown Artist"}</span
+          >
+        {:else}
+          <span class="text-3">No track selected</span>
+        {/if}
+      </div>
+    </div>
+
+    <div class="center">
+      <div class="controls">
+        <button
+          class="ctrl-btn"
+          class:active-toggle={$playerState.shuffle}
+          onclick={toggleShuffle}
+          title="Shuffle"><Shuffle size={16} /></button
+        >
+        <button
+          class="ctrl-btn"
+          onclick={skipPrev}
+          title="Previous"
+          disabled={!hasTrack}><SkipBack size={16} /></button
+        >
+        <button
+          class="play-btn"
+          onclick={togglePause}
+          title={$playerState.paused ? "Play" : "Pause"}
+          disabled={!hasTrack}
+        >
+          {#if $playerState.paused}
+            <Play size={16} />
+          {:else}
+            <Pause size={16} />
+          {/if}
+        </button>
+        <button
+          class="ctrl-btn"
+          onclick={skipNext}
+          title="Next"
+          disabled={!hasTrack}><SkipForward size={16} /></button
+        >
+        <button
+          class="ctrl-btn repeat-btn"
+          class:active-toggle={$playerState.repeat !== 0}
+          onclick={toggleRepeat}
+          title="Repeat: {repeatLabel}"
+        >
+          <Repeat size={16} />{#if $playerState.repeat === 2}<span
+              class="repeat-badge">1</span
+            >{/if}
+        </button>
+      </div>
+      <div class="seek-row">
+        <span class="ts text-3">{formatDuration(displayPosition)}</span>
+        <input
+          type="range"
+          class="seek-bar"
+          min="0"
+          max={durationMs}
+          value={displayPosition}
+          oninput={onSeekInput}
+          onchange={onSeekChange}
+        />
+        <span class="ts text-3">{formatDuration(durationMs)}</span>
+      </div>
+    </div>
+
+    <div class="right-controls">
+      <button
+        class="ctrl-btn queue-toggle"
+        class:active-toggle={$activePanel === "queue"}
+        onclick={onQueueToggle}
+        title="Queue"
+      >
+        <List size={18} />
+      </button>
+      <span class="vol-icon"
+        >{#if volume === 0}
+          <VolumeX size={16} />
+        {:else if volume < 0.4}
+          <Volume1 size={16} />
+        {:else if volume < 0.8}
+          <Volume2 size={16} />
+        {:else}
+          <Volume2 size={16} />
+        {/if}</span
+      >
       <input
         type="range"
-        class="seek-bar"
+        class="vol-bar"
         min="0"
-        max={durationMs}
-        value={displayPosition}
-        oninput={onSeekInput}
-        onchange={onSeekChange}
+        max="1"
+        step="0.01"
+        value={volume}
+        oninput={setVolume}
       />
-      <span class="ts text-3">{formatDuration(durationMs)}</span>
     </div>
-  </div>
-
-  <div class="right-controls">
-    <button
-      class="ctrl-btn queue-toggle"
-      class:active-toggle={$activePanel === "queue"}
-      onclick={toggleQueuePanel}
-      title="Queue"
-    >
-      <List size={18} />
-    </button>
-    <span class="vol-icon"
-      >{#if volume === 0}
-        <VolumeX size={16} />
-      {:else if volume < 0.4}
-        <Volume1 size={16} />
-      {:else if volume < 0.8}
-        <Volume2 size={16} />
-      {:else}
-        <Volume2 size={16} />
-      {/if}</span
-    >
-    <input
-      type="range"
-      class="vol-bar"
-      min="0"
-      max="1"
-      step="0.01"
-      value={volume}
-      oninput={setVolume}
-    />
-  </div>
+  {/if}
 </div>
 
 <style>
@@ -747,6 +1014,7 @@
     flex-direction: column;
     align-items: center;
     gap: 2px;
+    min-width: 0;
   }
   .controls {
     display: flex;
@@ -806,6 +1074,7 @@
     gap: 6px;
     width: 100%;
     max-width: 600px;
+    min-width: 0;
   }
   .ts {
     font-size: 11px;
@@ -842,5 +1111,343 @@
   }
   .queue-toggle:hover {
     color: var(--text-1);
+  }
+
+  .player.mobile {
+    display: block;
+    height: auto;
+    padding: 0;
+    border-top: none;
+    background: transparent;
+  }
+
+  .mobile-player-shell {
+    position: relative;
+  }
+
+  .mini-player {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    position: relative;
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background:
+      linear-gradient(
+        120deg,
+        rgba(55, 171, 134, 0.24),
+        rgba(55, 171, 134, 0.02) 52%
+      ),
+      var(--surface);
+    box-shadow: var(--shadow-pop);
+    overflow: hidden;
+  }
+
+  .mini-player.disabled {
+    opacity: 0.75;
+  }
+
+  .mini-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 6px 12px 8px;
+    position: relative;
+    text-align: left;
+    overflow: hidden;
+  }
+
+  .mini-main:disabled {
+    opacity: 1;
+    cursor: default;
+  }
+
+  .mini-progress-track {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.16);
+    pointer-events: none;
+  }
+
+  .mini-progress-track span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.15s linear;
+  }
+
+  .mini-art {
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: var(--surface-2);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mini-art img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+  }
+
+  .mini-art-placeholder {
+    font-size: 18px;
+  }
+
+  .mini-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .mini-title {
+    display: block;
+    max-width: 100%;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .mini-artist {
+    display: block;
+    max-width: 100%;
+    font-size: 11px;
+  }
+
+  .mini-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+    padding-right: 12px;
+  }
+
+  .sheet-icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-2);
+    transition:
+      background 0.12s,
+      color 0.12s;
+  }
+
+  .sheet-icon-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-1);
+  }
+
+  .mini-play-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--accent);
+    color: var(--on-accent);
+    margin-right: 2px;
+  }
+
+  .mini-play-btn:disabled {
+    opacity: 0.4;
+  }
+
+  .mobile-player-backdrop {
+    position: fixed;
+    inset: 0;
+    border: none;
+    background: var(--overlay-strong);
+    z-index: 140;
+  }
+
+  .mobile-player-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 145;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: max(12px, env(safe-area-inset-top)) 16px
+      max(18px, calc(env(safe-area-inset-bottom) + 10px));
+    background:
+      linear-gradient(
+        180deg,
+        rgba(33, 108, 86, 0.24),
+        rgba(18, 25, 29, 0.04) 44%
+      ),
+      var(--bg);
+    overflow-y: auto;
+  }
+
+  .sheet-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .sheet-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-2);
+  }
+
+  .sheet-art-wrap {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  .sheet-art {
+    width: min(78vw, 340px);
+    aspect-ratio: 1;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--surface-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: var(--shadow-pop);
+  }
+
+  .sheet-art img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+  }
+
+  .sheet-meta {
+    text-align: center;
+    min-height: 46px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+  }
+
+  .sheet-title {
+    font-size: 21px;
+    font-weight: 700;
+  }
+
+  .sheet-title.title-link {
+    text-align: center;
+  }
+
+  .sheet-artist {
+    font-size: 14px;
+  }
+
+  .sheet-seek-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .sheet-main-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    max-width: 360px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  .sheet-play-btn {
+    width: 54px;
+    height: 54px;
+  }
+
+  .sheet-bottom-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .sheet-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 7px 12px;
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .sheet-pill:hover {
+    background: var(--surface-hover);
+    color: var(--text-1);
+  }
+
+  .sheet-volume {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+    justify-content: flex-end;
+  }
+
+  .sheet-volume .vol-bar {
+    width: min(42vw, 220px);
+    flex: 1;
+  }
+
+  @media (max-width: 580px) {
+    .mini-play-btn {
+      width: 32px;
+      height: 32px;
+    }
+
+    .sheet-title {
+      font-size: 18px;
+    }
+
+    .sheet-main-controls {
+      max-width: none;
+    }
+
+    .sheet-bottom-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .sheet-volume {
+      justify-content: flex-start;
+    }
+
+    .sheet-volume .vol-bar {
+      width: 100%;
+      max-width: none;
+    }
   }
 </style>

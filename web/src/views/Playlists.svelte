@@ -895,4 +895,146 @@
     padding: 20px 12px;
     text-align: center;
   }
+
+  @media (max-width: 980px) {
+    .list-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .list-header h2 {
+      font-size: 18px;
+    }
+
+    .list-header-actions {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .new-btn {
+      width: 100%;
+      text-align: center;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+
+    .new-dialog {
+      max-width: none;
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+
+    .pl-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .pl-card {
+      border-radius: 10px;
+    }
+
+    .pl-info {
+      padding: 8px 10px;
+    }
+
+    .pl-name {
+      font-size: 13px;
+    }
+
+    .pl-meta {
+      font-size: 11px;
+    }
+
+    .detail-hero {
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .detail-art {
+      width: 104px;
+      height: 104px;
+      border-radius: 10px;
+    }
+
+    .detail-name {
+      font-size: 20px;
+    }
+
+    .detail-actions {
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .action-btn {
+      padding: 7px 12px;
+      font-size: 12px;
+    }
+
+    .filter-spacer {
+      display: none;
+    }
+
+    .filter-input {
+      width: 100%;
+      flex-basis: 100%;
+      order: 5;
+      margin-top: 2px;
+    }
+
+    .track-headers {
+      display: none;
+    }
+
+    .track-list :global(.track-row) {
+      grid-template-columns: 30px minmax(0, 1fr) 68px;
+      gap: 0 8px;
+      min-height: 40px;
+      padding: 8px 8px;
+    }
+
+    .track-list :global(.track-row .artist),
+    .track-list :global(.track-row .album) {
+      display: none;
+    }
+
+    .track-list :global(.track-row .title) {
+      font-size: 13px;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .list-header-actions {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .pl-grid {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .detail-hero {
+      align-items: center;
+    }
+
+    .detail-art {
+      width: 84px;
+      height: 84px;
+    }
+
+    .detail-name {
+      font-size: 18px;
+    }
+
+    .edit-input {
+      width: 100%;
+      max-width: 100%;
+    }
+  }
 </style>
