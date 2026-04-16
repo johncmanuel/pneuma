@@ -59,6 +59,7 @@ function trustedScriptURL(url: string): string {
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
 let hasReloadedAfterControllerChange = false;
+let shouldReloadOnControllerChange = false;
 let waitingServiceWorker: ServiceWorker | null = null;
 let registeredServiceWorker: ServiceWorkerRegistration | null = null;
 let updateCheckTimer: ReturnType<typeof setInterval> | null = null;
@@ -99,6 +100,7 @@ function scheduleUpdateChecks(registration: ServiceWorkerRegistration) {
 export function applyPWAUpdate() {
   if (!waitingServiceWorker) return;
 
+  shouldReloadOnControllerChange = true;
   waitingServiceWorker.postMessage({ type: "SKIP_WAITING" });
 }
 
@@ -146,9 +148,11 @@ export async function registerPWAServiceWorker() {
     scheduleUpdateChecks(registration);
 
     navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!shouldReloadOnControllerChange) return;
       if (hasReloadedAfterControllerChange) return;
 
       hasReloadedAfterControllerChange = true;
+      shouldReloadOnControllerChange = false;
       setWaitingServiceWorker(null);
       window.location.reload();
     });

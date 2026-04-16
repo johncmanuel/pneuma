@@ -25,7 +25,8 @@ type DatabaseConfig struct {
 
 // LibraryConfig holds music library settings.
 type LibraryConfig struct {
-	WatchFolders []string `toml:"watch_folders"`
+	WatchFolders        []string `toml:"watch_folders"`
+	ScanIntervalMinutes int      `toml:"scan_interval_minutes"`
 }
 
 // ArtworkConfig holds artwork cache settings.
@@ -103,6 +104,7 @@ const (
 	EnvDatabasePath          = "PNEUMA_DATABASE_PATH"
 	EnvAuthSecretKey         = "PNEUMA_AUTH_SECRET_KEY"
 	EnvLibraryWatchFolders   = "PNEUMA_LIBRARY_WATCH_FOLDERS"
+	EnvLibraryScanInterval   = "PNEUMA_LIBRARY_SCAN_INTERVAL_MINUTES"
 	EnvArtworkCacheDir       = "PNEUMA_ARTWORK_CACHE_DIR"
 	EnvArtworkMaxSizeMB      = "PNEUMA_ARTWORK_MAX_SIZE_MB"
 	EnvUploadDir             = "PNEUMA_UPLOAD_DIR"
@@ -145,7 +147,8 @@ func DefaultConfig(dataDir string) *Config {
 			Path: filepath.Join(dataDir, ConfigDatabaseName),
 		},
 		Library: LibraryConfig{
-			WatchFolders: []string{filepath.Join(dataDir, ConfigMusicDirName)},
+			WatchFolders:        []string{filepath.Join(dataDir, ConfigMusicDirName)},
+			ScanIntervalMinutes: 120,
 		},
 		Artwork: ArtworkConfig{
 			CacheDir:  filepath.Join(dataDir, ConfigArtworkDirName),
@@ -188,6 +191,11 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv(EnvLibraryWatchFolders); v != "" {
 		cfg.Library.WatchFolders = strings.Split(v, ",")
+	}
+	if v := os.Getenv(EnvLibraryScanInterval); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Library.ScanIntervalMinutes = p
+		}
 	}
 	if v := os.Getenv(EnvArtworkCacheDir); v != "" {
 		cfg.Artwork.CacheDir = v

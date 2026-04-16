@@ -205,6 +205,9 @@ services:
       # Point the music scanner to the mounted volume
       - PNEUMA_LIBRARY_WATCH_FOLDERS=/music
 
+      # Full rescan cadence in minutes with 120 as the default, but increase for low-power devices
+      # - PNEUMA_LIBRARY_SCAN_INTERVAL_MINUTES=240
+
       # Security (this'll be auto generated if not provided and placed in the config file)
       # - PNEUMA_AUTH_SECRET_KEY=change-this-to-a-secure-random-string
 

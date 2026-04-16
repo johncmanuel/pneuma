@@ -64,6 +64,27 @@ func NewRouter(svc Services) *echo.Echo {
 	}))
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORS())
+	e.Use(echomw.GzipWithConfig(echomw.GzipConfig{
+		Level: 5,
+		Skipper: func(c echo.Context) bool {
+			r := c.Request()
+			path := r.URL.Path
+
+			if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+				return true
+			}
+
+			if strings.HasPrefix(path, "/ws") {
+				return true
+			}
+
+			if strings.HasPrefix(path, "/api/stream/") || strings.HasSuffix(path, "/stream") {
+				return true
+			}
+
+			return r.Header.Get("Range") != ""
+		},
+	}))
 	e.Use(echomw.RequestID())
 	e.Use(middleware.SecurityHeaders())
 	e.Use(middleware.RequireSameOriginForCookieAuth())
@@ -224,11 +245,13 @@ func NewRouter(svc Services) *echo.Echo {
 			}
 			if f, err := ui.Open(fsPath); err == nil {
 				f.Close()
+				setSPAStaticCacheHeader(w.Header(), r2.URL.Path)
 				fileServer.ServeHTTP(w, &r2)
 				return
 			}
 
 			r2.URL.Path = "/index.html"
+			setSPAStaticCacheHeader(w.Header(), r2.URL.Path)
 			fileServer.ServeHTTP(w, &r2)
 		}))
 
@@ -243,6 +266,26 @@ func NewRouter(svc Services) *echo.Echo {
 	serveSPA("/player", svc.WebPlayerUI)
 
 	return e
+}
+
+func setSPAStaticCacheHeader(h http.Header, path string) {
+	p := strings.ToLower(strings.TrimSpace(path))
+
+	if p == "" {
+		p = "/"
+	}
+
+	if strings.HasPrefix(p, "/assets/") {
+		h.Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+
+	if p == "/" || p == "/index.html" || p == "/sw.js" || p == "/site.webmanifest" || p == "/offline.html" || strings.HasSuffix(p, ".html") {
+		h.Set("Cache-Control", "no-cache")
+		return
+	}
+
+	h.Set("Cache-Control", "public, max-age=86400")
 }
 
 // playbackWSDispatch returns a ws.InboundHandler that routes inbound WS
