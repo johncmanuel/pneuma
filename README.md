@@ -233,7 +233,7 @@ docker compose -f .staging/docker-compose.staging.yml \
 2. Expose the app to your tailnet:
 
 ```bash
-tailscale serve http://0.0.0.0:8989
+sudo tailscale serve http://0.0.0.0:8989
 ```
 
 3. Access from another device via the designated:
