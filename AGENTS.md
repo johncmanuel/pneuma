@@ -72,14 +72,15 @@ Run them after finalizing changes.
 
 ### Chrome Devtools MCP
 
-To test changes for the web player and dashboard, start the server with `bun server`, then access the server at the default address: http://127.0.0.1:8989.
+Utilize the following commands to start, verify and log outputs of, and stop the server. Always ensure to place any logs in `./tmp`. Assume the current directory is at root, `./`
 
-The web player can be found at http://127.0.0.1:8989/player. The dashboard can be found at http://127.0.0.1:8989/dashboard.
+1. Start: `nohup bun server > "tmp/server-run.log" 2>&1 & disown` (note: keep the .log filename unique)
+2. Check processes: `pgrep -af "bun server|go run ./cmd/server|/tmp/go-build|/cmd/server"`
+3. Verify port: `ss -ltnp | rg 8989`
+4. Stop: `pkill -f "bun server|go run ./cmd/server|/tmp/go-build.*exe/server"`
 
-If the server is not available at the default address, look in the logs for `bun server` for the address.
-
-If needed to log the data for `bun server`, ensure to place logs in `./tmp/`.
+The default address is http://127.0.0.1:8989. The web player can be found at http://127.0.0.1:8989/player. The dashboard can be found at http://127.0.0.1:8989/dashboard.
 
 When testing changes, be sure to perform the registration process (use any username/password) and test the features of the project. Be as rigorous as possible.
 
-Ensure to properly close the server once finished.
+Once the testing and verification are done, run the Stop command and report the results.
