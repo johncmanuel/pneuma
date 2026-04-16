@@ -4,16 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pneuma</title>
-    <script>
-      try {
-        const mode = localStorage.getItem("pneuma_theme_mode");
-        if (mode === "light" || mode === "dark") {
-          document.documentElement.setAttribute("data-theme", mode);
-        }
-      } catch {
-        console.warn("Could not set theme mode");
-      }
-    </script>
+    <script type="module" src="./src/theme-init.ts"></script>
   </head>
   <body>
     <div id="app"></div>
