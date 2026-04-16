@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"pneuma/internal/api/http/middleware"
+	"pneuma/internal/artwork"
+	"pneuma/internal/config"
 	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
 	"pneuma/internal/media"
@@ -38,20 +41,35 @@ type eventPublisher interface {
 
 // LibraryHandler serves library-related API routes.
 type LibraryHandler struct {
-	lib        *library.Service
-	q          *serverdb.Queries
-	scanner    scanTrigger
-	hub        eventPublisher
-	queue      *ingestion.Queue
-	uploadsDir string
-	tmpDir     string // temp staging area under uploadsDir
+	lib             *library.Service
+	q               *serverdb.Queries
+	scanner         scanTrigger
+	hub             eventPublisher
+	queue           *ingestion.Queue
+	uploadsDir      string
+	tmpDir          string // temp staging area under uploadsDir
+	trackArtworkDir string
 }
 
 // NewLibraryHandler creates a LibraryHandler.
-func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, queue *ingestion.Queue, uploadsDir string) *LibraryHandler {
+func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, queue *ingestion.Queue, uploadsDir, trackArtworkDir string) *LibraryHandler {
 	tmpDir := filepath.Join(uploadsDir, "tmp")
 	_ = os.MkdirAll(tmpDir, 0o755)
-	return &LibraryHandler{lib: lib, q: q, scanner: sc, hub: hub, queue: queue, uploadsDir: uploadsDir, tmpDir: tmpDir}
+	if strings.TrimSpace(trackArtworkDir) == "" {
+		trackArtworkDir = filepath.Join(uploadsDir, "track-artwork")
+	}
+	_ = os.MkdirAll(trackArtworkDir, 0o755)
+
+	return &LibraryHandler{
+		lib:             lib,
+		q:               q,
+		scanner:         sc,
+		hub:             hub,
+		queue:           queue,
+		uploadsDir:      uploadsDir,
+		tmpDir:          tmpDir,
+		trackArtworkDir: trackArtworkDir,
+	}
 }
 
 // ListTracks returns tracks. Supports optional pagination via ?offset=&limit=
@@ -168,6 +186,17 @@ func (h *LibraryHandler) ServeTrackArt(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 
+	info, err := os.Stat(track.Path)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	hash := trackArtCacheKey(track.Path, info)
+	cachePath := h.trackArtPath(hash)
+	if _, err := os.Stat(cachePath); err == nil {
+		return h.serveTrackArtFromPath(c, hash, cachePath)
+	}
+
 	f, err := os.Open(track.Path)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -184,20 +213,49 @@ func (h *LibraryHandler) ServeTrackArt(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "no embedded art")
 	}
 
-	ct := pic.MIMEType
-	if ct == "" {
-		ct = "image/jpeg"
+	thumbData, err := artwork.ResizeToThumbnail(pic.Data, config.PlaylistMaxArtDim)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to process embedded art")
 	}
 
-	sum := sha256.Sum256(pic.Data)
-	etag := `"` + hex.EncodeToString(sum[:8]) + `"`
+	if err := os.MkdirAll(h.trackArtworkDir, 0o755); err == nil {
+		if writeErr := artwork.WriteThumbnail(h.trackArtworkDir, filepath.Base(cachePath), thumbData); writeErr == nil {
+			return h.serveTrackArtFromPath(c, hash, cachePath)
+		}
+	}
+
+	etag := trackArtETag(hash)
+	if c.Request().Header.Get("If-None-Match") == etag {
+		return c.NoContent(http.StatusNotModified)
+	}
+	c.Response().Header().Set("ETag", etag)
+	c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	return c.Blob(http.StatusOK, "image/jpeg", thumbData)
+}
+
+func trackArtETag(hash string) string {
+	return `"` + hash + `"`
+}
+
+func trackArtCacheKey(path string, info os.FileInfo) string {
+	basis := fmt.Sprintf("%s|%d|%d", path, info.Size(), info.ModTime().UnixNano())
+	sum := sha256.Sum256([]byte(basis))
+	return hex.EncodeToString(sum[:12])
+}
+
+func (h *LibraryHandler) trackArtPath(hash string) string {
+	return filepath.Join(h.trackArtworkDir, "track-"+hash+".jpg")
+}
+
+func (h *LibraryHandler) serveTrackArtFromPath(c echo.Context, hash, path string) error {
+	etag := trackArtETag(hash)
 	if c.Request().Header.Get("If-None-Match") == etag {
 		return c.NoContent(http.StatusNotModified)
 	}
 
 	c.Response().Header().Set("ETag", etag)
 	c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	return c.Blob(http.StatusOK, ct, pic.Data)
+	return c.File(path)
 }
 
 // UpdateTrackMeta applies a partial metadata update (PATCH).

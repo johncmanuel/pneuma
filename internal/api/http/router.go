@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -93,7 +94,15 @@ func NewRouter(svc Services) *echo.Echo {
 	authMW := middleware.RequireAuth(secret)
 	adminMW := middleware.RequireAdmin(secret)
 
-	lh := handlers.NewLibraryHandler(svc.Library, svc.Queries, svc.Scanner, svc.Hub, svc.IngestionQueue, svc.UploadsDir)
+	lh := handlers.NewLibraryHandler(
+		svc.Library,
+		svc.Queries,
+		svc.Scanner,
+		svc.Hub,
+		svc.IngestionQueue,
+		svc.UploadsDir,
+		filepath.Join(svc.ArtworkDir, "tracks"),
+	)
 	ph := handlers.NewPlaybackHandler(svc.Playback)
 	uh := handlers.NewUserHandler(svc.User, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries)

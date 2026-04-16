@@ -10,11 +10,12 @@ FROM playlists WHERE id = ?;
 SELECT p.id, p.user_id, p.name, p.description, p.artwork_path, p.created_at, p.updated_at,
        COUNT(pi.playlist_id) AS item_count,
        CAST(COALESCE(SUM(CASE
-           WHEN pi.source = 'remote' THEN (SELECT COALESCE(t.duration_ms, 0) FROM tracks t WHERE t.id = pi.track_id)
+           WHEN pi.source = 'remote' THEN COALESCE(t.duration_ms, 0)
            ELSE pi.ref_duration_ms
        END), 0) AS INTEGER) AS total_duration_ms
 FROM playlists p
 LEFT JOIN playlist_items pi ON pi.playlist_id = p.id
+LEFT JOIN tracks t ON t.id = pi.track_id
 WHERE p.user_id = ?
 GROUP BY p.id
 ORDER BY p.updated_at DESC;
