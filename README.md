@@ -255,6 +255,7 @@ docker compose -f .staging/docker-compose.staging.yml \
 Notes:
 
 - Always use `/player/` (with trailing slash) for proper service worker scope.
+- If using `tailscale serve` for production, use `tailscale serve --bg http://0.0.0.0:8989` (or whatever port you're using). Use `tailscale serve --https=443 off` to turn it off if needed.
 
 ### Formatting
 
