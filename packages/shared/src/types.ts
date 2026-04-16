@@ -4,6 +4,16 @@ export const RepeatModeEnum = {
   One: 2
 } as const;
 
+export const StreamQualityValues = [
+  "auto",
+  "low",
+  "medium",
+  "high",
+  "original"
+] as const;
+
+export type StreamQuality = (typeof StreamQualityValues)[number];
+
 export const RepeatLabels = ["Off", "All", "One"];
 
 export type RepeatModeEnum =

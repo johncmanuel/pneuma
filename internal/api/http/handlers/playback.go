@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -33,6 +34,17 @@ func (h *PlaybackHandler) GetState(c echo.Context) error {
 	s, err := h.engine.GetState(claimsUserID(c), deviceID)
 
 	if err != nil {
+		if errors.Is(err, playback.ErrNoActiveSession) {
+			return c.JSON(http.StatusOK, map[string]any{
+				"playing":     false,
+				"track_id":    "",
+				"position_ms": 0,
+				"queue":       []string{},
+				"queue_index": 0,
+				"repeat":      playback.RepeatOff,
+				"shuffle":     false,
+			})
+		}
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
 

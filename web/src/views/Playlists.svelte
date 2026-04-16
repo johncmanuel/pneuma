@@ -19,7 +19,11 @@
     handleAddToPlaylist,
     setPlayingPlaylistContext
   } from "../lib/stores/playlists";
-  import { selectedPlaylistView, pushNav } from "../lib/stores/ui";
+  import {
+    selectedPlaylistView,
+    pushNav,
+    initialDataLoaded
+  } from "../lib/stores/ui";
   import { playerState } from "../lib/stores/playback";
   import { playlistArtUrl, uploadPlaylistArtwork } from "../lib/api";
   import { wsSend } from "../lib/ws";
@@ -272,7 +276,9 @@
   }
 
   onMount(() => {
-    loadPlaylists();
+    if (!$initialDataLoaded) {
+      loadPlaylists();
+    }
   });
 </script>
 

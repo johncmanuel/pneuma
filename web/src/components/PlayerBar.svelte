@@ -21,7 +21,6 @@
     Shuffle,
     Repeat,
     ChevronDown,
-    MonitorSpeaker,
     VolumeX,
     Volume1,
     Volume2,
@@ -34,6 +33,8 @@
     favoritesPlaylistId,
     playingPlaylistId
   } from "../lib/stores/playlists";
+  import { streamQuality } from "../lib/stores/settings";
+  import { type StreamQuality } from "../lib/stream-quality";
 
   const UNORGANIZED_KEY = "__unorganized__";
 
@@ -90,6 +91,12 @@
       document.fonts.ready.then(() => {
         scheduleMiniArtistMeasure();
       });
+    }
+
+    if (audio) {
+      const supportsOgg = audio.canPlayType("audio/ogg");
+      const supportsOpus = audio.canPlayType('audio/ogg; codecs="opus"');
+      supportsOpusStream = Boolean(supportsOpus || supportsOgg);
     }
 
     scheduleMiniArtistMeasure();
@@ -171,6 +178,34 @@
   let durationMs = $derived(
     audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0)
   );
+
+  // Determines whether the current browser environment supports Opus codec
+  // Opus is the goat for streaming due to its low bitrate and good quality
+  let supportsOpusStream = $state(true);
+
+  const OPUS_PROFILES = new Set<StreamQuality>(["low", "medium", "high"]);
+
+  function resolveEffectiveStreamQuality(): StreamQuality {
+    const selected = $streamQuality;
+
+    if (selected === "original") {
+      return "original";
+    }
+
+    if (selected === "auto") {
+      const autoChoice: StreamQuality = mobileView ? "medium" : "original";
+      if (OPUS_PROFILES.has(autoChoice) && !supportsOpusStream) {
+        return "original";
+      }
+      return autoChoice;
+    }
+
+    if (OPUS_PROFILES.has(selected) && !supportsOpusStream) {
+      return "original";
+    }
+
+    return selected;
+  }
 
   let miniProgressPercent = $derived(
     durationMs > 0
@@ -303,7 +338,10 @@
             }
           }
 
-          const url = streamUrl($playerState.trackId);
+          const url = streamUrl(
+            $playerState.trackId,
+            resolveEffectiveStreamQuality()
+          );
 
           if (url) {
             currentAudioSrc = url;

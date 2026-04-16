@@ -49,10 +49,11 @@ type LibraryHandler struct {
 	uploadsDir      string
 	tmpDir          string // temp staging area under uploadsDir
 	trackArtworkDir string
+	transcoder      *media.StreamTranscoder
 }
 
 // NewLibraryHandler creates a LibraryHandler.
-func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, queue *ingestion.Queue, uploadsDir, trackArtworkDir string) *LibraryHandler {
+func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, queue *ingestion.Queue, uploadsDir, trackArtworkDir string, transcoder *media.StreamTranscoder) *LibraryHandler {
 	tmpDir := filepath.Join(uploadsDir, "tmp")
 	_ = os.MkdirAll(tmpDir, 0o755)
 	if strings.TrimSpace(trackArtworkDir) == "" {
@@ -69,6 +70,7 @@ func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger
 		uploadsDir:      uploadsDir,
 		tmpDir:          tmpDir,
 		trackArtworkDir: trackArtworkDir,
+		transcoder:      transcoder,
 	}
 }
 
@@ -156,24 +158,90 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 
+	quality := media.ParseStreamQuality(c.QueryParam("quality"))
+
+	info, err := os.Stat(track.Path)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if h.transcoder != nil {
+		if cachedPath, ok := h.transcoder.ResolveCachedPath(track, track.Path, info, quality); ok {
+			cachedFile, err := os.Open(cachedPath)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			defer cachedFile.Close()
+
+			cachedInfo, err := cachedFile.Stat()
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+
+			c.Response().Header().Set("Content-Type", media.MimeFromExt(".ogg"))
+			c.Response().Header().Set("Cache-Control", "private, no-store")
+			c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.NormalizeStreamQuality(quality)))
+			normalizeRangeHeader(c.Request(), cachedInfo.Size())
+			http.ServeContent(c.Response(), c.Request(), cachedInfo.Name(), cachedInfo.ModTime(), cachedFile)
+			return nil
+		}
+
+		h.transcoder.QueueTranscode(track, track.Path, info, quality)
+	}
+
 	f, err := os.Open(track.Path)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer f.Close()
 
-	info, err := f.Stat()
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
 	ext := strings.ToLower(filepath.Ext(track.Path))
 
 	c.Response().Header().Set("Content-Type", media.MimeFromExt(ext))
 	c.Response().Header().Set("Cache-Control", "private, no-store")
+	c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.StreamQualityOriginal))
+	normalizeRangeHeader(c.Request(), info.Size())
 	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
 
 	return nil
+}
+
+// normalizeRangeHeader removes the Range header if the requested
+// start byte is beyond the end of the file.
+func normalizeRangeHeader(req *http.Request, fileSize int64) {
+	start, ok := parseRangeStart(req.Header.Get("Range"))
+	if !ok {
+		return
+	}
+
+	if start >= fileSize {
+		req.Header.Del("Range")
+	}
+}
+
+// parseRangeStart extracts the starting byte offset from a Range header value.
+func parseRangeStart(value string) (int64, bool) {
+	rangeValue := strings.TrimSpace(value)
+	if rangeValue == "" || !strings.HasPrefix(rangeValue, "bytes=") {
+		return 0, false
+	}
+
+	spec := strings.TrimSpace(strings.TrimPrefix(rangeValue, "bytes="))
+	if spec == "" || strings.Contains(spec, ",") {
+		return 0, false
+	}
+
+	sep := strings.Index(spec, "-")
+	if sep <= 0 {
+		return 0, false
+	}
+
+	start, err := strconv.ParseInt(strings.TrimSpace(spec[:sep]), 10, 64)
+	if err != nil || start < 0 {
+		return 0, false
+	}
+
+	return start, true
 }
 
 // ServeTrackArt returns embedded album art from the audio file.

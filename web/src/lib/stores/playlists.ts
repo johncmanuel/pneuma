@@ -28,6 +28,8 @@ export const favoriteTrackIDs = writable<Set<string>>(new Set());
 
 export const favoritesPlaylistId = writable<string | null>(null);
 
+let loadPlaylistsPromise: Promise<void> | null = null;
+
 export function setPlayingPlaylistContext(playlistId: string | null) {
   playingPlaylistId.set(playlistId);
 }
@@ -242,15 +244,25 @@ export async function toggleFavoriteTrack(track: Track | null) {
 }
 
 export async function loadPlaylists() {
-  const r = await apiFetch("/api/playlists");
-  if (!r.ok) return;
+  if (loadPlaylistsPromise) {
+    return loadPlaylistsPromise;
+  }
 
-  const data = await r.json();
-  const next = (
-    Array.isArray(data) ? data : (data.playlists ?? [])
-  ) as PlaylistSummary[];
-  playlists.set(next);
-  await refreshFavoritesState(next);
+  loadPlaylistsPromise = (async () => {
+    const r = await apiFetch("/api/playlists");
+    if (!r.ok) return;
+
+    const data = await r.json();
+    const next = (
+      Array.isArray(data) ? data : (data.playlists ?? [])
+    ) as PlaylistSummary[];
+    playlists.set(next);
+    await refreshFavoritesState(next);
+  })().finally(() => {
+    loadPlaylistsPromise = null;
+  });
+
+  return loadPlaylistsPromise;
 }
 
 export async function selectPlaylist(id: string) {

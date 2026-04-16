@@ -23,6 +23,7 @@ import (
 	apws "pneuma/internal/api/ws"
 	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
+	"pneuma/internal/media"
 	"pneuma/internal/playback"
 	"pneuma/internal/playlist"
 	"pneuma/internal/store/sqlite/serverdb"
@@ -46,6 +47,7 @@ type Services struct {
 	ArtworkDir     string // directory for playlist artwork thumbnails
 	UploadMaxMB    int    // max upload body size in MB (0 = default 500 MB)
 	IngestionQueue *ingestion.Queue
+	Transcoder     *media.StreamTranscoder
 	WebUI          fs.FS // embedded dashboard assets (nil = disabled)
 	WebPlayerUI    fs.FS // embedded web player assets (nil = disabled)
 
@@ -102,6 +104,7 @@ func NewRouter(svc Services) *echo.Echo {
 		svc.IngestionQueue,
 		svc.UploadsDir,
 		filepath.Join(svc.ArtworkDir, "tracks"),
+		svc.Transcoder,
 	)
 	ph := handlers.NewPlaybackHandler(svc.Playback)
 	uh := handlers.NewUserHandler(svc.User, secret)

@@ -19,6 +19,7 @@ import (
 	"pneuma/internal/config"
 	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
+	"pneuma/internal/media"
 	"pneuma/internal/metadata/parser"
 	"pneuma/internal/playback"
 	"pneuma/internal/playlist"
@@ -68,6 +69,12 @@ func main() {
 	metaParser := parser.New(cfg.Transcoding.FFmpegPath)
 	playEngine := playback.New(queries, hub, libSvc)
 	playlistSvc := playlist.New(queries)
+	transcoder := media.NewStreamTranscoder(media.TranscodeConfig{
+		FFmpegPath:        cfg.Transcoding.FFmpegPath,
+		CacheDir:          cfg.Transcoding.CacheDir,
+		CacheMaxSizeMB:    cfg.Transcoding.CacheMaxSizeMB,
+		MaxConcurrentJobs: cfg.Transcoding.MaxConcurrentJobs,
+	})
 
 	watcher, err := scanner.NewWatcher(libSvc, metaParser, hub)
 	if err != nil {
@@ -110,6 +117,7 @@ func main() {
 		ArtworkDir:          filepath.Join(dir, config.ConfigCachePlaylistArtDir),
 		UploadMaxMB:         cfg.Upload.MaxSizeMB,
 		IngestionQueue:      iqQueue,
+		Transcoder:          transcoder,
 		WebUI:               dashboard.FS(),
 		WebPlayerUI:         web.FS(),
 		RateLimitingEnabled: cfg.RateLimiting.Enabled,

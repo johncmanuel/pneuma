@@ -217,6 +217,12 @@ services:
       # Increase upload limit if needed (500 MB is default)
       # - PNEUMA_UPLOAD_MAX_SIZE_MB=500
 
+      # Optional stream transcoding cache for mobile profiles
+      # - PNEUMA_TRANSCODING_FFMPEG_PATH=ffmpeg
+      # - PNEUMA_TRANSCODING_CACHE_DIR=/data/transcode-cache
+      # - PNEUMA_TRANSCODING_CACHE_MAX_SIZE_MB=2048
+      # - PNEUMA_TRANSCODING_MAX_CONCURRENT_JOBS=1
+
 volumes:
   pneuma_data:
 ```

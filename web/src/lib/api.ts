@@ -1,5 +1,6 @@
 import { writable, derived } from "svelte/store";
 import { getOrCreateDeviceID, type CurrentUser } from "@pneuma/shared";
+import { type StreamQuality } from "./stream-quality";
 
 export const currentUser = writable<CurrentUser | null>(null);
 export const loggedIn = derived(currentUser, ($u) => Boolean($u));
@@ -147,9 +148,13 @@ export async function tryAutoAuth() {
   }
 }
 
-export function streamUrl(trackId: string): string {
+export function streamUrl(trackId: string, quality?: StreamQuality): string {
   const base = apiBase();
-  return `${base}/api/stream/tracks/${trackId}`;
+  const profile = quality?.trim();
+  if (!profile) {
+    return `${base}/api/stream/tracks/${trackId}`;
+  }
+  return `${base}/api/stream/tracks/${trackId}?quality=${encodeURIComponent(profile)}`;
 }
 
 export function artworkUrl(trackId: string): string {

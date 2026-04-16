@@ -4,6 +4,7 @@ type PanelName = "queue" | null;
 
 export const activePanel = writable<PanelName>(null);
 export const currentView = writable<string>("library");
+export const initialDataLoaded = writable(false);
 
 function togglePanel(name: "queue") {
   activePanel.update((v) => (v === name ? null : name));

@@ -7,30 +7,44 @@ export const albumGroups = writable<AlbumGroup[]>([]);
 export const albumGroupsTotal = writable(0);
 const PAGE_SIZE = 50;
 
+const inFlightAlbumGroupLoads = new Map<string, Promise<void>>();
+
 export async function loadAlbumGroupsPage(offset = 0, search = "") {
-  loading.set(true);
-  try {
-    const params = new URLSearchParams();
-    params.set("offset", String(offset));
-    params.set("limit", String(PAGE_SIZE));
-    if (search) params.set("filter", search);
-
-    const r = await apiFetch(`/api/library/albumgroups?${params}`);
-    if (!r.ok) return;
-
-    const data = await r.json();
-    const groups: AlbumGroup[] = data.groups ?? data ?? [];
-    const total: number = data.total ?? groups.length;
-
-    if (offset === 0) {
-      albumGroups.set(groups);
-    } else {
-      albumGroups.update((prev) => [...prev, ...groups]);
-    }
-    albumGroupsTotal.set(total);
-  } finally {
-    loading.set(false);
+  const key = `${offset}:${search}`;
+  const existingRequest = inFlightAlbumGroupLoads.get(key);
+  if (existingRequest) {
+    return existingRequest;
   }
+
+  const request = (async () => {
+    loading.set(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("offset", String(offset));
+      params.set("limit", String(PAGE_SIZE));
+      if (search) params.set("filter", search);
+
+      const r = await apiFetch(`/api/library/albumgroups?${params}`);
+      if (!r.ok) return;
+
+      const data = await r.json();
+      const groups: AlbumGroup[] = data.groups ?? data ?? [];
+      const total: number = data.total ?? groups.length;
+
+      if (offset === 0) {
+        albumGroups.set(groups);
+      } else {
+        albumGroups.update((prev) => [...prev, ...groups]);
+      }
+      albumGroupsTotal.set(total);
+    } finally {
+      loading.set(false);
+      inFlightAlbumGroupLoads.delete(key);
+    }
+  })();
+
+  inFlightAlbumGroupLoads.set(key, request);
+  return request;
 }
 
 export async function loadMoreAlbumGroups(search = "") {

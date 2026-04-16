@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
@@ -46,6 +47,9 @@ type State struct {
 	Shuffle    bool       `json:"shuffle"`
 }
 
+// ErrNoActiveSession is returned when there is no active playback session for a user/device.
+var ErrNoActiveSession = errors.New("no active session")
+
 // Engine tracks live playback state for every active user.
 type Engine struct {
 	mu       sync.Mutex
@@ -74,7 +78,7 @@ func (e *Engine) GetState(userID, deviceID string) (State, error) {
 	if s, ok := e.sessions[deviceID]; ok && s.UserID == userID {
 		return *s, nil
 	}
-	return State{}, fmt.Errorf("no active session for device %q", deviceID)
+	return State{}, ErrNoActiveSession
 }
 
 // Play starts or resumes playback for a track.

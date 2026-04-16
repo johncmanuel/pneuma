@@ -23,7 +23,10 @@ export const playerState = writable<PlayerState>(initial);
 export async function loadPlaybackState() {
   try {
     const res = await apiFetch("/api/playback");
-    if (!res.ok) return;
+    if (!res.ok) {
+      playerState.set(initial);
+      return;
+    }
     const s = await res.json();
     playerState.set({
       trackId: s.track_id ?? "",

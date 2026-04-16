@@ -27,7 +27,8 @@
   const baseNavItems = [
     { id: "library", label: "Library" },
     { id: "favorites", label: "Favorites" },
-    { id: "playlists", label: "Playlists" }
+    { id: "playlists", label: "Playlists" },
+    { id: "settings", label: "Settings" }
   ];
 
   let navItems = $derived(
@@ -64,12 +65,6 @@
       }))
     ].sort((a, b) => (b.playedAt ?? 0) - (a.playedAt ?? 0))
   );
-
-  $effect(() => {
-    ensureFavoritesPlaylist().catch((err) => {
-      console.error("Failed to ensure favorites playlist", err);
-    });
-  });
 
   async function handleNavClick(id: string) {
     if (id === "__dashboard") {
