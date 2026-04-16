@@ -8,6 +8,12 @@
   import { wsSend } from "../lib/ws";
   import type { Track, AlbumGroup } from "@pneuma/shared";
 
+  interface Props {
+    onItemSelected?: () => void;
+  }
+
+  let { onItemSelected }: Props = $props();
+
   let searchBar = $state<SearchBar | undefined>();
 
   async function searchFn(query: string) {
@@ -69,10 +75,13 @@
       track_id: track.id,
       position_ms: 0
     });
+
+    onItemSelected?.();
   }
 
   function openAlbum(album: AlbumGroup) {
     pushNav({ view: "library", albumKey: album.key });
+    onItemSelected?.();
   }
 
   export function focus() {

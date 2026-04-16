@@ -781,4 +781,106 @@
   .album-ctx-submenu button:hover {
     background: var(--surface-hover);
   }
+
+  @media (max-width: 980px) {
+    .scroll-body {
+      padding: 8px 0 0;
+    }
+
+    .toolbar {
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      font-size: 18px;
+    }
+
+    .album-grid-search {
+      max-width: none;
+      margin-bottom: 12px;
+    }
+
+    .album-grid {
+      grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+      gap: 12px;
+    }
+
+    .album-detail-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .album-art-hero {
+      width: min(56vw, 220px);
+      height: min(56vw, 220px);
+      border-radius: 10px;
+      margin: 0 auto;
+    }
+
+    .album-detail-info {
+      align-items: center;
+      text-align: center;
+      padding-bottom: 0;
+    }
+
+    .album-detail-title {
+      font-size: 17px;
+      margin-bottom: 2px;
+    }
+
+    .album-meta {
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .album-filter-bar {
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .album-filter-input {
+      max-width: none;
+    }
+
+    .track-headers {
+      display: none;
+    }
+
+    .track-list :global(.track-row) {
+      grid-template-columns: 30px minmax(0, 1fr) 68px;
+      gap: 0 8px;
+      min-height: 40px;
+      padding: 8px 8px;
+    }
+
+    .track-list :global(.track-row .artist) {
+      display: none;
+    }
+
+    .track-list :global(.track-row .num),
+    .track-list :global(.track-row .duration) {
+      font-size: 12px;
+    }
+
+    .track-list :global(.track-row .title) {
+      font-size: 13px;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .album-detail-header {
+      align-items: stretch;
+    }
+
+    .album-art-hero {
+      width: min(66vw, 220px);
+      height: min(66vw, 220px);
+    }
+
+    .album-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
 </style>

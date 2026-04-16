@@ -13,13 +13,15 @@
     collapsed?: boolean;
     onToggleCollapse?: () => void;
     onNavigate?: (id: string) => void;
+    onInteraction?: () => void;
   }
 
   let {
     activeView = "library",
     collapsed = false,
     onToggleCollapse,
-    onNavigate
+    onNavigate,
+    onInteraction
   }: Props = $props();
 
   const baseNavItems = [
@@ -73,25 +75,32 @@
   async function handleNavClick(id: string) {
     if (id === "__dashboard") {
       window.location.href = "/dashboard";
+      onInteraction?.();
     } else if (id === "favorites") {
       const favoritesID =
         $favoritesPlaylistId ?? (await ensureFavoritesPlaylist());
       if (favoritesID) {
         pushNav({ view: "favorites", playlistId: favoritesID });
+        onInteraction?.();
       }
     } else {
       onNavigate?.(id);
+      onInteraction?.();
     }
   }
 
   function handleRecentClick(item: { key: string }) {
     if (item.key.startsWith("al-")) {
       pushNav({ view: "library", albumKey: item.key.replace("al-", "") });
+      onInteraction?.();
     } else {
       const pl = filteredRecentPlaylists.find(
         (p) => "pl-" + p.playlist_id === item.key
       );
-      if (pl) pushNav({ view: "playlists", playlistId: pl.playlist_id });
+      if (pl) {
+        pushNav({ view: "playlists", playlistId: pl.playlist_id });
+        onInteraction?.();
+      }
     }
   }
 </script>

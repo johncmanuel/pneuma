@@ -2,6 +2,10 @@ import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import path from "path";
 
+// for versioning the service worker and other assets
+// to ensure clients get updates when a new version is deployed
+const buildID = Date.now().toString(36);
+
 export default defineConfig(({ command }) => ({
   plugins: [svelte()],
   resolve: {
@@ -21,5 +25,8 @@ export default defineConfig(({ command }) => ({
   },
   esbuild: {
     drop: ["debugger"]
+  },
+  define: {
+    __PWA_BUILD_ID__: JSON.stringify(buildID)
   }
 }));

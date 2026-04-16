@@ -229,4 +229,35 @@
     padding: 8px;
     font-size: 13px;
   }
+
+  @media (max-width: 980px) {
+    .queue-panel {
+      border-left: none;
+      border-radius: var(--r-lg);
+      height: 100%;
+    }
+
+    .queue-header {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-label {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+
+    .now-playing-item {
+      margin: 0 10px 8px;
+      padding: 8px 10px;
+    }
+
+    .queue-list {
+      padding: 0 10px 10px;
+    }
+
+    .queue-item {
+      padding: 8px;
+    }
+  }
 </style>

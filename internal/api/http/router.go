@@ -195,6 +195,9 @@ func NewRouter(svc Services) *echo.Echo {
 	e.GET("/", func(c echo.Context) error {
 		return c.Redirect(http.StatusMovedPermanently, "/player")
 	})
+	e.GET("/manifest.json", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently, "/player/manifest.json")
+	})
 
 	serveSPA := func(prefix string, ui fs.FS) {
 		if ui == nil {
@@ -229,7 +232,10 @@ func NewRouter(svc Services) *echo.Echo {
 			fileServer.ServeHTTP(w, &r2)
 		}))
 
-		e.GET(prefix, spaHandler)
+		e.GET(prefix, func(c echo.Context) error {
+			return c.Redirect(http.StatusMovedPermanently, prefix+"/")
+		})
+		e.GET(prefix+"/", spaHandler)
 		e.GET(prefix+"/*", spaHandler)
 	}
 

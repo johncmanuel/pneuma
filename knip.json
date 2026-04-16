@@ -5,7 +5,9 @@
   "ignoreDependencies": ["@pneuma/shared", "@pneuma/ui"],
   "workspaces": {
     ".": {},
-    "web": {},
+    "web": {
+      "ignore": ["public/sw.js"]
+    },
     "dashboard": {},
     "frontend": {
       "ignore": ["wailsjs/**"]
