@@ -80,4 +80,6 @@ If the server is not available at the default address, look in the logs for `bun
 
 If needed to log the data for `bun server`, ensure to place logs in `./tmp/`.
 
+When testing changes, be sure to perform the registration process (use any username/password) and test the features of the project. Be as rigorous as possible.
+
 Ensure to properly close the server once finished.
