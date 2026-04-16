@@ -1,0 +1,20 @@
+# mainly for testing before production
+# use tailscale to serve the staging instance to tailnet for testing in https environment
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: pneuma:staging
+    restart: unless-stopped
+    environment:
+      PNEUMA_SERVER_HOST: 0.0.0.0
+      PNEUMA_SERVER_PORT: 8989
+      PNEUMA_DATA_DIR: /data
+    volumes:
+      - pneuma_staging_data:/data
+    ports:
+      - "8989:8989"
+
+volumes:
+  pneuma_staging_data:

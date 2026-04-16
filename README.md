@@ -218,6 +218,44 @@ volumes:
   pneuma_data:
 ```
 
+##### Test in an HTTPS environment
+
+There are a handful of ways to test HTTPS locally. One way is to use [tailscale](https://tailscale.com/) to enable testing across not just the current machine, but through other devices, including mobile. [Configure HTTPS](https://tailscale.com/kb/1153/enabling-https) for your tailnet.
+
+1. Build and start the staging stack:
+
+```bash
+docker compose -f .staging/docker-compose.staging.yml \
+  --project-directory .staging \
+  up --build -d
+```
+
+2. Expose the app to your tailnet:
+
+```bash
+tailscale serve http://0.0.0.0:8989
+```
+
+3. Access from another device via the designated:
+
+```text
+https://<hostname>.<your tailnet domain>
+```
+
+4. Stop staging when done:
+
+```bash
+docker compose -f .staging/docker-compose.staging.yml \
+  --project-directory .staging \
+  down
+
+# ctrl+c to exit tailscale serve
+```
+
+Notes:
+
+- Always use `/player/` (with trailing slash) for proper service worker scope.
+
 ### Formatting
 
 Run `bun fmt` to format TypeScript, Svelte, and Go code.
