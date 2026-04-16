@@ -27,8 +27,7 @@
   const baseNavItems = [
     { id: "library", label: "Library" },
     { id: "favorites", label: "Favorites" },
-    { id: "playlists", label: "Playlists" },
-    { id: "settings", label: "Settings" }
+    { id: "playlists", label: "Playlists" }
   ];
 
   let navItems = $derived(
