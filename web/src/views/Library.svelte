@@ -106,7 +106,10 @@
 
       return list.slice().sort((a, b) => {
         if (albumSortField === "default")
-          return (a.track_number || 0) - (b.track_number || 0);
+          return (
+            (a.disc_number ?? 0) - (b.disc_number ?? 0) ||
+            (a.track_number || 0) - (b.track_number || 0)
+          );
 
         let cmp = 0;
         if (albumSortField === "title")
