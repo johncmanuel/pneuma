@@ -174,7 +174,7 @@ func (h *UserHandler) ChangePassword(c echo.Context) error {
 	}
 
 	if claims.UserID != body.UserID && !claims.IsAdmin {
-		return echo.NewHTTPError(http.StatusForbidden, "cannot change another user's password")
+		return c.NoContent(http.StatusForbidden)
 	}
 
 	if err := h.users.ChangePassword(c.Request().Context(), body.UserID, body.NewPassword); err != nil {
