@@ -4,6 +4,10 @@
   import { artworkUrl, streamUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import {
+    markMissingTrackArtID,
+    missingTrackArtIDs
+  } from "../lib/stores/missing-art";
+  import {
     formatDuration,
     setupMediaSessionActions,
     setMediaSessionPlaybackState,
@@ -151,6 +155,9 @@
 
   let track = $derived($playerState.track);
   let hasTrack = $derived(!!$playerState.trackId);
+  let trackArtSrc = $derived(
+    track && !$missingTrackArtIDs[track.id] ? artworkUrl(track.id) : ""
+  );
 
   // define a key from the track metadata to determine when to update Media Session metadata.
   let mediaMetadataKey = $derived(
@@ -167,9 +174,20 @@
     ) {
       lastMediaMetadataKey = mediaMetadataKey;
       setMediaSessionTrack(track);
-      updateMediaSessionMetadata(track, artworkUrl);
+      updateMediaSessionMetadata(track, () => trackArtSrc);
     }
   });
+
+  function hideArtworkAndRememberMissing(e: Event, trackID?: string) {
+    (e.currentTarget as HTMLImageElement).style.display = "none";
+    if (trackID) {
+      markMissingTrackArtID(trackID);
+    }
+  }
+
+  function resetArtworkVisibility(e: Event) {
+    (e.currentTarget as HTMLImageElement).style.display = "";
+  }
 
   $effect(() => {
     setMediaSessionPlaybackState(hasTrack ? $playerState.paused : null);
@@ -764,7 +782,7 @@
     onpause={onAudioPause}
     onloadedmetadata={changeAudioDuration}
     ondurationchange={changeAudioDuration}
-    preload="metadata"
+    preload="auto"
   ></audio>
 
   {#if mobileView}
@@ -782,16 +800,14 @@
         >
           <div class="mini-art">
             {#if track}
-              <img
-                src={artworkUrl(track.id)}
-                alt={track.title}
-                onerror={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = "none";
-                }}
-                onload={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = "";
-                }}
-              />
+              {#if trackArtSrc}
+                <img
+                  src={trackArtSrc}
+                  alt={track.title}
+                  onerror={(e) => hideArtworkAndRememberMissing(e, track.id)}
+                  onload={resetArtworkVisibility}
+                />
+              {/if}
               <div class="art-placeholder mini-art-placeholder">
                 <Music size={16} />
               </div>
@@ -903,17 +919,14 @@
           <div class="sheet-art-wrap">
             <div class="sheet-art">
               {#if track}
-                <img
-                  src={artworkUrl(track.id)}
-                  alt={track.title}
-                  onerror={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display =
-                      "none";
-                  }}
-                  onload={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = "";
-                  }}
-                />
+                {#if trackArtSrc}
+                  <img
+                    src={trackArtSrc}
+                    alt={track.title}
+                    onerror={(e) => hideArtworkAndRememberMissing(e, track.id)}
+                    onload={resetArtworkVisibility}
+                  />
+                {/if}
                 <div class="art-placeholder"><Music size={34} /></div>
               {:else}
                 <div class="art-placeholder"><Music size={34} /></div>
@@ -1037,16 +1050,14 @@
     <div class="now-playing">
       <div class="art">
         {#if track}
-          <img
-            src={artworkUrl(track.id)}
-            alt={track.title}
-            onerror={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-            onload={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "";
-            }}
-          />
+          {#if trackArtSrc}
+            <img
+              src={trackArtSrc}
+              alt={track.title}
+              onerror={(e) => hideArtworkAndRememberMissing(e, track.id)}
+              onload={resetArtworkVisibility}
+            />
+          {/if}
           <div class="art-placeholder" style="position:absolute">
             <Music size={16} />
           </div>

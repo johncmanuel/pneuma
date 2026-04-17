@@ -2,6 +2,10 @@
   import { SearchBar } from "@pneuma/ui";
   import { searchTracks, searchAlbumGroups } from "../lib/stores/library";
   import { artworkUrl, apiFetch } from "../lib/api";
+  import {
+    markMissingTrackArtID,
+    missingTrackArtIDs
+  } from "../lib/stores/missing-art";
   import { pushNav } from "../lib/stores/ui";
   import { playerState } from "../lib/stores/playback";
   import { setPlayingPlaylistContext } from "../lib/stores/playlists";
@@ -84,6 +88,17 @@
     onItemSelected?.();
   }
 
+  function artworkUrlWithMissingSuppression(trackID: string) {
+    if (!trackID || $missingTrackArtIDs[trackID]) return "";
+    return artworkUrl(trackID);
+  }
+
+  function handleAlbumArtError(album: AlbumGroup) {
+    if (album.first_track_id) {
+      markMissingTrackArtID(album.first_track_id);
+    }
+  }
+
   export function focus() {
     searchBar?.focus();
   }
@@ -94,5 +109,6 @@
   {searchFn}
   onPlayTrack={playTrack}
   onOpenAlbum={openAlbum}
-  {artworkUrl}
+  artworkUrl={artworkUrlWithMissingSuppression}
+  onAlbumArtError={handleAlbumArtError}
 />

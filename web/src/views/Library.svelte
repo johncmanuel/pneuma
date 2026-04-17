@@ -30,6 +30,10 @@
     type Track,
     type AlbumGroup
   } from "@pneuma/shared";
+  import {
+    markMissingTrackArtID,
+    missingTrackArtIDs
+  } from "../lib/stores/missing-art";
   import TrackRow from "../components/TrackRow.svelte";
   import { SortButton } from "@pneuma/ui";
   import { ChevronRight, Music, Search, X } from "@lucide/svelte";
@@ -269,6 +273,13 @@
     if (img) img.style.display = "none";
   }
 
+  function handleTrackArtError(e: Event, trackID?: string) {
+    hideImgOnError(e);
+    if (trackID) {
+      markMissingTrackArtID(trackID);
+    }
+  }
+
   let isScrolling = $state(false);
   let scrollTimer: ReturnType<typeof setTimeout>;
 
@@ -287,11 +298,12 @@
       <div class="album-detail-view">
         <div class="album-detail-header">
           <div class="album-art-hero">
-            {#if currentAlbumGroup.first_track_id}
+            {#if currentAlbumGroup.first_track_id && !$missingTrackArtIDs[currentAlbumGroup.first_track_id]}
               <img
                 src={artworkUrl(currentAlbumGroup.first_track_id)}
                 alt={currentAlbumGroup.name}
-                onerror={hideImgOnError}
+                onerror={(e) =>
+                  handleTrackArtError(e, currentAlbumGroup?.first_track_id)}
                 loading="lazy"
                 decoding="async"
               />
@@ -419,12 +431,15 @@
                 oncontextmenu={(e) => onAlbumContext(e, album)}
               >
                 <div class="album-art">
-                  <img
-                    src={artworkUrl(album.first_track_id)}
-                    alt={album.name}
-                    onerror={hideImgOnError}
-                    loading="lazy"
-                  />
+                  {#if !$missingTrackArtIDs[album.first_track_id]}
+                    <img
+                      src={artworkUrl(album.first_track_id)}
+                      alt={album.name}
+                      onerror={(e) =>
+                        handleTrackArtError(e, album.first_track_id)}
+                      loading="lazy"
+                    />
+                  {/if}
                   <div class="album-art-placeholder">
                     <Music size={24} />
                   </div>

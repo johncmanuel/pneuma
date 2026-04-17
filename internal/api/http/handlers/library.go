@@ -27,6 +27,8 @@ import (
 	"pneuma/internal/store/sqlite/serverdb"
 )
 
+const streamCacheControlHeader = "private, max-age=0, must-revalidate"
+
 // scanTrigger is satisfied by *scanner.Scheduler.
 type scanTrigger interface {
 	ScanAll()
@@ -178,9 +180,12 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
 
+			profile := string(media.NormalizeStreamQuality(quality))
+
 			c.Response().Header().Set("Content-Type", media.MimeFromExt(".ogg"))
-			c.Response().Header().Set("Cache-Control", "private, no-store")
-			c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.NormalizeStreamQuality(quality)))
+			c.Response().Header().Set("Cache-Control", streamCacheControlHeader)
+			c.Response().Header().Set("ETag", streamETag(track.ID, profile, cachedInfo))
+			c.Response().Header().Set("X-Pneuma-Stream-Profile", profile)
 			normalizeRangeHeader(c.Request(), cachedInfo.Size())
 			http.ServeContent(c.Response(), c.Request(), cachedInfo.Name(), cachedInfo.ModTime(), cachedFile)
 			return nil
@@ -198,12 +203,21 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 	ext := strings.ToLower(filepath.Ext(track.Path))
 
 	c.Response().Header().Set("Content-Type", media.MimeFromExt(ext))
-	c.Response().Header().Set("Cache-Control", "private, no-store")
+	c.Response().Header().Set("Cache-Control", streamCacheControlHeader)
+	c.Response().Header().Set("ETag", streamETag(track.ID, string(media.StreamQualityOriginal), info))
 	c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.StreamQualityOriginal))
 	normalizeRangeHeader(c.Request(), info.Size())
 	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
 
 	return nil
+}
+
+// streamETag returns a strong validator for stream responses.
+// It is scoped to track ID, effective profile, and backing file metadata.
+func streamETag(trackID, profile string, info os.FileInfo) string {
+	basis := fmt.Sprintf("%s|%s|%d|%d", trackID, profile, info.Size(), info.ModTime().UnixNano())
+	sum := sha256.Sum256([]byte(basis))
+	return fmt.Sprintf("\"pneuma-stream-%s\"", hex.EncodeToString(sum[:12]))
 }
 
 // normalizeRangeHeader removes the Range header if the requested

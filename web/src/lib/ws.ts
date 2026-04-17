@@ -2,6 +2,11 @@ import { writable, get } from "svelte/store";
 import { loggedIn, wsBase, deviceId } from "./api";
 import { handlePlaybackChanged } from "./stores/playback";
 import {
+  clearMissingPlaylistArtID,
+  clearMissingTrackArtID,
+  resetMissingTrackArtIDs
+} from "./stores/missing-art";
+import {
   favoritesPlaylistId,
   loadPlaylists,
   selectedPlaylist,
@@ -90,6 +95,11 @@ function handleMessage(msg: { type: string; payload: any }) {
     case "track.added":
     case "track.updated":
     case "track.removed":
+      if (msg.payload?.id) {
+        clearMissingTrackArtID(String(msg.payload.id));
+      }
+      libraryVersion.update((n) => n + 1);
+      break;
     case "library.deduped":
       libraryVersion.update((n) => n + 1);
       break;
@@ -99,6 +109,7 @@ function handleMessage(msg: { type: string; payload: any }) {
       break;
     case "scan.completed":
       scanRunning.set(false);
+      resetMissingTrackArtIDs();
       if (msg.payload && typeof msg.payload === "object") {
         scanResult.set(
           msg.payload as { added: number; updated: number; removed: number }
@@ -109,6 +120,19 @@ function handleMessage(msg: { type: string; payload: any }) {
     case "playlist.created":
     case "playlist.updated":
     case "playlist.deleted":
+      if (msg.type === "playlist.deleted" && msg.payload?.id) {
+        clearMissingPlaylistArtID(String(msg.payload.id));
+      }
+
+      if (
+        msg.type === "playlist.updated" &&
+        msg.payload?.id &&
+        typeof msg.payload?.artwork_path === "string" &&
+        msg.payload.artwork_path.trim() !== ""
+      ) {
+        clearMissingPlaylistArtID(String(msg.payload.id));
+      }
+
       libraryVersion.update((n) => n + 1);
       loadPlaylists().then(() => {
         // if the favorites playlist was updated, refresh the view

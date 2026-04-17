@@ -5,6 +5,12 @@
     ensureFavoritesPlaylist,
     favoritesPlaylistId
   } from "../lib/stores/playlists";
+  import {
+    markMissingPlaylistArtID,
+    markMissingTrackArtID,
+    missingPlaylistArtIDs,
+    missingTrackArtIDs
+  } from "../lib/stores/missing-art";
   import { recentAlbums, recentPlaylists } from "../lib/stores/recent";
   import { pushNav } from "../lib/stores/ui";
 
@@ -23,9 +29,6 @@
     onNavigate,
     onInteraction
   }: Props = $props();
-
-  let missingTrackArtIDs = $state<Record<string, true>>({});
-  let missingPlaylistArtIDs = $state<Record<string, true>>({});
 
   const baseNavItems = [
     { id: "library", label: "Library" },
@@ -58,7 +61,7 @@
         sub: a.album_artist,
         artworkTrackId: a.first_track_id || undefined,
         artworkUrl:
-          a.first_track_id && !missingTrackArtIDs[a.first_track_id]
+          a.first_track_id && !$missingTrackArtIDs[a.first_track_id]
             ? artworkUrl(a.first_track_id)
             : undefined,
         playedAt: new Date(a.played_at).getTime()
@@ -69,7 +72,7 @@
         sub: "Playlist",
         artworkPlaylistId: p.playlist_id || undefined,
         artworkUrl:
-          p.playlist_id && !missingPlaylistArtIDs[p.playlist_id]
+          p.playlist_id && !$missingPlaylistArtIDs[p.playlist_id]
             ? playlistArtUrl(p.playlist_id)
             : undefined,
         playedAt: new Date(p.played_at).getTime()
@@ -81,15 +84,12 @@
     artworkTrackId?: string;
     artworkPlaylistId?: string;
   }) {
-    if (item.artworkTrackId && !missingTrackArtIDs[item.artworkTrackId]) {
-      missingTrackArtIDs[item.artworkTrackId] = true;
+    if (item.artworkTrackId) {
+      markMissingTrackArtID(item.artworkTrackId);
     }
 
-    if (
-      item.artworkPlaylistId &&
-      !missingPlaylistArtIDs[item.artworkPlaylistId]
-    ) {
-      missingPlaylistArtIDs[item.artworkPlaylistId] = true;
+    if (item.artworkPlaylistId) {
+      markMissingPlaylistArtID(item.artworkPlaylistId);
     }
   }
 
