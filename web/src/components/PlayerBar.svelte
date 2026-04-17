@@ -782,7 +782,7 @@
     onpause={onAudioPause}
     onloadedmetadata={changeAudioDuration}
     ondurationchange={changeAudioDuration}
-    preload="auto"
+    preload="metadata"
   ></audio>
 
   {#if mobileView}
