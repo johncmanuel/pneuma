@@ -572,7 +572,7 @@
   <aside class="pwa-update-banner" role="status" aria-live="polite">
     <div class="pwa-update-text">
       <strong>Update available</strong>
-      <span>Reload now to get the latest mobile fixes.</span>
+      <span>Reload now to get the latest fixes.</span>
     </div>
     <div class="pwa-update-actions">
       <button class="pwa-update-btn primary" onclick={applyPendingPWAUpdate}
