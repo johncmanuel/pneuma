@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -23,6 +24,51 @@ type PlaylistHandler struct {
 	svc        *playlist.Service
 	hub        eventPublisher
 	artworkDir string
+}
+
+type playlistResponse struct {
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description,omitempty"`
+	ArtworkPath      string    `json:"artwork_path,omitempty"`
+	RemotePlaylistID string    `json:"remote_playlist_id,omitempty"`
+	CreatedAt        time.Time `json:"created_at,omitempty"`
+	UpdatedAt        time.Time `json:"updated_at,omitempty"`
+	ItemCount        int       `json:"item_count,omitempty"`
+	DurationMS       int64     `json:"duration_ms,omitempty"`
+	TrackCount       int       `json:"track_count,omitempty"`
+	TotalDurMS       int64     `json:"total_dur_ms,omitempty"`
+}
+
+func toPlaylistResponse(pl *models.Playlist) *playlistResponse {
+	if pl == nil {
+		return nil
+	}
+
+	return &playlistResponse{
+		ID:               pl.ID,
+		Name:             pl.Name,
+		Description:      pl.Description,
+		ArtworkPath:      pl.ArtworkPath,
+		RemotePlaylistID: pl.RemotePlaylistID,
+		CreatedAt:        pl.CreatedAt,
+		UpdatedAt:        pl.UpdatedAt,
+		ItemCount:        pl.ItemCount,
+		DurationMS:       pl.DurationMS,
+		TrackCount:       pl.TrackCount,
+		TotalDurMS:       pl.TotalDurMS,
+	}
+}
+
+func toPlaylistResponses(playlists []*models.Playlist) []*playlistResponse {
+	out := make([]*playlistResponse, 0, len(playlists))
+	for _, playlist := range playlists {
+		if playlist == nil {
+			continue
+		}
+		out = append(out, toPlaylistResponse(playlist))
+	}
+	return out
 }
 
 // NewPlaylistHandler creates a PlaylistHandler.
@@ -63,7 +109,7 @@ func (h *PlaylistHandler) ListPlaylists(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	return c.JSON(http.StatusOK, playlists)
+	return c.JSON(http.StatusOK, toPlaylistResponses(playlists))
 }
 
 // GetPlaylist gets a playlist by ID
@@ -75,7 +121,7 @@ func (h *PlaylistHandler) GetPlaylist(c echo.Context) error {
 		return err
 	}
 
-	return c.JSON(http.StatusOK, pl)
+	return c.JSON(http.StatusOK, toPlaylistResponse(pl))
 }
 
 // CreatePlaylist creates a new playlist.
@@ -105,7 +151,7 @@ func (h *PlaylistHandler) CreatePlaylist(c echo.Context) error {
 	}
 
 	h.hub.PublishToUser(claims.UserID, string(models.EventPlaylistCreated), pl)
-	return c.JSON(http.StatusCreated, pl)
+	return c.JSON(http.StatusCreated, toPlaylistResponse(pl))
 }
 
 // UpdatePlaylist updates a playlist by ID.
@@ -324,5 +370,5 @@ func (h *PlaylistHandler) GenerateRandom(c echo.Context) error {
 	}
 
 	h.hub.PublishToUser(claims.UserID, string(models.EventPlaylistCreated), pl)
-	return c.JSON(http.StatusCreated, pl)
+	return c.JSON(http.StatusCreated, toPlaylistResponse(pl))
 }

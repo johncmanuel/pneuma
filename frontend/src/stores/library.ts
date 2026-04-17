@@ -10,7 +10,6 @@ export interface RemoteAlbumGroup {
   artist: string;
   track_count: number;
   first_track_id: string;
-  artwork_id: string;
 }
 
 // Unique key for albums without the appropriate metadata

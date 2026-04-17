@@ -35,8 +35,7 @@ func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, off
 			COALESCE(NULLIF(TRIM(album_name),''),'') AS album_name,
 			COALESCE(album_artist,'') AS album_artist,
 			COUNT(*) AS track_count,
-			MIN(id) AS first_track_id,
-			'' AS artwork_id
+			MIN(id) AS first_track_id
 		FROM tracks
 		WHERE deleted_at IS NULL AND (album_name LIKE ? OR album_artist LIKE ?)
 		GROUP BY grp_key
@@ -50,8 +49,7 @@ func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, off
 			COALESCE(NULLIF(TRIM(album_name),''),'') AS album_name,
 			COALESCE(album_artist,'') AS album_artist,
 			COUNT(*) AS track_count,
-			MIN(id) AS first_track_id,
-			'' AS artwork_id
+			MIN(id) AS first_track_id
 		FROM tracks
 		WHERE deleted_at IS NULL
 		GROUP BY grp_key
@@ -70,7 +68,7 @@ func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, off
 	var out []*models.TrackAlbumGroup
 	for rows.Next() {
 		var g models.TrackAlbumGroup
-		if err := rows.Scan(&g.Key, &g.Name, &g.Artist, &g.TrackCount, &g.FirstTrackID, &g.ArtworkID); err != nil {
+		if err := rows.Scan(&g.Key, &g.Name, &g.Artist, &g.TrackCount, &g.FirstTrackID); err != nil {
 			return nil, err
 		}
 		out = append(out, &g)

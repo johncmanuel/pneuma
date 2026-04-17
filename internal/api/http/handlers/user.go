@@ -147,9 +147,7 @@ func (h *UserHandler) Me(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "user not found")
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"user": u,
-	})
+	return c.NoContent(http.StatusOK)
 }
 
 // Logout clears the HttpOnly session cookie.

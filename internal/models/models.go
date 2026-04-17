@@ -23,7 +23,6 @@ type TrackAlbumGroup struct {
 	Artist       string `json:"artist"` // album_artist
 	TrackCount   int    `json:"track_count"`
 	FirstTrackID string `json:"first_track_id"` // any track in this album (for artwork)
-	ArtworkID    string `json:"artwork_id"`
 }
 
 type Track struct {

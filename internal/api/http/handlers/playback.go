@@ -7,6 +7,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"pneuma/internal/api/http/middleware"
+	"pneuma/internal/models"
 	"pneuma/internal/playback"
 )
 
@@ -22,6 +23,28 @@ func claimsUserID(c echo.Context) string {
 // PlaybackHandler handles /api/playback/* routes.
 type PlaybackHandler struct {
 	engine *playback.Engine
+}
+
+type playbackTrackItem struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	AlbumArtist string `json:"album_artist"`
+	AlbumName   string `json:"album_name"`
+	DurationMS  int64  `json:"duration_ms"`
+}
+
+func compactPlaybackTrack(track *models.Track) *playbackTrackItem {
+	if track == nil {
+		return nil
+	}
+
+	return &playbackTrackItem{
+		ID:          track.ID,
+		Title:       track.Title,
+		AlbumArtist: track.AlbumArtist,
+		AlbumName:   track.AlbumName,
+		DurationMS:  track.DurationMS,
+	}
 }
 
 func NewPlaybackHandler(engine *playback.Engine) *PlaybackHandler {
@@ -48,7 +71,16 @@ func (h *PlaybackHandler) GetState(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
 	}
 
-	return c.JSON(http.StatusOK, s)
+	return c.JSON(http.StatusOK, map[string]any{
+		"playing":     s.Playing,
+		"track_id":    s.TrackID,
+		"track":       compactPlaybackTrack(s.Track),
+		"position_ms": s.PositionMS,
+		"queue":       s.Queue,
+		"queue_index": s.QueueIndex,
+		"repeat":      s.Repeat,
+		"shuffle":     s.Shuffle,
+	})
 }
 
 // Play POST /api/playback/play  body: {track_id, position_ms}

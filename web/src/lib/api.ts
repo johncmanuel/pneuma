@@ -1,5 +1,9 @@
 import { writable, derived } from "svelte/store";
-import { getOrCreateDeviceID, type CurrentUser } from "@pneuma/shared";
+import {
+  decodeJWT,
+  getOrCreateDeviceID,
+  type CurrentUser
+} from "@pneuma/shared";
 import { type StreamQuality } from "./stream-quality";
 
 export const currentUser = writable<CurrentUser | null>(null);
@@ -48,20 +52,27 @@ export async function apiFetch(
   return res;
 }
 
-async function hydrateCurrentUser(): Promise<boolean> {
-  const res = await apiFetch("/api/auth/me");
-  if (!res.ok) {
+function setCurrentUserFromToken(token?: string): boolean {
+  if (!token) {
     currentUser.set(null);
     return false;
   }
 
-  const data = (await res.json()) as { user?: CurrentUser };
-  if (!data.user) {
+  const claims = decodeJWT(token);
+  if (!claims?.user_id) {
     currentUser.set(null);
     return false;
   }
 
-  currentUser.set(data.user);
+  currentUser.set({
+    id: claims.user_id,
+    username: claims.username,
+    is_admin: claims.is_admin,
+    can_upload: claims.can_upload,
+    can_edit: claims.can_edit,
+    can_delete: claims.can_delete
+  });
+
   return true;
 }
 
@@ -81,11 +92,11 @@ export async function login(
     return data.message ?? "Login failed";
   }
 
-  const data = (await res.json()) as { user?: CurrentUser };
+  const data = (await res.json()) as { user?: CurrentUser; token?: string };
   if (data.user) {
     currentUser.set(data.user);
   } else {
-    await hydrateCurrentUser();
+    setCurrentUserFromToken(data.token);
   }
 
   return null;
@@ -107,11 +118,11 @@ export async function register(
     return data.message ?? "Registration failed";
   }
 
-  const data = (await res.json()) as { user?: CurrentUser };
+  const data = (await res.json()) as { user?: CurrentUser; token?: string };
   if (data.user) {
     currentUser.set(data.user);
   } else {
-    await hydrateCurrentUser();
+    setCurrentUserFromToken(data.token);
   }
 
   return null;
@@ -141,7 +152,8 @@ export async function tryAutoAuth() {
       return;
     }
 
-    await hydrateCurrentUser();
+    const data = (await refreshed.json()) as { token?: string };
+    setCurrentUserFromToken(data.token);
   } catch {
     console.warn("Auto-auth refresh failed");
     currentUser.set(null);

@@ -52,6 +52,35 @@ type LibraryHandler struct {
 	transcoder      *media.StreamTranscoder
 }
 
+type albumTrackListItem struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	AlbumArtist string `json:"album_artist"`
+	AlbumName   string `json:"album_name"`
+	TrackNumber int    `json:"track_number"`
+	DiscNumber  int    `json:"disc_number"`
+	DurationMS  int64  `json:"duration_ms"`
+}
+
+func compactTrackListItems(tracks []*models.Track) []albumTrackListItem {
+	items := make([]albumTrackListItem, 0, len(tracks))
+	for _, track := range tracks {
+		if track == nil {
+			continue
+		}
+		items = append(items, albumTrackListItem{
+			ID:          track.ID,
+			Title:       track.Title,
+			AlbumArtist: track.AlbumArtist,
+			AlbumName:   track.AlbumName,
+			TrackNumber: track.TrackNumber,
+			DiscNumber:  track.DiscNumber,
+			DurationMS:  track.DurationMS,
+		})
+	}
+	return items
+}
+
 // NewLibraryHandler creates a LibraryHandler.
 func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, queue *ingestion.Queue, uploadsDir, trackArtworkDir string, transcoder *media.StreamTranscoder) *LibraryHandler {
 	tmpDir := filepath.Join(uploadsDir, "tmp")
@@ -86,7 +115,7 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(http.StatusOK, tracks)
+		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
 	}
 
 	// Fetch tracks by album: GET /api/library/tracks?album_name=X&album_artist=Y
@@ -96,7 +125,7 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(http.StatusOK, tracks)
+		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
 	}
 
 	offsetStr := c.QueryParam("offset")
