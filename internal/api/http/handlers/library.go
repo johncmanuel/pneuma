@@ -248,15 +248,15 @@ func parseRangeStart(value string) (int64, bool) {
 func (h *LibraryHandler) ServeTrackArt(c echo.Context) error {
 	track, err := h.lib.TrackByID(c.Request().Context(), c.Param("id"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return c.NoContent(http.StatusNotFound)
 	}
 	if track == nil {
-		return echo.NewHTTPError(http.StatusNotFound, "not found")
+		return c.NoContent(http.StatusNotFound)
 	}
 
 	info, err := os.Stat(track.Path)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return c.NoContent(http.StatusNotFound)
 	}
 
 	hash := trackArtCacheKey(track.Path, info)
@@ -267,23 +267,23 @@ func (h *LibraryHandler) ServeTrackArt(c echo.Context) error {
 
 	f, err := os.Open(track.Path)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return c.NoContent(http.StatusNotFound)
 	}
 	defer f.Close()
 
 	m, err := tag.ReadFrom(f)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "no tags")
+		return c.NoContent(http.StatusNotFound)
 	}
 
 	pic := m.Picture()
 	if pic == nil || len(pic.Data) == 0 {
-		return echo.NewHTTPError(http.StatusNotFound, "no embedded art")
+		return c.NoContent(http.StatusNotFound)
 	}
 
 	thumbData, err := artwork.ResizeToThumbnail(pic.Data, config.PlaylistMaxArtDim)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to process embedded art")
+		return c.NoContent(http.StatusNotFound)
 	}
 
 	if err := os.MkdirAll(h.trackArtworkDir, 0o755); err == nil {

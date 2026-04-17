@@ -36,15 +36,16 @@ type EventBus interface {
 
 // State represents the current playback state of a user.
 type State struct {
-	UserID     string     `json:"-"`
-	DeviceID   string     `json:"-"`
-	Playing    bool       `json:"playing"`
-	TrackID    string     `json:"track_id"`
-	PositionMS int64      `json:"position_ms"`
-	Queue      []string   `json:"queue"`
-	QueueIndex int        `json:"queue_index"`
-	Repeat     RepeatMode `json:"repeat"`
-	Shuffle    bool       `json:"shuffle"`
+	UserID     string        `json:"-"`
+	DeviceID   string        `json:"-"`
+	Playing    bool          `json:"playing"`
+	TrackID    string        `json:"track_id"`
+	Track      *models.Track `json:"track,omitempty"`
+	PositionMS int64         `json:"position_ms"`
+	Queue      []string      `json:"queue"`
+	QueueIndex int           `json:"queue_index"`
+	Repeat     RepeatMode    `json:"repeat"`
+	Shuffle    bool          `json:"shuffle"`
 }
 
 // ErrNoActiveSession is returned when there is no active playback session for a user/device.
@@ -76,6 +77,9 @@ func (e *Engine) GetState(userID, deviceID string) (State, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if s, ok := e.sessions[deviceID]; ok && s.UserID == userID {
+		if s.Track == nil {
+			s.Track = e.trackByID(context.Background(), s.TrackID)
+		}
 		return *s, nil
 	}
 	return State{}, ErrNoActiveSession
@@ -300,6 +304,7 @@ func (e *Engine) LoadSession(ctx context.Context, userID, deviceID string) (Stat
 		UserID:     sess.UserID,
 		DeviceID:   deviceID,
 		TrackID:    sess.TrackID,
+		Track:      e.trackByID(ctx, sess.TrackID),
 		PositionMS: sess.PositionMS,
 		Queue:      sess.Queue,
 		QueueIndex: sess.QueueIndex,
@@ -322,6 +327,7 @@ func (e *Engine) loadFromDB(deviceID string) (State, error) {
 		UserID:     sess.UserID,
 		DeviceID:   deviceID,
 		TrackID:    sess.TrackID,
+		Track:      e.trackByID(context.Background(), sess.TrackID),
 		PositionMS: sess.PositionMS,
 		Queue:      sess.Queue,
 		QueueIndex: sess.QueueIndex,
@@ -355,8 +361,12 @@ func (e *Engine) getOrCreate(userID, deviceID string) *State {
 
 // persist saves the session to the database and publishes state to WS clients.
 func (e *Engine) persist(ctx context.Context, userID, deviceID string, s *State) error {
+	trackPayload := e.trackByID(ctx, s.TrackID)
+	s.Track = trackPayload
+
 	e.bus.PublishToDevice(userID, deviceID, "playback.changed", map[string]any{
 		"track_id":    s.TrackID,
+		"track":       trackPayload,
 		"playing":     s.Playing,
 		"position_ms": s.PositionMS,
 		"queue":       s.Queue,
@@ -407,4 +417,18 @@ func (e *Engine) persist(ctx context.Context, userID, deviceID string, s *State)
 	}
 
 	return nil
+}
+
+// trackByID is a helper to get a track by ID, returning nil if not found or on error.
+func (e *Engine) trackByID(ctx context.Context, trackID string) *models.Track {
+	if trackID == "" || e.lib == nil {
+		return nil
+	}
+
+	track, err := e.lib.TrackByID(ctx, trackID)
+	if err != nil || track == nil {
+		return nil
+	}
+
+	return track
 }

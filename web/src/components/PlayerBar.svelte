@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { playerState } from "../lib/stores/playback";
-  import { apiFetch, artworkUrl, streamUrl } from "../lib/api";
+  import { artworkUrl, streamUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import {
     formatDuration,
@@ -314,52 +314,27 @@
           seekSyncTimer = null;
         }
 
-        (async () => {
-          // Fetch track metadata if the store's track object is stale.
-          // Happens when playback.changed arrives from the server (skipNext,
-          // auto-advance, other client) which only carries track_id, not the
-          // full Track object.
-          if ($playerState.track?.id !== $playerState.trackId) {
-            try {
-              const res = await apiFetch(
-                `/api/library/tracks/${$playerState.trackId}`
-              );
-              if (res.ok) {
-                const t = await res.json();
-                playerState.update((s) =>
-                  s.trackId === $playerState.trackId ? { ...s, track: t } : s
-                );
-              }
-            } catch {
-              console.error(
-                "Failed to fetch track metadata for",
-                $playerState.trackId
-              );
+        const url = streamUrl(
+          $playerState.trackId,
+          resolveEffectiveStreamQuality()
+        );
+
+        if (url) {
+          currentAudioSrc = url;
+          audio.src = url;
+          audio.currentTime = $playerState.positionMs / 1000;
+          displayPosition = $playerState.positionMs;
+          if (track) setMediaSessionTrack(track);
+        }
+
+        if (!$playerState.paused) {
+          audio.play().catch((e) => {
+            if (e.name !== "AbortError") {
+              console.warn("Audio play failed", e);
             }
-          }
-
-          const url = streamUrl(
-            $playerState.trackId,
-            resolveEffectiveStreamQuality()
-          );
-
-          if (url) {
-            currentAudioSrc = url;
-            audio.src = url;
-            audio.currentTime = $playerState.positionMs / 1000;
-            displayPosition = $playerState.positionMs;
-            if (track) setMediaSessionTrack(track);
-          }
-
-          if (!$playerState.paused) {
-            audio.play().catch((e) => {
-              if (e.name !== "AbortError") {
-                console.warn("Audio play failed", e);
-              }
-            });
-            startPositionLoop();
-          }
-        })();
+          });
+          startPositionLoop();
+        }
       } else if (pausedChanged) {
         lastPaused = $playerState.paused;
 

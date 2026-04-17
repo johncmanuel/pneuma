@@ -1,5 +1,5 @@
 import { writable } from "svelte/store";
-import { type PlayerState, isLocalID } from "@pneuma/shared";
+import { type PlayerState, type Track, isLocalID } from "@pneuma/shared";
 import { apiFetch } from "../api";
 
 const initial: PlayerState = {
@@ -16,6 +16,18 @@ const initial: PlayerState = {
 
 export const playerState = writable<PlayerState>(initial);
 
+function isTrackPayload(value: unknown): value is Track {
+  if (!value || typeof value !== "object") return false;
+
+  const candidate = value as Partial<Track>;
+  return (
+    typeof candidate.id === "string" &&
+    typeof candidate.title === "string" &&
+    typeof candidate.album_name === "string" &&
+    typeof candidate.album_artist === "string"
+  );
+}
+
 /**
  * Fetch the current playback state from the server and hydrate the store.
  * Called on auth success so the player restores where the user left off.
@@ -30,9 +42,7 @@ export async function loadPlaybackState() {
     const s = await res.json();
     playerState.set({
       trackId: s.track_id ?? "",
-
-      // fetched lazily by PlayerBar reactive block
-      track: null,
+      track: isTrackPayload(s.track) ? s.track : null,
 
       queue: s.queue ?? [],
       baseQueue: s.queue ?? [],
@@ -67,11 +77,13 @@ export function handlePlaybackChanged(payload: any): boolean {
 
   const incomingTrackId: string | undefined = payload.track_id;
   const incomingPlaying: boolean | undefined = payload.playing;
+  const incomingTrack = isTrackPayload(payload.track) ? payload.track : null;
 
   playerState.update((s) => {
     const trackChanged =
       incomingTrackId != null && incomingTrackId !== s.trackId;
     const isPaused = incomingPlaying != null ? !incomingPlaying : s.paused;
+    const nextTrack = incomingTrack ?? (trackChanged ? null : s.track);
 
     // Only accept the server's position when:
     // 1. the track actually changed (new song), or
@@ -85,6 +97,7 @@ export function handlePlaybackChanged(payload: any): boolean {
     return {
       ...s,
       trackId: incomingTrackId ?? s.trackId,
+      track: nextTrack,
       paused: isPaused,
       positionMs: acceptServerPosition
         ? (payload.position_ms ?? s.positionMs)

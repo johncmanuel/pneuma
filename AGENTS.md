@@ -81,6 +81,8 @@ Utilize the following commands to start, verify and log outputs of, and stop the
 
 The default address is http://127.0.0.1:8989. The web player can be found at http://127.0.0.1:8989/player. The dashboard can be found at http://127.0.0.1:8989/dashboard.
 
+If any problems occur with devtools (i.e request timed out, etc.), try removing the process and restarting it: `pkill -f chrome-devtools-mcp`
+
 When testing changes, be sure to perform the registration process (use any username/password) and test the features of the project. Be as rigorous as possible.
 
 Once the testing and verification are done, run the Stop command and report the results.

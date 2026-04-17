@@ -276,11 +276,11 @@ func (h *PlaylistHandler) ServePlaylistArt(c echo.Context) error {
 
 	pl, err := h.svc.GetByID(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "playlist not found")
+		return c.NoContent(http.StatusNotFound)
 	}
 
 	if pl.ArtworkPath == "" {
-		return echo.NewHTTPError(http.StatusNotFound, "no artwork")
+		return c.NoContent(http.StatusNotFound)
 	}
 
 	// Path traversal protection
@@ -288,7 +288,7 @@ func (h *PlaylistHandler) ServePlaylistArt(c echo.Context) error {
 	artPath := filepath.Join(h.artworkDir, cleanName)
 
 	if _, err := os.Stat(artPath); os.IsNotExist(err) {
-		return echo.NewHTTPError(http.StatusNotFound, "artwork file not found")
+		return c.NoContent(http.StatusNotFound)
 	}
 
 	return c.File(artPath)
