@@ -211,7 +211,9 @@
 
     if ($selectedPlaylist) {
       recordRecentPlaylist({
-        playlist_id: $selectedPlaylist.id
+        playlist_id: $selectedPlaylist.id,
+        name: $selectedPlaylist.name,
+        artwork_path: $selectedPlaylist.artwork_path
       });
 
       setPlayingPlaylistContext($selectedPlaylist.id);

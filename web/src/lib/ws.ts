@@ -12,6 +12,7 @@ import {
   selectedPlaylist,
   selectPlaylist
 } from "./stores/playlists";
+import { invalidateCachedTrack } from "./stores/library";
 
 const libraryVersion = writable(0);
 const scanRunning = writable(false);
@@ -95,8 +96,11 @@ function handleMessage(msg: { type: string; payload: any }) {
     case "track.added":
     case "track.updated":
     case "track.removed":
+      // if the track was updated or removed, clear any missing artwork ID for it
       if (msg.payload?.id) {
-        clearMissingTrackArtID(String(msg.payload.id));
+        const trackID = String(msg.payload.id);
+        clearMissingTrackArtID(trackID);
+        invalidateCachedTrack(trackID);
       }
       libraryVersion.update((n) => n + 1);
       break;

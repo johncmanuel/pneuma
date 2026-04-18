@@ -1,7 +1,11 @@
 import { writable } from "svelte/store";
 import { playerState } from "./player";
 import { type Track, addToast } from "@pneuma/shared";
-import { loadRemoteAlbumGroupsPage, tracks } from "./library";
+import {
+  invalidateCachedTrack,
+  loadRemoteAlbumGroupsPage,
+  tracks
+} from "./library";
 import {
   favoritesRemotePlaylistId,
   favoritesSyncEnabled,
@@ -70,6 +74,9 @@ export function connectWS() {
         case "track.added":
         case "track.updated":
         case "track.removed":
+          if (msg.payload?.id) {
+            invalidateCachedTrack(String(msg.payload.id));
+          }
           loadRemoteAlbumGroupsPage(0);
           break;
         case "library.deduped": {

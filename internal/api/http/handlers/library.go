@@ -53,14 +53,18 @@ type LibraryHandler struct {
 }
 
 type compactTrackListItem struct {
-	ID               string    `json:"id"`
-	Title            string    `json:"title"`
-	ArtistName       string    `json:"artist_name,omitempty"`
-	AlbumArtist      string    `json:"album_artist"`
-	AlbumName        string    `json:"album_name"`
-	TrackNumber      int       `json:"track_number"`
-	DiscNumber       int       `json:"disc_number"`
-	DurationMS       int64     `json:"duration_ms"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	ArtistName  string `json:"artist_name,omitempty"`
+	AlbumArtist string `json:"album_artist"`
+	AlbumName   string `json:"album_name"`
+	TrackNumber int    `json:"track_number"`
+	DiscNumber  int    `json:"disc_number"`
+	DurationMS  int64  `json:"duration_ms"`
+}
+
+type adminTrackListItem struct {
+	compactTrackListItem
 	UploadedByUserID string    `json:"uploaded_by_user_id,omitempty"`
 	CreatedAt        time.Time `json:"created_at,omitempty"`
 }
@@ -72,34 +76,70 @@ func compactTrackListItems(tracks []*models.Track) []compactTrackListItem {
 			continue
 		}
 		items = append(items, compactTrackListItem{
-			ID:               track.ID,
-			Title:            track.Title,
-			ArtistName:       track.AlbumArtist,
-			AlbumArtist:      track.AlbumArtist,
-			AlbumName:        track.AlbumName,
-			TrackNumber:      track.TrackNumber,
-			DiscNumber:       track.DiscNumber,
-			DurationMS:       track.DurationMS,
-			UploadedByUserID: track.UploadedByUserID,
-			CreatedAt:        track.CreatedAt,
+			ID:          track.ID,
+			Title:       track.Title,
+			ArtistName:  track.AlbumArtist,
+			AlbumArtist: track.AlbumArtist,
+			AlbumName:   track.AlbumName,
+			TrackNumber: track.TrackNumber,
+			DiscNumber:  track.DiscNumber,
+			DurationMS:  track.DurationMS,
 		})
 	}
 	return items
 }
 
+func adminTrackListItems(tracks []*models.Track) []adminTrackListItem {
+	items := make([]adminTrackListItem, 0, len(tracks))
+	for _, track := range tracks {
+		if track == nil {
+			continue
+		}
+
+		items = append(items, adminTrackListItem{
+			compactTrackListItem: compactTrackListItem{
+				ID:          track.ID,
+				Title:       track.Title,
+				ArtistName:  track.AlbumArtist,
+				AlbumArtist: track.AlbumArtist,
+				AlbumName:   track.AlbumName,
+				TrackNumber: track.TrackNumber,
+				DiscNumber:  track.DiscNumber,
+				DurationMS:  track.DurationMS,
+			},
+			UploadedByUserID: track.UploadedByUserID,
+			CreatedAt:        track.CreatedAt,
+		})
+	}
+
+	return items
+}
+
+// trackResponseView determines the desired level of detail for
+// track list responses based on the "view" query parameter.
 func trackResponseView(c echo.Context) string {
 	return strings.ToLower(strings.TrimSpace(c.QueryParam("view")))
 }
 
+// wantsCompactTrackResponse returns true if the "view" query parameter
+// indicates a "compact" or "lite" view.
 func wantsCompactTrackResponse(c echo.Context) bool {
 	switch trackResponseView(c) {
-	case "compact", "lite", "admin-list":
+	case "compact", "lite":
 		return true
 	default:
 		return false
 	}
 }
 
+// wantsAdminTrackResponse returns true if the "view" query parameter
+// indicates an "admin-list" view.
+func wantsAdminTrackResponse(c echo.Context) bool {
+	return trackResponseView(c) == "admin-list"
+}
+
+// wantsFullTrackResponse returns true if the "view" query parameter
+// indicates a "full" view, which includes all track details.
 func wantsFullTrackResponse(c echo.Context) bool {
 	return trackResponseView(c) == "full"
 }
@@ -141,6 +181,9 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		if wantsFullTrackResponse(c) {
 			return c.JSON(http.StatusOK, tracks)
 		}
+		if wantsAdminTrackResponse(c) {
+			return c.JSON(http.StatusOK, adminTrackListItems(tracks))
+		}
 		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
 	}
 
@@ -153,6 +196,9 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		}
 		if wantsFullTrackResponse(c) {
 			return c.JSON(http.StatusOK, tracks)
+		}
+		if wantsAdminTrackResponse(c) {
+			return c.JSON(http.StatusOK, adminTrackListItems(tracks))
 		}
 		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
 	}
@@ -181,7 +227,9 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		}
 
 		trackPayload := any(tracks)
-		if wantsCompactTrackResponse(c) {
+		if wantsAdminTrackResponse(c) {
+			trackPayload = adminTrackListItems(tracks)
+		} else if wantsCompactTrackResponse(c) {
 			trackPayload = compactTrackListItems(tracks)
 		}
 
@@ -196,6 +244,9 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 	tracks, err := h.lib.AllTracks(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if wantsAdminTrackResponse(c) {
+		return c.JSON(http.StatusOK, adminTrackListItems(tracks))
 	}
 	if wantsCompactTrackResponse(c) {
 		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
@@ -491,6 +542,9 @@ func (h *LibraryHandler) Search(c echo.Context) error {
 	tracks, err := h.lib.Search(c.Request().Context(), q)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if wantsAdminTrackResponse(c) {
+		return c.JSON(http.StatusOK, adminTrackListItems(tracks))
 	}
 	if wantsCompactTrackResponse(c) {
 		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
