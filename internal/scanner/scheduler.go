@@ -131,9 +131,9 @@ func (sc *Scheduler) ScanPath(path string) {
 	}
 
 	if isNew {
-		sc.bus.Publish("track.added", track)
+		sc.bus.Publish("track.added", compactTrackEventPayload(track))
 	} else {
-		sc.bus.Publish("track.updated", track)
+		sc.bus.Publish("track.updated", compactTrackEventPayload(track))
 	}
 }
 
@@ -225,10 +225,10 @@ func (sc *Scheduler) scan(ctx context.Context) {
 
 			if isNew {
 				added++
-				sc.bus.Publish("track.added", track)
+				sc.bus.Publish("track.added", compactTrackEventPayload(track))
 			} else {
 				updated++
-				sc.bus.Publish("track.updated", track)
+				sc.bus.Publish("track.updated", compactTrackEventPayload(track))
 			}
 			return nil
 		})

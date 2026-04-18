@@ -29,7 +29,6 @@ import {
   mergeRemoteAndLocalFavoriteItems,
   pickCanonicalFavoritesPlaylist,
   storageKeys,
-  toFavoritesWriteItem,
   toFavoritesWriteItemFromTrack,
   visiblePlaylistsForAddMenu as visiblePlaylistsForAddMenuShared,
   type LocalPlaylistItem,
@@ -91,6 +90,7 @@ interface RemotePlaylistSummary {
   name: string;
   description: string;
   item_count: number;
+  total_duration_ms?: number;
   updated_at: string;
 }
 
@@ -102,6 +102,15 @@ interface RemoteFavoriteItem {
   ref_album_artist: string;
   ref_duration_ms: number;
   added_at?: string;
+}
+
+interface RemotePlaylistItemWrite {
+  source: string;
+  track_id: string;
+  ref_title: string;
+  ref_album: string;
+  ref_album_artist: string;
+  ref_duration_ms: number;
 }
 
 type PlaylistTrackInput =
@@ -305,7 +314,7 @@ async function ensureRemoteFavoritesPlaylist(): Promise<string | null> {
       }));
       const deduped = dedupeFavoriteTrackItems(mergedItems);
 
-      await serverFetch(`/api/playlists/${canonical.id}/items`, {
+      await serverFetch(`/api/playlists/${canonical.id}/items?view=full`, {
         method: "PUT",
         body: JSON.stringify(deduped)
       });
@@ -354,7 +363,9 @@ async function ensureRemoteFavoritesPlaylist(): Promise<string | null> {
 async function fetchRemoteFavoritesItems(
   remotePlaylistID: string
 ): Promise<RemoteFavoriteItem[]> {
-  const res = await serverFetch(`/api/playlists/${remotePlaylistID}/items`);
+  const res = await serverFetch(
+    `/api/playlists/${remotePlaylistID}/items?view=full`
+  );
   if (!res.ok) return [];
 
   const data = await res.json();
@@ -362,6 +373,37 @@ async function fetchRemoteFavoritesItems(
     Array.isArray(data) ? data : (data.items ?? [])
   ) as RemoteFavoriteItem[];
   return items.filter((item) => Boolean(item.track_id));
+}
+
+async function appendRemotePlaylistItems(
+  remotePlaylistID: string,
+  items: RemotePlaylistItemWrite[]
+) {
+  if (items.length === 0) return true;
+
+  const res = await serverFetch(
+    `/api/playlists/${remotePlaylistID}/items/append`,
+    {
+      method: "POST",
+      body: JSON.stringify({ items })
+    }
+  );
+
+  return res.ok;
+}
+
+async function removeRemotePlaylistItemByPosition(
+  remotePlaylistID: string,
+  position: number
+) {
+  const res = await serverFetch(
+    `/api/playlists/${remotePlaylistID}/items/${position}`,
+    {
+      method: "DELETE"
+    }
+  );
+
+  return res.ok;
 }
 
 function remoteToLocalFavoriteItems(
@@ -539,7 +581,9 @@ export async function toggleFavoriteTrack(track: Track | null) {
       return;
     }
 
-    const read = await serverFetch(`/api/playlists/${remoteID}/items`);
+    const read = await serverFetch(
+      `/api/playlists/${remoteID}/items?view=full`
+    );
     if (!read.ok) {
       console.error(
         "Failed to update favorites: failed to read remote favorites playlist"
@@ -558,20 +602,18 @@ export async function toggleFavoriteTrack(track: Track | null) {
     );
     wasRemoved = alreadyFavorite;
 
-    const nextPayload = alreadyFavorite
-      ? existingItems
-          .filter((item) => item.track_id !== track.id)
-          .map(toFavoritesWriteItem)
-      : [
-          ...existingItems.map(toFavoritesWriteItem),
+    const position = existingItems.findIndex(
+      (item) => item.track_id === track.id
+    );
+    const ok = alreadyFavorite
+      ? position >= 0
+        ? await removeRemotePlaylistItemByPosition(remoteID, position)
+        : true
+      : await appendRemotePlaylistItems(remoteID, [
           toFavoritesWriteItemFromTrack(track)
-        ];
+        ]);
 
-    const write = await serverFetch(`/api/playlists/${remoteID}/items`, {
-      method: "PUT",
-      body: JSON.stringify(nextPayload)
-    });
-    if (!write.ok) {
+    if (!ok) {
       console.error(
         "Failed to update favorites: failed to write remote favorites playlist"
       );

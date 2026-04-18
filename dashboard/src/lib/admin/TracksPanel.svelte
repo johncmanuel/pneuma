@@ -165,7 +165,7 @@
   async function loadTracks() {
     loading = true;
     try {
-      const r = await apiFetch("/api/library/tracks");
+      const r = await apiFetch("/api/library/tracks?view=admin-list");
       if (r.ok) tracks = await r.json();
     } finally {
       loading = false;

@@ -153,7 +153,7 @@ func (h *UserHandler) Me(c echo.Context) error {
 // Logout clears the HttpOnly session cookie.
 func (h *UserHandler) Logout(c echo.Context) error {
 	h.clearSessionCookie(c)
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	return c.NoContent(http.StatusNoContent)
 }
 
 // ChangePassword changes a user's password. Only the authenticated user (changing their own) or an admin may call this.

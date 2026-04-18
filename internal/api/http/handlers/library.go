@@ -52,33 +52,56 @@ type LibraryHandler struct {
 	transcoder      *media.StreamTranscoder
 }
 
-type albumTrackListItem struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	AlbumArtist string `json:"album_artist"`
-	AlbumName   string `json:"album_name"`
-	TrackNumber int    `json:"track_number"`
-	DiscNumber  int    `json:"disc_number"`
-	DurationMS  int64  `json:"duration_ms"`
+type compactTrackListItem struct {
+	ID               string    `json:"id"`
+	Title            string    `json:"title"`
+	ArtistName       string    `json:"artist_name,omitempty"`
+	AlbumArtist      string    `json:"album_artist"`
+	AlbumName        string    `json:"album_name"`
+	TrackNumber      int       `json:"track_number"`
+	DiscNumber       int       `json:"disc_number"`
+	DurationMS       int64     `json:"duration_ms"`
+	UploadedByUserID string    `json:"uploaded_by_user_id,omitempty"`
+	CreatedAt        time.Time `json:"created_at,omitempty"`
 }
 
-func compactTrackListItems(tracks []*models.Track) []albumTrackListItem {
-	items := make([]albumTrackListItem, 0, len(tracks))
+func compactTrackListItems(tracks []*models.Track) []compactTrackListItem {
+	items := make([]compactTrackListItem, 0, len(tracks))
 	for _, track := range tracks {
 		if track == nil {
 			continue
 		}
-		items = append(items, albumTrackListItem{
-			ID:          track.ID,
-			Title:       track.Title,
-			AlbumArtist: track.AlbumArtist,
-			AlbumName:   track.AlbumName,
-			TrackNumber: track.TrackNumber,
-			DiscNumber:  track.DiscNumber,
-			DurationMS:  track.DurationMS,
+		items = append(items, compactTrackListItem{
+			ID:               track.ID,
+			Title:            track.Title,
+			ArtistName:       track.AlbumArtist,
+			AlbumArtist:      track.AlbumArtist,
+			AlbumName:        track.AlbumName,
+			TrackNumber:      track.TrackNumber,
+			DiscNumber:       track.DiscNumber,
+			DurationMS:       track.DurationMS,
+			UploadedByUserID: track.UploadedByUserID,
+			CreatedAt:        track.CreatedAt,
 		})
 	}
 	return items
+}
+
+func trackResponseView(c echo.Context) string {
+	return strings.ToLower(strings.TrimSpace(c.QueryParam("view")))
+}
+
+func wantsCompactTrackResponse(c echo.Context) bool {
+	switch trackResponseView(c) {
+	case "compact", "lite", "admin-list":
+		return true
+	default:
+		return false
+	}
+}
+
+func wantsFullTrackResponse(c echo.Context) bool {
+	return trackResponseView(c) == "full"
 }
 
 // NewLibraryHandler creates a LibraryHandler.
@@ -115,6 +138,9 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+		if wantsFullTrackResponse(c) {
+			return c.JSON(http.StatusOK, tracks)
+		}
 		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
 	}
 
@@ -124,6 +150,9 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		tracks, err := h.lib.TracksByAlbum(ctx, albumName, albumArtist)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if wantsFullTrackResponse(c) {
+			return c.JSON(http.StatusOK, tracks)
 		}
 		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
 	}
@@ -150,8 +179,14 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+
+		trackPayload := any(tracks)
+		if wantsCompactTrackResponse(c) {
+			trackPayload = compactTrackListItems(tracks)
+		}
+
 		return c.JSON(http.StatusOK, map[string]any{
-			"tracks": tracks,
+			"tracks": trackPayload,
 			"total":  total,
 			"offset": offset,
 			"limit":  limit,
@@ -161,6 +196,9 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 	tracks, err := h.lib.AllTracks(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if wantsCompactTrackResponse(c) {
+		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
 	}
 	return c.JSON(http.StatusOK, tracks)
 }
@@ -454,13 +492,16 @@ func (h *LibraryHandler) Search(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+	if wantsCompactTrackResponse(c) {
+		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
+	}
 	return c.JSON(http.StatusOK, tracks)
 }
 
 // TriggerScan kicks off a full library rescan.
 func (h *LibraryHandler) TriggerScan(c echo.Context) error {
 	go h.scanner.ScanAll()
-	return c.JSON(http.StatusAccepted, map[string]string{"status": "scan started"})
+	return c.NoContent(http.StatusAccepted)
 }
 
 // UploadTrack uploads a track to the specified uploads directory.
@@ -618,7 +659,7 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 		CreatedAt:  dbconv.FormatTime(time.Now()),
 	})
 
-	h.hub.Publish(string(models.EventTrackRemoved), track)
+	h.hub.Publish(string(models.EventTrackRemoved), map[string]string{"id": track.ID})
 	return c.NoContent(http.StatusNoContent)
 }
 

@@ -17,7 +17,20 @@ import (
 	"pneuma/internal/library"
 	"pneuma/internal/media"
 	"pneuma/internal/metadata/parser"
+	"pneuma/internal/models"
 )
+
+type trackEventPayload struct {
+	ID string `json:"id"`
+}
+
+func compactTrackEventPayload(track *models.Track) trackEventPayload {
+	if track == nil {
+		return trackEventPayload{}
+	}
+
+	return trackEventPayload{ID: track.ID}
+}
 
 // EventBus is any type that can publish library change events.
 type EventBus interface {
@@ -181,18 +194,20 @@ func (w *Watcher) ingestFile(ctx context.Context, path string) {
 	}
 	w.log.Info("ingested", "path", path, "title", track.Title)
 	if isNew {
-		w.bus.Publish("track.added", track)
+		w.bus.Publish("track.added", compactTrackEventPayload(track))
 	} else {
-		w.bus.Publish("track.updated", track)
+		w.bus.Publish("track.updated", compactTrackEventPayload(track))
 	}
 }
 
 // removeFile deletes a track by path and publishes an event.
 func (w *Watcher) removeFile(ctx context.Context, path string) {
+	track, _ := w.lib.TrackByPath(ctx, path)
+
 	if err := w.lib.RemoveByPath(ctx, path); err != nil {
 		w.log.Error("remove failed", "path", path, "err", err)
 		return
 	}
 	w.log.Info("removed", "path", path)
-	w.bus.Publish("track.removed", map[string]string{"path": path})
+	w.bus.Publish("track.removed", compactTrackEventPayload(track))
 }

@@ -41,6 +41,7 @@ type Hub struct {
 	clients   map[*client]struct{}
 	log       *slog.Logger
 	onMessage InboundHandler
+	transform func(eventType string, payload any) any
 }
 
 func New() *Hub {
@@ -55,9 +56,23 @@ func (h *Hub) SetMessageHandler(handler InboundHandler) {
 	h.onMessage = handler
 }
 
+// SetOutboundPayloadTransformer registers a callback that can compact/transform
+// outbound payloads per event type before they are marshaled and sent.
+func (h *Hub) SetOutboundPayloadTransformer(transform func(eventType string, payload any) any) {
+	h.transform = transform
+}
+
+func (h *Hub) transformedPayload(eventType string, payload any) any {
+	if h.transform == nil {
+		return payload
+	}
+
+	return h.transform(eventType, payload)
+}
+
 // Publish sends an event to every connected client.
 func (h *Hub) Publish(eventType string, payload any) {
-	env := Envelope{Type: eventType, Payload: payload}
+	env := Envelope{Type: eventType, Payload: h.transformedPayload(eventType, payload)}
 	data := mustMarshal(env)
 
 	h.mu.RLock()
@@ -72,7 +87,7 @@ func (h *Hub) Publish(eventType string, payload any) {
 
 // PublishToUser sends an event only to clients authenticated as the given user.
 func (h *Hub) PublishToUser(userID, eventType string, payload any) {
-	env := Envelope{Type: eventType, Payload: payload}
+	env := Envelope{Type: eventType, Payload: h.transformedPayload(eventType, payload)}
 	data := mustMarshal(env)
 
 	h.mu.RLock()
@@ -89,7 +104,7 @@ func (h *Hub) PublishToUser(userID, eventType string, payload any) {
 
 // PublishToDevice sends an event only to a specific device of a user.
 func (h *Hub) PublishToDevice(userID, deviceID, eventType string, payload any) {
-	env := Envelope{Type: eventType, Payload: payload}
+	env := Envelope{Type: eventType, Payload: h.transformedPayload(eventType, payload)}
 	data := mustMarshal(env)
 
 	h.mu.RLock()

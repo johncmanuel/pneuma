@@ -24,6 +24,7 @@ import (
 	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
 	"pneuma/internal/media"
+	"pneuma/internal/models"
 	"pneuma/internal/playback"
 	"pneuma/internal/playlist"
 	"pneuma/internal/store/sqlite/serverdb"
@@ -113,6 +114,7 @@ func NewRouter(svc Services) *echo.Echo {
 	rh := handlers.NewRecentHandler(svc.Queries)
 
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
+	svc.Hub.SetOutboundPayloadTransformer(transformOutboundEventPayload)
 
 	// WebSocket: validate JWT from Authorization/cookie/query token.
 	e.GET("/ws", func(c echo.Context) error {
@@ -195,6 +197,8 @@ func NewRouter(svc Services) *echo.Echo {
 	pl.GET("/:id/items", plh.GetPlaylistItems)
 	pl.PUT("/:id/items", plh.SetPlaylistItems)
 	pl.POST("/:id/items", plh.AddPlaylistItem)
+	pl.POST("/:id/items/append", plh.AppendPlaylistItems)
+	pl.DELETE("/:id/items/:position", plh.RemovePlaylistItem)
 	pl.POST("/:id/artwork", plh.UploadPlaylistArt)
 	pl.GET("/:id/art", plh.ServePlaylistArt)
 
@@ -278,6 +282,31 @@ func NewRouter(svc Services) *echo.Echo {
 	serveSPA("/player", svc.WebPlayerUI)
 
 	return e
+}
+
+func transformOutboundEventPayload(eventType string, payload any) any {
+	switch eventType {
+	case string(models.EventTrackAdded), string(models.EventTrackUpdated), string(models.EventTrackRemoved):
+		type trackEventPayload struct {
+			ID string `json:"id"`
+		}
+
+		if p, ok := payload.(map[string]string); ok {
+			if id := strings.TrimSpace(p["id"]); id != "" {
+				return trackEventPayload{ID: id}
+			}
+		}
+
+		if p, ok := payload.(*models.Track); ok && p != nil {
+			return trackEventPayload{ID: p.ID}
+		}
+
+		if p, ok := payload.(models.Track); ok {
+			return trackEventPayload{ID: p.ID}
+		}
+	}
+
+	return payload
 }
 
 func setSPAStaticCacheHeader(h http.Header, path string) {

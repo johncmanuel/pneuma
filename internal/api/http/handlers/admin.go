@@ -65,7 +65,7 @@ func (h *AdminHandler) UpdatePermissions(c echo.Context) error {
 		CreatedAt:  dbconv.FormatTime(time.Now()),
 	})
 
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	return c.NoContent(http.StatusNoContent)
 }
 
 // DeleteUser deletes a user.

@@ -11,7 +11,6 @@ import {
   isFavoritesPlaylist as isFavoritesPlaylistShared,
   localTrackToSharedTrack,
   pickCanonicalFavoritesPlaylist,
-  toFavoritesWriteItem,
   toFavoritesWriteItemFromTrack,
   visiblePlaylistsForAddMenu as visiblePlaylistsForAddMenuShared
 } from "@pneuma/shared";
@@ -30,6 +29,15 @@ export const favoritesPlaylistId = writable<string | null>(null);
 
 let loadPlaylistsPromise: Promise<void> | null = null;
 
+type PlaylistItemWrite = {
+  source: string;
+  track_id: string;
+  ref_title: string;
+  ref_album: string;
+  ref_album_artist: string;
+  ref_duration_ms: number;
+};
+
 export function setPlayingPlaylistContext(playlistId: string | null) {
   playingPlaylistId.set(playlistId);
 }
@@ -45,11 +53,37 @@ async function fetchRemotePlaylists(): Promise<PlaylistSummary[] | null> {
 }
 
 async function fetchPlaylistItems(playlistId: string): Promise<PlaylistItem[]> {
-  const res = await apiFetch(`/api/playlists/${playlistId}/items`);
+  const res = await apiFetch(`/api/playlists/${playlistId}/items?view=full`);
   if (!res.ok) return [];
 
   const data = await res.json();
   return (Array.isArray(data) ? data : (data.items ?? [])) as PlaylistItem[];
+}
+
+async function removePlaylistItemAt(playlistId: string, position: number) {
+  const res = await apiFetch(`/api/playlists/${playlistId}/items/${position}`, {
+    method: "DELETE"
+  });
+
+  if (!res.ok) {
+    throw new Error("failed to remove playlist item");
+  }
+}
+
+async function appendPlaylistItems(
+  playlistId: string,
+  items: PlaylistItemWrite[]
+) {
+  if (items.length === 0) return;
+
+  const res = await apiFetch(`/api/playlists/${playlistId}/items/append`, {
+    method: "POST",
+    body: JSON.stringify({ items })
+  });
+
+  if (!res.ok) {
+    throw new Error("failed to append playlist items");
+  }
 }
 
 async function normalizeFavoritesOnServer(
@@ -77,7 +111,7 @@ async function normalizeFavoritesOnServer(
     ).then((items) => items.flat());
 
     const deduped = dedupeFavoriteTrackItems(merged);
-    await apiFetch(`/api/playlists/${canonical.id}/items`, {
+    await apiFetch(`/api/playlists/${canonical.id}/items?view=full`, {
       method: "PUT",
       body: JSON.stringify(deduped)
     });
@@ -116,7 +150,7 @@ async function refreshFavoriteTrackIDsFromPlaylist(playlistId: string | null) {
     return;
   }
 
-  const res = await apiFetch(`/api/playlists/${playlistId}/items`);
+  const res = await apiFetch(`/api/playlists/${playlistId}/items?view=full`);
   if (!res.ok) {
     favoriteTrackIDs.set(new Set());
     return;
@@ -189,7 +223,7 @@ export async function toggleFavoriteTrack(track: Track | null) {
   }
   favoriteTrackIDs.set(optimisticIDs);
 
-  const res = await apiFetch(`/api/playlists/${favoritesID}/items`);
+  const res = await apiFetch(`/api/playlists/${favoritesID}/items?view=full`);
   if (!res.ok) {
     favoriteTrackIDs.set(prevIDs);
     addToast("Failed to update Favorites", "error");
@@ -204,20 +238,20 @@ export async function toggleFavoriteTrack(track: Track | null) {
     (item) => item.track_id === track.id
   );
 
-  const nextItems = alreadyFavorite
-    ? existingItems
-        .filter((item) => item.track_id !== track.id)
-        .map(toFavoritesWriteItem)
-    : [
-        ...existingItems.map(toFavoritesWriteItem),
+  try {
+    if (alreadyFavorite) {
+      const position = existingItems.findIndex(
+        (item) => item.track_id === track.id
+      );
+      if (position >= 0) {
+        await removePlaylistItemAt(favoritesID, position);
+      }
+    } else {
+      await appendPlaylistItems(favoritesID, [
         toFavoritesWriteItemFromTrack(track)
-      ];
-
-  const write = await apiFetch(`/api/playlists/${favoritesID}/items`, {
-    method: "PUT",
-    body: JSON.stringify(nextItems)
-  });
-  if (!write.ok) {
+      ]);
+    }
+  } catch {
     favoriteTrackIDs.set(prevIDs);
     addToast("Failed to update Favorites", "error");
     return;
@@ -270,7 +304,7 @@ export async function selectPlaylist(id: string) {
   try {
     const [plRes, itemsRes] = await Promise.all([
       apiFetch(`/api/playlists/${id}`),
-      apiFetch(`/api/playlists/${id}/items`)
+      apiFetch(`/api/playlists/${id}/items?view=full`)
     ]);
 
     if (plRes.ok) {
@@ -352,41 +386,33 @@ async function addTracksToPlaylist(playlistId: string, tracks: Track[]) {
     get(selectedPlaylist)?.id === playlistId
       ? get(selectedPlaylistItems)
       : await (async () => {
-          const r = await apiFetch(`/api/playlists/${playlistId}/items`);
+          const r = await apiFetch(
+            `/api/playlists/${playlistId}/items?view=full`
+          );
           if (!r.ok) return [] as PlaylistItem[];
 
           const data = await r.json();
           return Array.isArray(data) ? data : (data.items ?? []);
         })();
 
-  const existingItems = existing.map((item: PlaylistItem) => ({
-    source: item.source || "remote",
-    track_id: item.track_id,
-    ref_title: item.ref_title,
-    ref_album: item.ref_album,
-    ref_album_artist: item.ref_album_artist,
-    ref_duration_ms: item.ref_duration_ms
-  }));
+  const existingTrackIDs = new Set(
+    existing
+      .map((item: PlaylistItem) => item.track_id)
+      .filter((id: string): id is string => Boolean(id))
+  );
 
-  const newItems = tracks.map((t) => ({
-    source: "remote",
-    track_id: t.id,
-    ref_title: t.title,
-    ref_album: t.album_name,
-    ref_album_artist: t.album_artist,
-    ref_duration_ms: t.duration_ms
-  }));
+  const newItems = tracks
+    .filter((track) => !existingTrackIDs.has(track.id))
+    .map((t) => ({
+      source: "remote",
+      track_id: t.id,
+      ref_title: t.title,
+      ref_album: t.album_name,
+      ref_album_artist: t.album_artist,
+      ref_duration_ms: t.duration_ms
+    }));
 
-  const items = [...existingItems, ...newItems];
-
-  const write = await apiFetch(`/api/playlists/${playlistId}/items`, {
-    method: "PUT",
-    body: JSON.stringify(items)
-  });
-
-  if (!write.ok) {
-    throw new Error("failed to update playlist items");
-  }
+  await appendPlaylistItems(playlistId, newItems);
 
   // Refresh if this is the selected playlist
   if (get(selectedPlaylist)?.id === playlistId) {
@@ -424,7 +450,9 @@ export async function handleAddTracksToPlaylist(
     get(selectedPlaylist)?.id === playlistId
       ? get(selectedPlaylistItems)
       : await (async () => {
-          const r = await apiFetch(`/api/playlists/${playlistId}/items`);
+          const r = await apiFetch(
+            `/api/playlists/${playlistId}/items?view=full`
+          );
           if (!r.ok) return [] as PlaylistItem[];
 
           const data = await r.json();
@@ -460,22 +488,7 @@ export async function handleAddTracksToPlaylist(
 }
 
 export async function removePlaylistItem(playlistId: string, position: number) {
-  const current = get(selectedPlaylistItems);
-  const remaining = current
-    .filter((item) => item.position !== position)
-    .map((item) => ({
-      track_id: item.track_id,
-      ref_title: item.ref_title,
-      ref_album: item.ref_album,
-      ref_album_artist: item.ref_album_artist,
-      ref_duration_ms: item.ref_duration_ms
-    }));
-
-  await apiFetch(`/api/playlists/${playlistId}/items`, {
-    method: "PUT",
-    body: JSON.stringify(remaining)
-  });
-
+  await removePlaylistItemAt(playlistId, position);
   await selectPlaylist(playlistId);
 }
 

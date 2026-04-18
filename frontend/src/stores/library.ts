@@ -81,7 +81,14 @@ export async function loadMoreRemoteAlbumGroups(filter = "") {
 /** Fetch tracks by IDs (for queue resolution). */
 export async function fetchTracksByIDs(ids: string[]): Promise<Track[]> {
   if (!get(connected) || ids.length === 0) return [];
-  const r = await serverFetch(`/api/library/tracks?ids=${ids.join(",")}`);
+
+  const params = new URLSearchParams();
+  params.set("ids", ids.join(","));
+
+  const r = await serverFetch(`/api/library/tracks?${params}`);
+
+  if (!r.ok) return [];
+
   const data = await r.json();
   return Array.isArray(data) ? data : [];
 }

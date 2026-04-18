@@ -48,6 +48,28 @@ type State struct {
 	Shuffle    bool          `json:"shuffle"`
 }
 
+type wsPlaybackTrack struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	AlbumArtist string `json:"album_artist"`
+	AlbumName   string `json:"album_name"`
+	DurationMS  int64  `json:"duration_ms"`
+}
+
+func compactPlaybackTrack(track *models.Track) *wsPlaybackTrack {
+	if track == nil {
+		return nil
+	}
+
+	return &wsPlaybackTrack{
+		ID:          track.ID,
+		Title:       track.Title,
+		AlbumArtist: track.AlbumArtist,
+		AlbumName:   track.AlbumName,
+		DurationMS:  track.DurationMS,
+	}
+}
+
 // ErrNoActiveSession is returned when there is no active playback session for a user/device.
 var ErrNoActiveSession = errors.New("no active session")
 
@@ -366,7 +388,7 @@ func (e *Engine) persist(ctx context.Context, userID, deviceID string, s *State)
 
 	e.bus.PublishToDevice(userID, deviceID, "playback.changed", map[string]any{
 		"track_id":    s.TrackID,
-		"track":       trackPayload,
+		"track":       compactPlaybackTrack(trackPayload),
 		"playing":     s.Playing,
 		"position_ms": s.PositionMS,
 		"queue":       s.Queue,

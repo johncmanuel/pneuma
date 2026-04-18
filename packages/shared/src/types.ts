@@ -65,11 +65,9 @@ export interface PlaylistSummary {
   description: string;
   item_count: number;
   total_duration_ms: number;
-  duration_ms?: number;
   artwork_path: string;
   remote_playlist_id?: string;
   track_count?: number;
-  total_dur_ms?: number;
   created_at?: string;
   updated_at: string;
 }

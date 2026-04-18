@@ -153,7 +153,7 @@ function handleMessage(msg: { type: string; payload: any }) {
       ) {
         const sel = get(selectedPlaylist);
         if (sel?.id === msg.payload.id) {
-          selectedPlaylist.set(msg.payload as typeof sel);
+          void selectPlaylist(msg.payload.id);
         }
       }
       break;
