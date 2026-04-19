@@ -7,6 +7,8 @@
     "@pneuma/ui": "workspace:*"
   },
   "scripts": {
+    "predev": "bun run --cwd .. sync:icons",
+    "prebuild": "bun run --cwd .. sync:icons",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

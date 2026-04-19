@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "sync:icons": "bun run ./scripts/sync-icons.ts",
     "fmt": "prettier --write . && go fmt ./...",
     "build:web": "cd web && bun run build",
     "build:dash": "cd dashboard && bun run build",

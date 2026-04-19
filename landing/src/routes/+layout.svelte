@@ -1,7 +1,7 @@
 <script lang="ts">
   import "@pneuma/shared/style.css";
+  import { asset } from "$app/paths";
   import { seo } from "$lib/seo";
-  import favicon from "$lib/assets/favicon.svg";
 
   let { children } = $props();
 </script>
@@ -26,7 +26,19 @@
 
   <!-- kinda feel iffy about using @html, but should work for now -->
   {@html `<script type="application/ld+json">${seo.structuredDataJson}</script>`}
-  <link rel="icon" href={favicon} />
+  <link rel="shortcut icon" href={asset('/favicon.ico')} />
+  <link rel="icon" type="image/svg+xml" href={asset('/favicon.svg')} />
+  <link
+    rel="icon"
+    type="image/png"
+    href={asset('/favicon-96x96.png')}
+    sizes="96x96"
+  />
+  <link
+    rel="apple-touch-icon"
+    sizes="180x180"
+    href={asset('/apple-touch-icon.png')}
+  />
 </svelte:head>
 
 {@render children()}

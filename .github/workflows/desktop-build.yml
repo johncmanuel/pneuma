@@ -58,6 +58,9 @@ jobs:
           jq --arg v "$VERSION" '.info.productVersion = $v' wails.json > wails.tmp.json && mv wails.tmp.json wails.json
           echo "Building version: $VERSION"
 
+      - name: Sync shared icons
+        run: bun run sync:icons
+
       - name: Build wails
         run: wails build -platform ${{ matrix.build.platform }}
 
@@ -82,18 +85,64 @@ jobs:
       #   maybe some script here to create + sign dmg
       #   run: bash build/darwin/create-dmg.sh
 
-      - name: Rename Linux binary
+      - name: Stage Linux desktop artifacts
         if: runner.os == 'Linux'
         shell: bash
         run: |
           VERSION=$(jq -r '.info.productVersion' wails.json)
-          mv build/bin/pneuma "build/bin/pneuma-${VERSION}-linux-amd64"
+          mkdir -p build/bin
+          mkdir -p build/bin/release-assets
+          mv build/bin/pneuma "build/bin/release-assets/pneuma-${VERSION}-linux-amd64"
+
+      - name: Stage macOS desktop artifacts
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p build/bin
+          mkdir -p build/bin/release-assets
+          mv build/bin/pneuma-macos-universal.zip build/bin/release-assets/
+
+      - name: Stage Windows desktop artifacts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $releaseDir = "build/bin/release-assets"
+          New-Item -Path $releaseDir -ItemType Directory -Force | Out-Null
+
+          $version = (Get-Content wails.json | ConvertFrom-Json).info.productVersion
+          $windowsFiles = Get-ChildItem -Path "build/bin" -File | Where-Object {
+            $_.Extension -eq ".exe" -and $_.Name -like "pneuma*"
+          }
+          $installerFiles = $windowsFiles | Where-Object {
+            $_.Name -match "installer"
+          }
+
+          if (-not $windowsFiles) {
+            throw "No Windows binaries found in build/bin after Wails NSIS build."
+          }
+
+          if (-not $installerFiles) {
+            throw "No NSIS installer artifact found in build/bin after Wails NSIS build."
+          }
+
+          foreach ($file in $windowsFiles) {
+            $targetName = if ($file.Name -match "installer") {
+              "pneuma-$version-windows-amd64-installer.exe"
+            } elseif ($file.Name -eq "pneuma.exe") {
+              "pneuma-$version-windows-amd64.exe"
+            } else {
+              $file.Name
+            }
+
+            Copy-Item -Path $file.FullName -Destination (Join-Path $releaseDir $targetName) -Force
+          }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: pneuma-desktop-${{ matrix.build.os }}
-          path: build/bin/pneuma-*
+          path: build/bin/release-assets/*
+          if-no-files-found: error
           retention-days: 1
 
   release:
