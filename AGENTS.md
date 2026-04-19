@@ -56,13 +56,9 @@ Some general styling guidelines:
   - Prioritize accessibility via ARIA
   - Boolean attributes should be written without a value
 
-### Formatting
+### Developer Tooling
 
 Run `bun fmt` to format TypeScript, Svelte, and Go code.
-
-Run them after finalizing changes.
-
-### Linting
 
 Run `bun lint` to lint TypeScript, Svelte, and Go code.
 
