@@ -205,6 +205,9 @@ services:
       # Point the music scanner to the mounted volume
       - PNEUMA_LIBRARY_WATCH_FOLDERS=/music
 
+      # Full rescan cadence in minutes with 120 as the default, but increase for low-power devices
+      # - PNEUMA_LIBRARY_SCAN_INTERVAL_MINUTES=240
+
       # Security (this'll be auto generated if not provided and placed in the config file)
       # - PNEUMA_AUTH_SECRET_KEY=change-this-to-a-secure-random-string
 
@@ -213,6 +216,12 @@ services:
 
       # Increase upload limit if needed (500 MB is default)
       # - PNEUMA_UPLOAD_MAX_SIZE_MB=500
+
+      # Optional stream transcoding cache for mobile profiles
+      # - PNEUMA_TRANSCODING_FFMPEG_PATH=ffmpeg
+      # - PNEUMA_TRANSCODING_CACHE_DIR=/data/transcode-cache
+      # - PNEUMA_TRANSCODING_CACHE_MAX_SIZE_MB=2048
+      # - PNEUMA_TRANSCODING_MAX_CONCURRENT_JOBS=1
 
 volumes:
   pneuma_data:
@@ -276,6 +285,15 @@ Add SQL query files under `internal/store/sqlite/<desktop or server>/query/`.
 Once done so, run `sqlc generate` to generate the Go code equivalent of the queries. The generated code will be placed under `internal/store/sqlite/<desktop or server>db/` with the file extension `.sql.go`. They can be imported from the the package, `<desktop or server>db`.
 
 The config file, `sqlc.yaml` is found at the root.
+
+### Database concurrency
+
+The server defaults to a single SQLite connection for reliability.
+
+- TOML: set `database.max_open_conns` in `config.toml`
+- ENV: set `PNEUMA_DATABASE_MAX_OPEN_CONNS`
+
+Increase carefully (e.g. `2` or `4`) and monitor for lock contention.
 
 ### Database Migrations
 

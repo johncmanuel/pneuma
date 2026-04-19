@@ -29,7 +29,6 @@ import {
   mergeRemoteAndLocalFavoriteItems,
   pickCanonicalFavoritesPlaylist,
   storageKeys,
-  toFavoritesWriteItem,
   toFavoritesWriteItemFromTrack,
   visiblePlaylistsForAddMenu as visiblePlaylistsForAddMenuShared,
   type LocalPlaylistItem,
@@ -91,6 +90,7 @@ interface RemotePlaylistSummary {
   name: string;
   description: string;
   item_count: number;
+  total_duration_ms?: number;
   updated_at: string;
 }
 
@@ -103,6 +103,39 @@ interface RemoteFavoriteItem {
   ref_duration_ms: number;
   added_at?: string;
 }
+
+interface RemotePlaylistItemWrite {
+  source: string;
+  track_id: string;
+  ref_title: string;
+  ref_album: string;
+  ref_album_artist: string;
+  ref_duration_ms: number;
+}
+
+type RemotePlaylistDelta = {
+  id?: string;
+  remote_playlist_id?: string;
+  name?: string;
+  description?: string;
+  item_count?: number;
+  total_duration_ms?: number;
+  duration_ms?: number;
+  total_dur_ms?: number;
+  artwork_path?: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted?: boolean;
+  items_changed?: boolean;
+  metadata_changed?: boolean;
+};
+
+type RemotePlaylistDeltaResult = {
+  applied: boolean;
+  localPlaylistID: string | null;
+  wasFavorites: boolean;
+  itemsChanged: boolean;
+};
 
 type PlaylistTrackInput =
   | Track
@@ -149,6 +182,65 @@ function trackID(track: PlaylistTrackInput): string {
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function resolveRemoteDurationMS(
+  delta: RemotePlaylistDelta,
+  fallbackDurationMS: number
+) {
+  if (isFiniteNumber(delta.total_duration_ms)) return delta.total_duration_ms;
+  if (isFiniteNumber(delta.duration_ms)) return delta.duration_ms;
+  if (isFiniteNumber(delta.total_dur_ms)) return delta.total_dur_ms;
+  return fallbackDurationMS;
+}
+
+function resolveLocalArtworkPath(
+  delta: RemotePlaylistDelta,
+  fallbackArtworkPath: string
+) {
+  if (typeof delta.artwork_path !== "string") return fallbackArtworkPath;
+
+  // Desktop stores local thumbnail filenames. Preserve current path unless
+  // server explicitly cleared artwork.
+  return delta.artwork_path.trim() === "" ? "" : fallbackArtworkPath;
+}
+
+// apply a remote playlist delta to the local playlist state, returning whether the 
+// delta was applied and if it affected the currently selected playlist
+function mergeLocalPlaylistFromRemoteDelta(
+  fallback: LocalPlaylistSummary,
+  delta: RemotePlaylistDelta,
+  remoteID: string
+): LocalPlaylistSummary {
+  return {
+    ...fallback,
+    name: typeof delta.name === "string" ? delta.name : fallback.name,
+    description:
+      typeof delta.description === "string"
+        ? delta.description
+        : fallback.description,
+    item_count: isFiniteNumber(delta.item_count)
+      ? delta.item_count
+      : fallback.item_count,
+    total_duration_ms: resolveRemoteDurationMS(
+      delta,
+      fallback.total_duration_ms
+    ),
+    artwork_path: resolveLocalArtworkPath(delta, fallback.artwork_path),
+    remote_playlist_id: remoteID,
+    updated_at:
+      typeof delta.updated_at === "string"
+        ? delta.updated_at
+        : fallback.updated_at,
+    created_at:
+      typeof delta.created_at === "string"
+        ? delta.created_at
+        : fallback.created_at
+  };
 }
 
 function buildLocalPlaylistItem(
@@ -305,7 +397,7 @@ async function ensureRemoteFavoritesPlaylist(): Promise<string | null> {
       }));
       const deduped = dedupeFavoriteTrackItems(mergedItems);
 
-      await serverFetch(`/api/playlists/${canonical.id}/items`, {
+      await serverFetch(`/api/playlists/${canonical.id}/items?view=full`, {
         method: "PUT",
         body: JSON.stringify(deduped)
       });
@@ -354,7 +446,9 @@ async function ensureRemoteFavoritesPlaylist(): Promise<string | null> {
 async function fetchRemoteFavoritesItems(
   remotePlaylistID: string
 ): Promise<RemoteFavoriteItem[]> {
-  const res = await serverFetch(`/api/playlists/${remotePlaylistID}/items`);
+  const res = await serverFetch(
+    `/api/playlists/${remotePlaylistID}/items?view=full`
+  );
   if (!res.ok) return [];
 
   const data = await res.json();
@@ -362,6 +456,66 @@ async function fetchRemoteFavoritesItems(
     Array.isArray(data) ? data : (data.items ?? [])
   ) as RemoteFavoriteItem[];
   return items.filter((item) => Boolean(item.track_id));
+}
+
+async function appendRemotePlaylistItems(
+  remotePlaylistID: string,
+  items: RemotePlaylistItemWrite[]
+) {
+  if (items.length === 0) return true;
+
+  const res = await serverFetch(
+    `/api/playlists/${remotePlaylistID}/items/append`,
+    {
+      method: "POST",
+      body: JSON.stringify({ items })
+    }
+  );
+
+  return res.ok;
+}
+
+async function fetchRemotePlaylistSummary(
+  remotePlaylistID: string
+): Promise<RemotePlaylistDelta | null> {
+  if (!remotePlaylistID) return null;
+
+  const res = await serverFetch(`/api/playlists/${remotePlaylistID}`);
+  if (!res.ok) return null;
+
+  const payload = (await res.json()) as RemotePlaylistSummary & {
+    artwork_path?: string;
+    remote_playlist_id?: string;
+    created_at?: string;
+    updated_at?: string;
+  };
+
+  return {
+    id: payload.id,
+    name: payload.name,
+    description: payload.description,
+    item_count: payload.item_count,
+    total_duration_ms: payload.total_duration_ms,
+    artwork_path: payload.artwork_path,
+    remote_playlist_id: payload.remote_playlist_id,
+    created_at: payload.created_at,
+    updated_at: payload.updated_at,
+    metadata_changed: true
+  };
+}
+
+async function removeRemotePlaylistItemByPosition(
+  remotePlaylistID: string,
+  position: number
+) {
+  const res = await serverFetch(
+    `/api/playlists/${remotePlaylistID}/items/${position}`,
+    {
+      method: "DELETE"
+    }
+  );
+
+  return res.ok;
 }
 
 function remoteToLocalFavoriteItems(
@@ -494,6 +648,113 @@ export async function syncFavoritesFromServer() {
   }
 }
 
+export async function applyRemotePlaylistDelta(
+  delta: RemotePlaylistDelta
+): Promise<RemotePlaylistDeltaResult> {
+  const remoteID = (delta.id ?? delta.remote_playlist_id ?? "").trim();
+  if (!remoteID) {
+    return {
+      applied: false,
+      localPlaylistID: null,
+      wasFavorites: false,
+      itemsChanged: Boolean(delta.items_changed)
+    };
+  }
+
+  const local = get(playlists).find((pl) => pl.remote_playlist_id === remoteID);
+  if (!local) {
+    return {
+      applied: false,
+      localPlaylistID: null,
+      wasFavorites: false,
+      itemsChanged: Boolean(delta.items_changed)
+    };
+  }
+
+  const wasFavorites = get(favoritesPlaylistId) === local.id;
+
+  if (delta.deleted) {
+    const unlinkTime =
+      typeof delta.updated_at === "string"
+        ? delta.updated_at
+        : new Date().toISOString();
+
+    playlists.update((list) =>
+      list.map((playlist) =>
+        playlist.id === local.id
+          ? {
+              ...playlist,
+              remote_playlist_id: "",
+              updated_at: unlinkTime
+            }
+          : playlist
+      )
+    );
+
+    selectedPlaylist.update((selected) =>
+      selected?.id === local.id
+        ? {
+            ...selected,
+            remote_playlist_id: "",
+            updated_at: unlinkTime
+          }
+        : selected
+    );
+
+    if (wasFavorites && get(favoritesRemotePlaylistId) === remoteID) {
+      favoritesRemotePlaylistId.set(null);
+    }
+
+    await LinkLocalPlaylistToRemote(local.id, "").catch((e) =>
+      console.warn("Failed to unlink local playlist from deleted remote", e)
+    );
+
+    return {
+      applied: true,
+      localPlaylistID: local.id,
+      wasFavorites,
+      itemsChanged: Boolean(delta.items_changed)
+    };
+  }
+
+  const merged = mergeLocalPlaylistFromRemoteDelta(local, delta, remoteID);
+
+  playlists.update((list) =>
+    list.map((playlist) => (playlist.id === local.id ? merged : playlist))
+  );
+
+  selectedPlaylist.update((selected) =>
+    selected?.id === local.id ? merged : selected
+  );
+
+  if (wasFavorites && get(favoritesRemotePlaylistId) !== remoteID) {
+    favoritesRemotePlaylistId.set(remoteID);
+  }
+
+  const metadataChanged =
+    merged.name !== local.name ||
+    merged.description !== local.description ||
+    merged.artwork_path !== local.artwork_path;
+
+  if (metadataChanged) {
+    await UpdateLocalPlaylist(
+      local.id,
+      merged.name,
+      merged.description,
+      merged.artwork_path ?? ""
+    ).catch((e) =>
+      console.warn("Failed to persist remote playlist metadata delta", e)
+    );
+  }
+
+  return {
+    applied: true,
+    localPlaylistID: local.id,
+    wasFavorites,
+    itemsChanged: Boolean(delta.items_changed)
+  };
+}
+
 export async function toggleFavoriteTrack(track: Track | null) {
   if (!track?.id) return;
 
@@ -539,7 +800,9 @@ export async function toggleFavoriteTrack(track: Track | null) {
       return;
     }
 
-    const read = await serverFetch(`/api/playlists/${remoteID}/items`);
+    const read = await serverFetch(
+      `/api/playlists/${remoteID}/items?view=full`
+    );
     if (!read.ok) {
       console.error(
         "Failed to update favorites: failed to read remote favorites playlist"
@@ -558,20 +821,18 @@ export async function toggleFavoriteTrack(track: Track | null) {
     );
     wasRemoved = alreadyFavorite;
 
-    const nextPayload = alreadyFavorite
-      ? existingItems
-          .filter((item) => item.track_id !== track.id)
-          .map(toFavoritesWriteItem)
-      : [
-          ...existingItems.map(toFavoritesWriteItem),
+    const position = existingItems.findIndex(
+      (item) => item.track_id === track.id
+    );
+    const ok = alreadyFavorite
+      ? position >= 0
+        ? await removeRemotePlaylistItemByPosition(remoteID, position)
+        : true
+      : await appendRemotePlaylistItems(remoteID, [
           toFavoritesWriteItemFromTrack(track)
-        ];
+        ]);
 
-    const write = await serverFetch(`/api/playlists/${remoteID}/items`, {
-      method: "PUT",
-      body: JSON.stringify(nextPayload)
-    });
-    if (!write.ok) {
+    if (!ok) {
       console.error(
         "Failed to update favorites: failed to write remote favorites playlist"
       );
@@ -581,6 +842,15 @@ export async function toggleFavoriteTrack(track: Track | null) {
     }
 
     await syncFavoritesFromServer();
+
+    const remoteSummary = await fetchRemotePlaylistSummary(remoteID);
+    if (remoteSummary) {
+      await applyRemotePlaylistDelta({
+        ...remoteSummary,
+        items_changed: true,
+        updated_at: new Date().toISOString()
+      });
+    }
   } else {
     const nextItems = localAlreadyFavorite
       ? currentItems.filter(
@@ -616,7 +886,10 @@ export async function toggleFavoriteTrack(track: Track | null) {
     );
   }
 
-  await loadPlaylists();
+  if (!canSyncRemote) {
+    await loadPlaylists();
+  }
+
   if (get(selectedPlaylistId) === localID) {
     await selectPlaylist(localID);
   }

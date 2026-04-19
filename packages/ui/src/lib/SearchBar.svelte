@@ -15,6 +15,7 @@
     onOpenAlbum?: (album: AlbumGroup) => void;
     onAddToQueue?: (track: Track) => void;
     artworkUrl?: (trackId: string) => string;
+    onAlbumArtError?: (album: AlbumGroup) => void;
   }
 
   let {
@@ -23,7 +24,8 @@
     onPlayTrack,
     onOpenAlbum,
     onAddToQueue,
-    artworkUrl = () => ""
+    artworkUrl = () => "",
+    onAlbumArtError
   }: Props = $props();
 
   let query = $state("");
@@ -82,6 +84,11 @@
 
   function hideImg(e: Event) {
     (e.currentTarget as HTMLImageElement).style.display = "none";
+  }
+
+  function handleAlbumArtError(e: Event, album: AlbumGroup) {
+    hideImg(e);
+    onAlbumArtError?.(album);
   }
 
   let hasAnyResults = $derived(
@@ -229,7 +236,7 @@
                 <img
                   src={artworkUrl(album.first_track_id)}
                   alt=""
-                  onerror={hideImg}
+                  onerror={(e) => handleAlbumArtError(e, album)}
                 />
                 <span class="album-thumb-ph"><Music size={14} /></span>
               </div>

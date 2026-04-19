@@ -11,6 +11,9 @@ services:
       PNEUMA_SERVER_HOST: 0.0.0.0
       PNEUMA_SERVER_PORT: 8989
       PNEUMA_DATA_DIR: /data
+      PNEUMA_LIBRARY_SCAN_INTERVAL_MINUTES: 120
+      PNEUMA_TRANSCODING_CACHE_MAX_SIZE_MB: 2048
+      PNEUMA_TRANSCODING_MAX_CONCURRENT_JOBS: 1
     volumes:
       - pneuma_staging_data:/data
     ports:

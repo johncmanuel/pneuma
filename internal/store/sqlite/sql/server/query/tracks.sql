@@ -138,7 +138,7 @@ AND rowid NOT IN (
     GROUP BY fingerprint
 );
 
--- name: SearchTracks :many
+-- name: SearchTracksByIDs :many
 SELECT id, path, title,
     COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
     COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
@@ -151,11 +151,7 @@ SELECT id, path, title,
     deleted_at, created_at, updated_at
 FROM tracks
 WHERE tracks.deleted_at IS NULL
-  AND (title LIKE sqlc.arg(pattern)
-    OR album_name LIKE sqlc.arg(pattern)
-    OR album_artist LIKE sqlc.arg(pattern)
-    OR genre LIKE sqlc.arg(pattern))
-ORDER BY title COLLATE NOCASE LIMIT 200;
+  AND tracks.id IN (sqlc.slice('ids'));
 
 -- name: ListTracksByAlbumUnorganized :many
 SELECT id, path, title,

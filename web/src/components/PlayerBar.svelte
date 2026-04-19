@@ -1,8 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { playerState } from "../lib/stores/playback";
-  import { apiFetch, artworkUrl, streamUrl } from "../lib/api";
+  import { artworkUrl, streamUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
+  import {
+    markMissingTrackArtID,
+    missingTrackArtIDs
+  } from "../lib/stores/missing-art";
   import {
     formatDuration,
     setupMediaSessionActions,
@@ -21,7 +25,6 @@
     Shuffle,
     Repeat,
     ChevronDown,
-    MonitorSpeaker,
     VolumeX,
     Volume1,
     Volume2,
@@ -34,6 +37,8 @@
     favoritesPlaylistId,
     playingPlaylistId
   } from "../lib/stores/playlists";
+  import { streamQuality } from "../lib/stores/settings";
+  import { type StreamQuality } from "../lib/stream-quality";
 
   const UNORGANIZED_KEY = "__unorganized__";
 
@@ -92,6 +97,12 @@
       });
     }
 
+    if (audio) {
+      const supportsOgg = audio.canPlayType("audio/ogg");
+      const supportsOpus = audio.canPlayType('audio/ogg; codecs="opus"');
+      supportsOpusStream = Boolean(supportsOpus || supportsOgg);
+    }
+
     scheduleMiniArtistMeasure();
   });
 
@@ -144,6 +155,9 @@
 
   let track = $derived($playerState.track);
   let hasTrack = $derived(!!$playerState.trackId);
+  let trackArtSrc = $derived(
+    track && !$missingTrackArtIDs[track.id] ? artworkUrl(track.id) : ""
+  );
 
   // define a key from the track metadata to determine when to update Media Session metadata.
   let mediaMetadataKey = $derived(
@@ -160,9 +174,20 @@
     ) {
       lastMediaMetadataKey = mediaMetadataKey;
       setMediaSessionTrack(track);
-      updateMediaSessionMetadata(track, artworkUrl);
+      updateMediaSessionMetadata(track, () => trackArtSrc);
     }
   });
+
+  function hideArtworkAndRememberMissing(e: Event, trackID?: string) {
+    (e.currentTarget as HTMLImageElement).style.display = "none";
+    if (trackID) {
+      markMissingTrackArtID(trackID);
+    }
+  }
+
+  function resetArtworkVisibility(e: Event) {
+    (e.currentTarget as HTMLImageElement).style.display = "";
+  }
 
   $effect(() => {
     setMediaSessionPlaybackState(hasTrack ? $playerState.paused : null);
@@ -171,6 +196,34 @@
   let durationMs = $derived(
     audioDurationMs > 0 ? audioDurationMs : (track?.duration_ms ?? 0)
   );
+
+  // Determines whether the current browser environment supports Opus codec
+  // Opus is the goat for streaming due to its low bitrate and good quality
+  let supportsOpusStream = $state(true);
+
+  const OPUS_PROFILES = new Set<StreamQuality>(["low", "medium", "high"]);
+
+  function resolveEffectiveStreamQuality(): StreamQuality {
+    const selected = $streamQuality;
+
+    if (selected === "original") {
+      return "original";
+    }
+
+    if (selected === "auto") {
+      const autoChoice: StreamQuality = mobileView ? "medium" : "original";
+      if (OPUS_PROFILES.has(autoChoice) && !supportsOpusStream) {
+        return "original";
+      }
+      return autoChoice;
+    }
+
+    if (OPUS_PROFILES.has(selected) && !supportsOpusStream) {
+      return "original";
+    }
+
+    return selected;
+  }
 
   let miniProgressPercent = $derived(
     durationMs > 0
@@ -279,49 +332,27 @@
           seekSyncTimer = null;
         }
 
-        (async () => {
-          // Fetch track metadata if the store's track object is stale.
-          // Happens when playback.changed arrives from the server (skipNext,
-          // auto-advance, other client) which only carries track_id, not the
-          // full Track object.
-          if ($playerState.track?.id !== $playerState.trackId) {
-            try {
-              const res = await apiFetch(
-                `/api/library/tracks/${$playerState.trackId}`
-              );
-              if (res.ok) {
-                const t = await res.json();
-                playerState.update((s) =>
-                  s.trackId === $playerState.trackId ? { ...s, track: t } : s
-                );
-              }
-            } catch {
-              console.error(
-                "Failed to fetch track metadata for",
-                $playerState.trackId
-              );
+        const url = streamUrl(
+          $playerState.trackId,
+          resolveEffectiveStreamQuality()
+        );
+
+        if (url) {
+          currentAudioSrc = url;
+          audio.src = url;
+          audio.currentTime = $playerState.positionMs / 1000;
+          displayPosition = $playerState.positionMs;
+          if (track) setMediaSessionTrack(track);
+        }
+
+        if (!$playerState.paused) {
+          audio.play().catch((e) => {
+            if (e.name !== "AbortError") {
+              console.warn("Audio play failed", e);
             }
-          }
-
-          const url = streamUrl($playerState.trackId);
-
-          if (url) {
-            currentAudioSrc = url;
-            audio.src = url;
-            audio.currentTime = $playerState.positionMs / 1000;
-            displayPosition = $playerState.positionMs;
-            if (track) setMediaSessionTrack(track);
-          }
-
-          if (!$playerState.paused) {
-            audio.play().catch((e) => {
-              if (e.name !== "AbortError") {
-                console.warn("Audio play failed", e);
-              }
-            });
-            startPositionLoop();
-          }
-        })();
+          });
+          startPositionLoop();
+        }
       } else if (pausedChanged) {
         lastPaused = $playerState.paused;
 
@@ -769,16 +800,14 @@
         >
           <div class="mini-art">
             {#if track}
-              <img
-                src={artworkUrl(track.id)}
-                alt={track.title}
-                onerror={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = "none";
-                }}
-                onload={(e) => {
-                  (e.currentTarget as HTMLImageElement).style.display = "";
-                }}
-              />
+              {#if trackArtSrc}
+                <img
+                  src={trackArtSrc}
+                  alt={track.title}
+                  onerror={(e) => hideArtworkAndRememberMissing(e, track.id)}
+                  onload={resetArtworkVisibility}
+                />
+              {/if}
               <div class="art-placeholder mini-art-placeholder">
                 <Music size={16} />
               </div>
@@ -890,17 +919,14 @@
           <div class="sheet-art-wrap">
             <div class="sheet-art">
               {#if track}
-                <img
-                  src={artworkUrl(track.id)}
-                  alt={track.title}
-                  onerror={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display =
-                      "none";
-                  }}
-                  onload={(e) => {
-                    (e.currentTarget as HTMLImageElement).style.display = "";
-                  }}
-                />
+                {#if trackArtSrc}
+                  <img
+                    src={trackArtSrc}
+                    alt={track.title}
+                    onerror={(e) => hideArtworkAndRememberMissing(e, track.id)}
+                    onload={resetArtworkVisibility}
+                  />
+                {/if}
                 <div class="art-placeholder"><Music size={34} /></div>
               {:else}
                 <div class="art-placeholder"><Music size={34} /></div>
@@ -1024,16 +1050,14 @@
     <div class="now-playing">
       <div class="art">
         {#if track}
-          <img
-            src={artworkUrl(track.id)}
-            alt={track.title}
-            onerror={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-            onload={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "";
-            }}
-          />
+          {#if trackArtSrc}
+            <img
+              src={trackArtSrc}
+              alt={track.title}
+              onerror={(e) => hideArtworkAndRememberMissing(e, track.id)}
+              onload={resetArtworkVisibility}
+            />
+          {/if}
           <div class="art-placeholder" style="position:absolute">
             <Music size={16} />
           </div>

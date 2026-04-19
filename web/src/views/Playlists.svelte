@@ -19,7 +19,11 @@
     handleAddToPlaylist,
     setPlayingPlaylistContext
   } from "../lib/stores/playlists";
-  import { selectedPlaylistView, pushNav } from "../lib/stores/ui";
+  import {
+    selectedPlaylistView,
+    pushNav,
+    initialDataLoaded
+  } from "../lib/stores/ui";
   import { playerState } from "../lib/stores/playback";
   import { playlistArtUrl, uploadPlaylistArtwork } from "../lib/api";
   import { wsSend } from "../lib/ws";
@@ -27,6 +31,11 @@
     recordRecentPlaylist,
     removeRecentPlaylist
   } from "../lib/stores/recent";
+  import {
+    clearMissingPlaylistArtID,
+    markMissingPlaylistArtID,
+    missingPlaylistArtIDs
+  } from "../lib/stores/missing-art";
   import { Music, SquarePen } from "@lucide/svelte";
   import TrackRow from "../components/TrackRow.svelte";
   import {
@@ -67,6 +76,7 @@
     uploadingArt = true;
     try {
       await uploadPlaylistArtwork($selectedPlaylistView, file);
+      clearMissingPlaylistArtID($selectedPlaylistView);
       await selectPlaylist($selectedPlaylistView);
       await loadPlaylists();
     } finally {
@@ -201,7 +211,9 @@
 
     if ($selectedPlaylist) {
       recordRecentPlaylist({
-        playlist_id: $selectedPlaylist.id
+        playlist_id: $selectedPlaylist.id,
+        name: $selectedPlaylist.name,
+        artwork_path: $selectedPlaylist.artwork_path
       });
 
       setPlayingPlaylistContext($selectedPlaylist.id);
@@ -271,8 +283,17 @@
     if (img) img.style.display = "none";
   }
 
+  function handlePlaylistArtError(e: Event, playlistID?: string) {
+    hideImg(e);
+    if (playlistID) {
+      markMissingPlaylistArtID(playlistID);
+    }
+  }
+
   onMount(() => {
-    loadPlaylists();
+    if (!$initialDataLoaded) {
+      loadPlaylists();
+    }
   });
 </script>
 
@@ -294,14 +315,16 @@
           title="Change artwork"
         >
           {#if $selectedPlaylist.artwork_path}
-            <img
-              src={playlistArtUrl(
-                $selectedPlaylist.id,
-                $selectedPlaylist.updated_at
-              )}
-              alt=""
-              onerror={hideImg}
-            />
+            {#if !$missingPlaylistArtIDs[$selectedPlaylist.id]}
+              <img
+                src={playlistArtUrl(
+                  $selectedPlaylist.id,
+                  $selectedPlaylist.updated_at
+                )}
+                alt=""
+                onerror={(e) => handlePlaylistArtError(e, $selectedPlaylist.id)}
+              />
+            {/if}
           {/if}
           <span class="art-placeholder"><Music size={24} /></span>
           <div class="art-overlay">
@@ -530,11 +553,13 @@
           <button class="pl-card" onclick={() => openPlaylist(pl)}>
             <div class="pl-art">
               {#if pl.artwork_path}
-                <img
-                  src={playlistArtUrl(pl.id, pl.updated_at)}
-                  alt=""
-                  onerror={hideImg}
-                />
+                {#if !$missingPlaylistArtIDs[pl.id]}
+                  <img
+                    src={playlistArtUrl(pl.id, pl.updated_at)}
+                    alt=""
+                    onerror={(e) => handlePlaylistArtError(e, pl.id)}
+                  />
+                {/if}
               {/if}
               <span class="art-placeholder"><Music size={40} /></span>
             </div>

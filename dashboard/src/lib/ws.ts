@@ -1,12 +1,13 @@
 import { writable, get } from "svelte/store";
 import { loggedIn, wsBase } from "./api";
 
-/**
- * Incremented every time the server reports a library mutation
- * (track.added / track.updated / track.removed / library.deduped).
- * Components can `$: if ($libraryVersion !== prev) reload()` to react.
- */
-export const libraryVersion = writable(0);
+type LibraryDelta = {
+  seq: number;
+  type: "track.added" | "track.updated" | "track.removed" | "library.deduped";
+  id: string | null;
+};
+
+export const libraryDelta = writable<LibraryDelta | null>(null);
 
 export const scanRunning = writable(false);
 
@@ -18,6 +19,7 @@ export const scanResult = writable<{
 
 let socket: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let deltaSeq = 0;
 
 export function connectWS() {
   if (!get(loggedIn)) return;
@@ -82,7 +84,11 @@ function handleMessage(msg: { type: string; payload: any }) {
     case "track.updated":
     case "track.removed":
     case "library.deduped":
-      libraryVersion.update((n) => n + 1);
+      libraryDelta.set({
+        seq: ++deltaSeq,
+        type: msg.type,
+        id: msg.payload?.id ? String(msg.payload.id) : null
+      });
       break;
     case "scan.started":
       scanRunning.set(true);
@@ -95,7 +101,6 @@ function handleMessage(msg: { type: string; payload: any }) {
           msg.payload as { added: number; updated: number; removed: number }
         );
       }
-      libraryVersion.update((n) => n + 1);
       break;
   }
 }

@@ -147,15 +147,13 @@ func (h *UserHandler) Me(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "user not found")
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"user": u,
-	})
+	return c.NoContent(http.StatusOK)
 }
 
 // Logout clears the HttpOnly session cookie.
 func (h *UserHandler) Logout(c echo.Context) error {
 	h.clearSessionCookie(c)
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	return c.NoContent(http.StatusNoContent)
 }
 
 // ChangePassword changes a user's password. Only the authenticated user (changing their own) or an admin may call this.
@@ -174,7 +172,7 @@ func (h *UserHandler) ChangePassword(c echo.Context) error {
 	}
 
 	if claims.UserID != body.UserID && !claims.IsAdmin {
-		return echo.NewHTTPError(http.StatusForbidden, "cannot change another user's password")
+		return c.NoContent(http.StatusForbidden)
 	}
 
 	if err := h.users.ChangePassword(c.Request().Context(), body.UserID, body.NewPassword); err != nil {

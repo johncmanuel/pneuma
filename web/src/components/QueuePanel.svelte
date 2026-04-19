@@ -6,6 +6,10 @@
   import { artworkUrl } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import { type Track, isLocalID } from "@pneuma/shared";
+  import {
+    markMissingTrackArtID,
+    missingTrackArtIDs
+  } from "../lib/stores/missing-art";
 
   let queue = $derived(
     ($playerState.queue ?? []).filter((id) => !isLocalID(id))
@@ -69,6 +73,11 @@
       position_ms: 0
     });
   }
+
+  function handleNowPlayingArtError(e: Event, trackID: string) {
+    (e.currentTarget as HTMLImageElement).style.display = "none";
+    markMissingTrackArtID(trackID);
+  }
 </script>
 
 <aside class="queue-panel">
@@ -81,13 +90,13 @@
     <div class="section-label">Now playing</div>
     <div class="now-playing-item">
       <div class="art-sm">
-        <img
-          src={artworkUrl(nowPlayingTrack.id)}
-          alt=""
-          onerror={(e) => {
-            (e.currentTarget as HTMLImageElement).style.display = "none";
-          }}
-        />
+        {#if !$missingTrackArtIDs[nowPlayingTrack.id]}
+          <img
+            src={artworkUrl(nowPlayingTrack.id)}
+            alt=""
+            onerror={(e) => handleNowPlayingArtError(e, nowPlayingTrack.id)}
+          />
+        {/if}
       </div>
       <div class="track-info">
         <span class="name truncate">{nowPlayingTrack.title}</span>
@@ -180,6 +189,9 @@
     overflow: hidden;
     flex-shrink: 0;
     background: var(--surface-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   .art-sm img {
     width: 100%;

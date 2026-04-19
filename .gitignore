@@ -3,3 +3,6 @@ build/bin
 **/dist
 **/.svelte-kit
 **/build
+
+# place to store server logs during devtools mcp usage
+tmp/

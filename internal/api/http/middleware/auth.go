@@ -95,7 +95,7 @@ func RequireAdmin(secret string) echo.MiddlewareFunc {
 			}
 
 			if !claims.IsAdmin {
-				return echo.NewHTTPError(http.StatusForbidden, "admin access required")
+				return c.NoContent(http.StatusForbidden)
 			}
 
 			c.Set(ContextKey, claims)

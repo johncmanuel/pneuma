@@ -126,7 +126,7 @@ type trackRows interface {
 	serverdb.ListTracksRow |
 		serverdb.ListTracksPageRow |
 		serverdb.ListTracksByIDsRow |
-		serverdb.SearchTracksRow |
+		serverdb.SearchTracksByIDsRow |
 		serverdb.ListTracksByAlbumNameRow |
 		serverdb.ListTracksByAlbumNameAndArtistRow |
 		serverdb.ListTracksByAlbumUnorganizedRow
@@ -190,7 +190,7 @@ func ListTracksByIDsToModels(rows []serverdb.ListTracksByIDsRow) []*models.Track
 	return tracksToModels(rows)
 }
 
-func SearchTracksToModels(rows []serverdb.SearchTracksRow) []*models.Track {
+func SearchTracksByIDsToModels(rows []serverdb.SearchTracksByIDsRow) []*models.Track {
 	return tracksToModels(rows)
 }
 

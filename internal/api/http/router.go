@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,8 @@ import (
 	apws "pneuma/internal/api/ws"
 	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
+	"pneuma/internal/media"
+	"pneuma/internal/models"
 	"pneuma/internal/playback"
 	"pneuma/internal/playlist"
 	"pneuma/internal/store/sqlite/serverdb"
@@ -45,6 +48,7 @@ type Services struct {
 	ArtworkDir     string // directory for playlist artwork thumbnails
 	UploadMaxMB    int    // max upload body size in MB (0 = default 500 MB)
 	IngestionQueue *ingestion.Queue
+	Transcoder     *media.StreamTranscoder
 	WebUI          fs.FS // embedded dashboard assets (nil = disabled)
 	WebPlayerUI    fs.FS // embedded web player assets (nil = disabled)
 
@@ -64,6 +68,27 @@ func NewRouter(svc Services) *echo.Echo {
 	}))
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORS())
+	e.Use(echomw.GzipWithConfig(echomw.GzipConfig{
+		Level: 5,
+		Skipper: func(c echo.Context) bool {
+			r := c.Request()
+			path := r.URL.Path
+
+			if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+				return true
+			}
+
+			if strings.HasPrefix(path, "/ws") {
+				return true
+			}
+
+			if strings.HasPrefix(path, "/api/stream/") || strings.HasSuffix(path, "/stream") {
+				return true
+			}
+
+			return r.Header.Get("Range") != ""
+		},
+	}))
 	e.Use(echomw.RequestID())
 	e.Use(middleware.SecurityHeaders())
 	e.Use(middleware.RequireSameOriginForCookieAuth())
@@ -72,7 +97,16 @@ func NewRouter(svc Services) *echo.Echo {
 	authMW := middleware.RequireAuth(secret)
 	adminMW := middleware.RequireAdmin(secret)
 
-	lh := handlers.NewLibraryHandler(svc.Library, svc.Queries, svc.Scanner, svc.Hub, svc.IngestionQueue, svc.UploadsDir)
+	lh := handlers.NewLibraryHandler(
+		svc.Library,
+		svc.Queries,
+		svc.Scanner,
+		svc.Hub,
+		svc.IngestionQueue,
+		svc.UploadsDir,
+		filepath.Join(svc.ArtworkDir, "tracks"),
+		svc.Transcoder,
+	)
 	ph := handlers.NewPlaybackHandler(svc.Playback)
 	uh := handlers.NewUserHandler(svc.User, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries)
@@ -80,6 +114,7 @@ func NewRouter(svc Services) *echo.Echo {
 	rh := handlers.NewRecentHandler(svc.Queries)
 
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
+	svc.Hub.SetOutboundPayloadTransformer(transformOutboundEventPayload)
 
 	// WebSocket: validate JWT from Authorization/cookie/query token.
 	e.GET("/ws", func(c echo.Context) error {
@@ -162,6 +197,8 @@ func NewRouter(svc Services) *echo.Echo {
 	pl.GET("/:id/items", plh.GetPlaylistItems)
 	pl.PUT("/:id/items", plh.SetPlaylistItems)
 	pl.POST("/:id/items", plh.AddPlaylistItem)
+	pl.POST("/:id/items/append", plh.AppendPlaylistItems)
+	pl.DELETE("/:id/items/:position", plh.RemovePlaylistItem)
 	pl.POST("/:id/artwork", plh.UploadPlaylistArt)
 	pl.GET("/:id/art", plh.ServePlaylistArt)
 
@@ -224,11 +261,13 @@ func NewRouter(svc Services) *echo.Echo {
 			}
 			if f, err := ui.Open(fsPath); err == nil {
 				f.Close()
+				setSPAStaticCacheHeader(w.Header(), r2.URL.Path)
 				fileServer.ServeHTTP(w, &r2)
 				return
 			}
 
 			r2.URL.Path = "/index.html"
+			setSPAStaticCacheHeader(w.Header(), r2.URL.Path)
 			fileServer.ServeHTTP(w, &r2)
 		}))
 
@@ -243,6 +282,51 @@ func NewRouter(svc Services) *echo.Echo {
 	serveSPA("/player", svc.WebPlayerUI)
 
 	return e
+}
+
+func transformOutboundEventPayload(eventType string, payload any) any {
+	switch eventType {
+	case string(models.EventTrackAdded), string(models.EventTrackUpdated), string(models.EventTrackRemoved):
+		type trackEventPayload struct {
+			ID string `json:"id"`
+		}
+
+		if p, ok := payload.(map[string]string); ok {
+			if id := strings.TrimSpace(p["id"]); id != "" {
+				return trackEventPayload{ID: id}
+			}
+		}
+
+		if p, ok := payload.(*models.Track); ok && p != nil {
+			return trackEventPayload{ID: p.ID}
+		}
+
+		if p, ok := payload.(models.Track); ok {
+			return trackEventPayload{ID: p.ID}
+		}
+	}
+
+	return payload
+}
+
+func setSPAStaticCacheHeader(h http.Header, path string) {
+	p := strings.ToLower(strings.TrimSpace(path))
+
+	if p == "" {
+		p = "/"
+	}
+
+	if strings.HasPrefix(p, "/assets/") {
+		h.Set("Cache-Control", "public, max-age=31536000, immutable")
+		return
+	}
+
+	if p == "/" || p == "/index.html" || p == "/sw.js" || p == "/site.webmanifest" || p == "/offline.html" || strings.HasSuffix(p, ".html") {
+		h.Set("Cache-Control", "no-cache")
+		return
+	}
+
+	h.Set("Cache-Control", "public, max-age=86400")
 }
 
 // playbackWSDispatch returns a ws.InboundHandler that routes inbound WS

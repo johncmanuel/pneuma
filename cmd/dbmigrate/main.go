@@ -78,7 +78,11 @@ func main() {
 
 	// FK enforcement must be off for migration 003, involving a recreation of the table, tracks.
 	// The pragma must be set on the connection before a transaction begins; it cannot be changed from inside a transaction.
-	db, err := sqlite.OpenRaw(path, false)
+	db, err := sqlite.OpenRaw(path, sqlite.OpenOptions{
+		EnableFKs:    false,
+		MaxOpenConns: 1,
+		MaxIdleConns: 1,
+	})
 	if err != nil {
 		fatalf("open db: %v", err)
 	}

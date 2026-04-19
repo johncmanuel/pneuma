@@ -112,7 +112,7 @@ func (iq *Queue) process(_ context.Context, job Job) {
 		CreatedAt:  dbconv.FormatTime(now),
 	})
 
-	iq.hub.Publish(string(models.EventTrackAdded), job.Track)
+	iq.hub.Publish(string(models.EventTrackAdded), map[string]string{"id": job.Track.ID})
 
 	go iq.scanner.ScanPath(job.FinalPath)
 

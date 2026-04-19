@@ -20,12 +20,14 @@ type ServerConfig struct {
 
 // DatabaseConfig holds SQLite settings.
 type DatabaseConfig struct {
-	Path string `toml:"path"`
+	Path         string `toml:"path"`
+	MaxOpenConns int    `toml:"max_open_conns"`
 }
 
 // LibraryConfig holds music library settings.
 type LibraryConfig struct {
-	WatchFolders []string `toml:"watch_folders"`
+	WatchFolders        []string `toml:"watch_folders"`
+	ScanIntervalMinutes int      `toml:"scan_interval_minutes"`
 }
 
 // ArtworkConfig holds artwork cache settings.
@@ -46,6 +48,12 @@ type TranscodingConfig struct {
 	FFmpegPath string `toml:"ffmpeg_path"`
 	// FpcalcPath is the path to the Chromaprint fpcalc binary.
 	FpcalcPath string `toml:"fpcalc_path"`
+	// CacheDir is where cached transcoded streams are written.
+	CacheDir string `toml:"cache_dir"`
+	// CacheMaxSizeMB is the max on-disk transcode cache size in MB.
+	CacheMaxSizeMB int `toml:"cache_max_size_mb"`
+	// MaxConcurrentJobs limits concurrent ffmpeg transcode jobs.
+	MaxConcurrentJobs int `toml:"max_concurrent_jobs"`
 }
 
 // UploadConfig holds music upload settings.
@@ -92,6 +100,7 @@ const (
 	ConfigMusicDirName        = "music"
 	ConfigArtworkDirName      = "artwork"
 	ConfigCachePlaylistArtDir = "playlist-artwork"
+	ConfigCacheTranscodeDir   = "transcode-cache"
 	ConfigUploadDirName       = "uploads"
 	ConfigDefaultDataDirName  = ".pneuma"
 
@@ -101,8 +110,10 @@ const (
 	EnvServerHost            = "PNEUMA_SERVER_HOST"
 	EnvServerPort            = "PNEUMA_SERVER_PORT"
 	EnvDatabasePath          = "PNEUMA_DATABASE_PATH"
+	EnvDatabaseMaxOpenConns  = "PNEUMA_DATABASE_MAX_OPEN_CONNS"
 	EnvAuthSecretKey         = "PNEUMA_AUTH_SECRET_KEY"
 	EnvLibraryWatchFolders   = "PNEUMA_LIBRARY_WATCH_FOLDERS"
+	EnvLibraryScanInterval   = "PNEUMA_LIBRARY_SCAN_INTERVAL_MINUTES"
 	EnvArtworkCacheDir       = "PNEUMA_ARTWORK_CACHE_DIR"
 	EnvArtworkMaxSizeMB      = "PNEUMA_ARTWORK_MAX_SIZE_MB"
 	EnvUploadDir             = "PNEUMA_UPLOAD_DIR"
@@ -110,6 +121,9 @@ const (
 	EnvUploadQueueCapacity   = "PNEUMA_UPLOAD_QUEUE_CAPACITY"
 	EnvTranscodingFFmpegPath = "PNEUMA_TRANSCODING_FFMPEG_PATH"
 	EnvTranscodingFpcalcPath = "PNEUMA_TRANSCODING_FPCALC_PATH"
+	EnvTranscodingCacheDir   = "PNEUMA_TRANSCODING_CACHE_DIR"
+	EnvTranscodingCacheMaxMB = "PNEUMA_TRANSCODING_CACHE_MAX_SIZE_MB"
+	EnvTranscodingMaxJobs    = "PNEUMA_TRANSCODING_MAX_CONCURRENT_JOBS"
 	EnvRateLimitingEnabled   = "PNEUMA_RATE_LIMITING_ENABLED"
 
 	// Playlist artwork caching
@@ -142,10 +156,12 @@ func DefaultConfig(dataDir string) *Config {
 			Port: ServerPortDefault,
 		},
 		Database: DatabaseConfig{
-			Path: filepath.Join(dataDir, ConfigDatabaseName),
+			Path:         filepath.Join(dataDir, ConfigDatabaseName),
+			MaxOpenConns: 1,
 		},
 		Library: LibraryConfig{
-			WatchFolders: []string{filepath.Join(dataDir, ConfigMusicDirName)},
+			WatchFolders:        []string{filepath.Join(dataDir, ConfigMusicDirName)},
+			ScanIntervalMinutes: 120,
 		},
 		Artwork: ArtworkConfig{
 			CacheDir:  filepath.Join(dataDir, ConfigArtworkDirName),
@@ -161,8 +177,11 @@ func DefaultConfig(dataDir string) *Config {
 		},
 		// fpcalc will be used for fingerprinting in the future (a stretch goal atm)
 		Transcoding: TranscodingConfig{
-			FFmpegPath: "ffmpeg",
-			FpcalcPath: "fpcalc",
+			FFmpegPath:        "ffmpeg",
+			FpcalcPath:        "fpcalc",
+			CacheDir:          filepath.Join(dataDir, ConfigCacheTranscodeDir),
+			CacheMaxSizeMB:    2048,
+			MaxConcurrentJobs: 1,
 		},
 		RateLimiting: RateLimitingConfig{
 			Enabled: true,
@@ -183,11 +202,21 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv(EnvDatabasePath); v != "" {
 		cfg.Database.Path = v
 	}
+	if v := os.Getenv(EnvDatabaseMaxOpenConns); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Database.MaxOpenConns = n
+		}
+	}
 	if v := os.Getenv(EnvAuthSecretKey); v != "" {
 		cfg.Auth.SecretKey = v
 	}
 	if v := os.Getenv(EnvLibraryWatchFolders); v != "" {
 		cfg.Library.WatchFolders = strings.Split(v, ",")
+	}
+	if v := os.Getenv(EnvLibraryScanInterval); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Library.ScanIntervalMinutes = p
+		}
 	}
 	if v := os.Getenv(EnvArtworkCacheDir); v != "" {
 		cfg.Artwork.CacheDir = v
@@ -215,6 +244,19 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv(EnvTranscodingFpcalcPath); v != "" {
 		cfg.Transcoding.FpcalcPath = v
+	}
+	if v := os.Getenv(EnvTranscodingCacheDir); v != "" {
+		cfg.Transcoding.CacheDir = v
+	}
+	if v := os.Getenv(EnvTranscodingCacheMaxMB); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Transcoding.CacheMaxSizeMB = p
+		}
+	}
+	if v := os.Getenv(EnvTranscodingMaxJobs); v != "" {
+		if p, err := strconv.Atoi(v); err == nil {
+			cfg.Transcoding.MaxConcurrentJobs = p
+		}
 	}
 	if v := os.Getenv(EnvRateLimitingEnabled); v != "" {
 		// Accept "false", "0", "no" as falsy; anything else (including "true", "1") keeps it enabled.

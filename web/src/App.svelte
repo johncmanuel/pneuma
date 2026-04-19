@@ -14,6 +14,7 @@
     activePanel,
     closePanel,
     currentView,
+    initialDataLoaded,
     pushNav,
     goBack,
     goForward,
@@ -28,6 +29,7 @@
   import Library from "./views/Library.svelte";
   import Playlists from "./views/Playlists.svelte";
   import Favorites from "./views/Favorites.svelte";
+  import SettingsView from "./views/Settings.svelte";
   import Login from "./views/Login.svelte";
   import Register from "./views/Register.svelte";
   import {
@@ -74,15 +76,14 @@
 
   type MobileTab = "library" | "search" | "playlists" | "favorites";
 
-  let activeMobileTab = $derived(
-    $currentView === "favorites"
-      ? "favorites"
-      : $currentView === "playlists"
-        ? "playlists"
-        : $currentView === "search"
-          ? "search"
-          : "library"
-  );
+  const MOBILE_TAB_MAP: Record<string, MobileTab> = {
+    favorites: "favorites",
+    playlists: "playlists",
+    search: "search",
+    library: "library"
+  };
+
+  let activeMobileTab = $derived(MOBILE_TAB_MAP[$currentView] ?? null);
 
   let resizeMoveHandler: ((event: MouseEvent) => void) | null = $state(null);
   let resizeUpHandler: (() => void) | null = $state(null);
@@ -348,12 +349,16 @@
       wasLoggedIn = true;
       connectWS();
       loadPlaybackState();
-      loadAlbumGroupsPage(0);
-      loadPlaylists();
-      loadRecent();
+      if (!$initialDataLoaded) {
+        initialDataLoaded.set(true);
+        loadAlbumGroupsPage(0);
+        loadPlaylists();
+        loadRecent();
+      }
     } else if (!$loggedIn && wasLoggedIn) {
       wasLoggedIn = false;
       disconnectWS();
+      initialDataLoaded.set(false);
     }
   });
 
@@ -499,6 +504,8 @@
         <Playlists />
       {:else if $currentView === "search"}
         <SearchView mobileView={isMobileView} />
+      {:else if $currentView === "settings"}
+        <SettingsView />
       {/if}
     </main>
 
@@ -565,7 +572,7 @@
   <aside class="pwa-update-banner" role="status" aria-live="polite">
     <div class="pwa-update-text">
       <strong>Update available</strong>
-      <span>Reload now to get the latest mobile fixes.</span>
+      <span>Reload now to get the latest fixes.</span>
     </div>
     <div class="pwa-update-actions">
       <button class="pwa-update-btn primary" onclick={applyPendingPWAUpdate}

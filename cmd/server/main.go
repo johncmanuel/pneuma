@@ -19,6 +19,7 @@ import (
 	"pneuma/internal/config"
 	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
+	"pneuma/internal/media"
 	"pneuma/internal/metadata/parser"
 	"pneuma/internal/playback"
 	"pneuma/internal/playlist"
@@ -52,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	store, err := sqlite.Open(cfg.Database.Path)
+	store, err := sqlite.Open(cfg.Database.Path, cfg.Database.MaxOpenConns)
 	if err != nil {
 		slog.Error("db open failed", "err", err)
 		os.Exit(1)
@@ -68,6 +69,12 @@ func main() {
 	metaParser := parser.New(cfg.Transcoding.FFmpegPath)
 	playEngine := playback.New(queries, hub, libSvc)
 	playlistSvc := playlist.New(queries)
+	transcoder := media.NewStreamTranscoder(media.TranscodeConfig{
+		FFmpegPath:        cfg.Transcoding.FFmpegPath,
+		CacheDir:          cfg.Transcoding.CacheDir,
+		CacheMaxSizeMB:    cfg.Transcoding.CacheMaxSizeMB,
+		MaxConcurrentJobs: cfg.Transcoding.MaxConcurrentJobs,
+	})
 
 	watcher, err := scanner.NewWatcher(libSvc, metaParser, hub)
 	if err != nil {
@@ -79,7 +86,13 @@ func main() {
 			slog.Warn("watch folder unavailable", "dir", dir, "err", err)
 		}
 	}
-	sched := scanner.NewScheduler(libSvc, metaParser, hub, cfg.Library.WatchFolders, 15*time.Minute)
+	scanIntervalMinutes := cfg.Library.ScanIntervalMinutes
+	if scanIntervalMinutes <= 0 {
+		scanIntervalMinutes = 120
+	}
+	scanInterval := time.Duration(scanIntervalMinutes) * time.Minute
+	slog.Info("library scan interval configured", "minutes", scanIntervalMinutes)
+	sched := scanner.NewScheduler(libSvc, metaParser, hub, cfg.Library.WatchFolders, scanInterval)
 
 	// Clean up orphaned temp files from a previous crash
 	tmpUploadsDir := filepath.Join(cfg.Upload.Dir, "tmp")
@@ -104,13 +117,21 @@ func main() {
 		ArtworkDir:          filepath.Join(dir, config.ConfigCachePlaylistArtDir),
 		UploadMaxMB:         cfg.Upload.MaxSizeMB,
 		IngestionQueue:      iqQueue,
+		Transcoder:          transcoder,
 		WebUI:               dashboard.FS(),
 		WebPlayerUI:         web.FS(),
 		RateLimitingEnabled: cfg.RateLimiting.Enabled,
 	})
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
-	srv := &http.Server{Addr: addr, Handler: router}
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           router,
+		ReadHeaderTimeout: 15 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

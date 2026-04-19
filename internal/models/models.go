@@ -23,7 +23,6 @@ type TrackAlbumGroup struct {
 	Artist       string `json:"artist"` // album_artist
 	TrackCount   int    `json:"track_count"`
 	FirstTrackID string `json:"first_track_id"` // any track in this album (for artwork)
-	ArtworkID    string `json:"artwork_id"`
 }
 
 type Track struct {
@@ -70,9 +69,8 @@ type Playlist struct {
 
 	// Computed/aggregate fields (not stored, populated by service layer).
 	ItemCount  int   `json:"item_count,omitempty"`
-	DurationMS int64 `json:"duration_ms,omitempty"`
-	TrackCount int   `json:"track_count,omitempty"`  // alias for ItemCount in list views
-	TotalDurMS int64 `json:"total_dur_ms,omitempty"` // alias for DurationMS in list views
+	DurationMS int64 `json:"total_duration_ms,omitempty"`
+	TrackCount int   `json:"track_count,omitempty"` // alias for ItemCount in list views
 }
 
 // PlaylistItem is a single entry in a playlist. It supports both remote tracks

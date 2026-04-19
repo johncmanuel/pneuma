@@ -270,7 +270,7 @@ func (a *App) updateServerPlaylistItems(serverURL, token, playlistID string, ite
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		msg, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("set items failed (%d): %s", resp.StatusCode, string(msg))
 	}

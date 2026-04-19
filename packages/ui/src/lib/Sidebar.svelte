@@ -20,6 +20,8 @@
     name: string;
     sub: string;
     artworkUrl?: string;
+    artworkTrackId?: string;
+    artworkPlaylistId?: string;
   }
 
   interface Props {
@@ -30,6 +32,7 @@
     onToggleCollapse?: () => void;
     onNavigate?: (id: string) => void;
     onRecentClick?: (item: RecentItem) => void;
+    onRecentArtError?: (item: RecentItem) => void;
   }
 
   let {
@@ -39,11 +42,13 @@
     collapsed = false,
     onToggleCollapse,
     onNavigate,
-    onRecentClick
+    onRecentClick,
+    onRecentArtError
   }: Props = $props();
 
-  function hideImg(e: Event) {
+  function handleRecentArtError(e: Event, item: RecentItem) {
     (e.currentTarget as HTMLImageElement).style.display = "none";
+    onRecentArtError?.(item);
   }
 
   const navIconById: Record<string, any> = {
@@ -112,7 +117,7 @@
               <img
                 src={item.artworkUrl}
                 alt=""
-                onerror={hideImg}
+                onerror={(e) => handleRecentArtError(e, item)}
                 loading="lazy"
               />
             {/if}

@@ -135,8 +135,6 @@ self.addEventListener("install", (event) => {
       );
 
       await precacheShellLinkedAssets(cache);
-
-      await self.skipWaiting();
     })()
   );
 });
@@ -180,9 +178,6 @@ self.addEventListener("fetch", (event) => {
           });
           return network;
         } catch {
-          const fallback = await caches.match(offlineFallbackPathname);
-          if (fallback) return fallback;
-
           const cached = await caches.match(request);
           if (cached) return cached;
 
@@ -191,6 +186,9 @@ self.addEventListener("fetch", (event) => {
 
           const appShellHTML = await caches.match(appShellPathname);
           if (appShellHTML) return appShellHTML;
+
+          const fallback = await caches.match(offlineFallbackPathname);
+          if (fallback) return fallback;
 
           throw new Error("offline and no cached html available");
         }

@@ -3,6 +3,7 @@ package handlers
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -16,6 +17,8 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"pneuma/internal/api/http/middleware"
+	"pneuma/internal/artwork"
+	"pneuma/internal/config"
 	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
 	"pneuma/internal/media"
@@ -38,20 +41,129 @@ type eventPublisher interface {
 
 // LibraryHandler serves library-related API routes.
 type LibraryHandler struct {
-	lib        *library.Service
-	q          *serverdb.Queries
-	scanner    scanTrigger
-	hub        eventPublisher
-	queue      *ingestion.Queue
-	uploadsDir string
-	tmpDir     string // temp staging area under uploadsDir
+	lib             *library.Service
+	q               *serverdb.Queries
+	scanner         scanTrigger
+	hub             eventPublisher
+	queue           *ingestion.Queue
+	uploadsDir      string
+	tmpDir          string // temp staging area under uploadsDir
+	trackArtworkDir string
+	transcoder      *media.StreamTranscoder
+}
+
+type compactTrackListItem struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	ArtistName  string `json:"artist_name,omitempty"`
+	AlbumArtist string `json:"album_artist"`
+	AlbumName   string `json:"album_name"`
+	TrackNumber int    `json:"track_number"`
+	DiscNumber  int    `json:"disc_number"`
+	DurationMS  int64  `json:"duration_ms"`
+}
+
+type adminTrackListItem struct {
+	compactTrackListItem
+	UploadedByUserID string    `json:"uploaded_by_user_id,omitempty"`
+	CreatedAt        time.Time `json:"created_at,omitempty"`
+}
+
+func compactTrackListItems(tracks []*models.Track) []compactTrackListItem {
+	items := make([]compactTrackListItem, 0, len(tracks))
+	for _, track := range tracks {
+		if track == nil {
+			continue
+		}
+		items = append(items, compactTrackListItem{
+			ID:          track.ID,
+			Title:       track.Title,
+			ArtistName:  track.AlbumArtist,
+			AlbumArtist: track.AlbumArtist,
+			AlbumName:   track.AlbumName,
+			TrackNumber: track.TrackNumber,
+			DiscNumber:  track.DiscNumber,
+			DurationMS:  track.DurationMS,
+		})
+	}
+	return items
+}
+
+func adminTrackListItems(tracks []*models.Track) []adminTrackListItem {
+	items := make([]adminTrackListItem, 0, len(tracks))
+	for _, track := range tracks {
+		if track == nil {
+			continue
+		}
+
+		items = append(items, adminTrackListItem{
+			compactTrackListItem: compactTrackListItem{
+				ID:          track.ID,
+				Title:       track.Title,
+				ArtistName:  track.AlbumArtist,
+				AlbumArtist: track.AlbumArtist,
+				AlbumName:   track.AlbumName,
+				TrackNumber: track.TrackNumber,
+				DiscNumber:  track.DiscNumber,
+				DurationMS:  track.DurationMS,
+			},
+			UploadedByUserID: track.UploadedByUserID,
+			CreatedAt:        track.CreatedAt,
+		})
+	}
+
+	return items
+}
+
+// trackResponseView determines the desired level of detail for
+// track list responses based on the "view" query parameter.
+func trackResponseView(c echo.Context) string {
+	return strings.ToLower(strings.TrimSpace(c.QueryParam("view")))
+}
+
+// wantsCompactTrackResponse returns true if the "view" query parameter
+// indicates a "compact" or "lite" view.
+func wantsCompactTrackResponse(c echo.Context) bool {
+	switch trackResponseView(c) {
+	case "compact", "lite":
+		return true
+	default:
+		return false
+	}
+}
+
+// wantsAdminTrackResponse returns true if the "view" query parameter
+// indicates an "admin-list" view.
+func wantsAdminTrackResponse(c echo.Context) bool {
+	return trackResponseView(c) == "admin-list"
+}
+
+// wantsFullTrackResponse returns true if the "view" query parameter
+// indicates a "full" view, which includes all track details.
+func wantsFullTrackResponse(c echo.Context) bool {
+	return trackResponseView(c) == "full"
 }
 
 // NewLibraryHandler creates a LibraryHandler.
-func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, queue *ingestion.Queue, uploadsDir string) *LibraryHandler {
+func NewLibraryHandler(lib *library.Service, q *serverdb.Queries, sc scanTrigger, hub eventPublisher, queue *ingestion.Queue, uploadsDir, trackArtworkDir string, transcoder *media.StreamTranscoder) *LibraryHandler {
 	tmpDir := filepath.Join(uploadsDir, "tmp")
 	_ = os.MkdirAll(tmpDir, 0o755)
-	return &LibraryHandler{lib: lib, q: q, scanner: sc, hub: hub, queue: queue, uploadsDir: uploadsDir, tmpDir: tmpDir}
+	if strings.TrimSpace(trackArtworkDir) == "" {
+		trackArtworkDir = filepath.Join(uploadsDir, "track-artwork")
+	}
+	_ = os.MkdirAll(trackArtworkDir, 0o755)
+
+	return &LibraryHandler{
+		lib:             lib,
+		q:               q,
+		scanner:         sc,
+		hub:             hub,
+		queue:           queue,
+		uploadsDir:      uploadsDir,
+		tmpDir:          tmpDir,
+		trackArtworkDir: trackArtworkDir,
+		transcoder:      transcoder,
+	}
 }
 
 // ListTracks returns tracks. Supports optional pagination via ?offset=&limit=
@@ -66,7 +178,13 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(http.StatusOK, tracks)
+		if wantsFullTrackResponse(c) {
+			return c.JSON(http.StatusOK, tracks)
+		}
+		if wantsAdminTrackResponse(c) {
+			return c.JSON(http.StatusOK, adminTrackListItems(tracks))
+		}
+		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
 	}
 
 	// Fetch tracks by album: GET /api/library/tracks?album_name=X&album_artist=Y
@@ -76,7 +194,13 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
-		return c.JSON(http.StatusOK, tracks)
+		if wantsFullTrackResponse(c) {
+			return c.JSON(http.StatusOK, tracks)
+		}
+		if wantsAdminTrackResponse(c) {
+			return c.JSON(http.StatusOK, adminTrackListItems(tracks))
+		}
+		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
 	}
 
 	offsetStr := c.QueryParam("offset")
@@ -101,8 +225,16 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+
+		trackPayload := any(tracks)
+		if wantsAdminTrackResponse(c) {
+			trackPayload = adminTrackListItems(tracks)
+		} else if wantsCompactTrackResponse(c) {
+			trackPayload = compactTrackListItems(tracks)
+		}
+
 		return c.JSON(http.StatusOK, map[string]any{
-			"tracks": tracks,
+			"tracks": trackPayload,
 			"total":  total,
 			"offset": offset,
 			"limit":  limit,
@@ -112,6 +244,12 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 	tracks, err := h.lib.AllTracks(ctx)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if wantsAdminTrackResponse(c) {
+		return c.JSON(http.StatusOK, adminTrackListItems(tracks))
+	}
+	if wantsCompactTrackResponse(c) {
+		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
 	}
 	return c.JSON(http.StatusOK, tracks)
 }
@@ -138,66 +276,172 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound, "not found")
 	}
 
+	quality := media.ParseStreamQuality(c.QueryParam("quality"))
+
+	info, err := os.Stat(track.Path)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if h.transcoder != nil {
+		if cachedPath, ok := h.transcoder.ResolveCachedPath(track, track.Path, info, quality); ok {
+			cachedFile, err := os.Open(cachedPath)
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			defer cachedFile.Close()
+
+			cachedInfo, err := cachedFile.Stat()
+			if err != nil {
+				return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+
+			c.Response().Header().Set("Content-Type", media.MimeFromExt(".ogg"))
+			c.Response().Header().Set("Cache-Control", "private, no-store")
+			c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.NormalizeStreamQuality(quality)))
+			normalizeRangeHeader(c.Request(), cachedInfo.Size())
+			http.ServeContent(c.Response(), c.Request(), cachedInfo.Name(), cachedInfo.ModTime(), cachedFile)
+			return nil
+		}
+
+		h.transcoder.QueueTranscode(track, track.Path, info, quality)
+	}
+
 	f, err := os.Open(track.Path)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	defer f.Close()
 
-	info, err := f.Stat()
-	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-
 	ext := strings.ToLower(filepath.Ext(track.Path))
 
 	c.Response().Header().Set("Content-Type", media.MimeFromExt(ext))
 	c.Response().Header().Set("Cache-Control", "private, no-store")
+	c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.StreamQualityOriginal))
+	normalizeRangeHeader(c.Request(), info.Size())
 	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
 
 	return nil
+}
+
+// normalizeRangeHeader removes the Range header if the requested
+// start byte is beyond the end of the file.
+func normalizeRangeHeader(req *http.Request, fileSize int64) {
+	start, ok := parseRangeStart(req.Header.Get("Range"))
+	if !ok {
+		return
+	}
+
+	if start >= fileSize {
+		req.Header.Del("Range")
+	}
+}
+
+// parseRangeStart extracts the starting byte offset from a Range header value.
+func parseRangeStart(value string) (int64, bool) {
+	rangeValue := strings.TrimSpace(value)
+	if rangeValue == "" || !strings.HasPrefix(rangeValue, "bytes=") {
+		return 0, false
+	}
+
+	spec := strings.TrimSpace(strings.TrimPrefix(rangeValue, "bytes="))
+	if spec == "" || strings.Contains(spec, ",") {
+		return 0, false
+	}
+
+	sep := strings.Index(spec, "-")
+	if sep <= 0 {
+		return 0, false
+	}
+
+	start, err := strconv.ParseInt(strings.TrimSpace(spec[:sep]), 10, 64)
+	if err != nil || start < 0 {
+		return 0, false
+	}
+
+	return start, true
 }
 
 // ServeTrackArt returns embedded album art from the audio file.
 func (h *LibraryHandler) ServeTrackArt(c echo.Context) error {
 	track, err := h.lib.TrackByID(c.Request().Context(), c.Param("id"))
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return c.NoContent(http.StatusNotFound)
 	}
 	if track == nil {
-		return echo.NewHTTPError(http.StatusNotFound, "not found")
+		return c.NoContent(http.StatusNotFound)
+	}
+
+	info, err := os.Stat(track.Path)
+	if err != nil {
+		return c.NoContent(http.StatusNotFound)
+	}
+
+	hash := trackArtCacheKey(track.Path, info)
+	cachePath := h.trackArtPath(hash)
+	if _, err := os.Stat(cachePath); err == nil {
+		return h.serveTrackArtFromPath(c, hash, cachePath)
 	}
 
 	f, err := os.Open(track.Path)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return c.NoContent(http.StatusNotFound)
 	}
 	defer f.Close()
 
 	m, err := tag.ReadFrom(f)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusNotFound, "no tags")
+		return c.NoContent(http.StatusNotFound)
 	}
 
 	pic := m.Picture()
 	if pic == nil || len(pic.Data) == 0 {
-		return echo.NewHTTPError(http.StatusNotFound, "no embedded art")
+		return c.NoContent(http.StatusNotFound)
 	}
 
-	ct := pic.MIMEType
-	if ct == "" {
-		ct = "image/jpeg"
+	thumbData, err := artwork.ResizeToThumbnail(pic.Data, config.PlaylistMaxArtDim)
+	if err != nil {
+		return c.NoContent(http.StatusNotFound)
 	}
 
-	sum := sha256.Sum256(pic.Data)
-	etag := `"` + hex.EncodeToString(sum[:8]) + `"`
+	if err := os.MkdirAll(h.trackArtworkDir, 0o755); err == nil {
+		if writeErr := artwork.WriteThumbnail(h.trackArtworkDir, filepath.Base(cachePath), thumbData); writeErr == nil {
+			return h.serveTrackArtFromPath(c, hash, cachePath)
+		}
+	}
+
+	etag := trackArtETag(hash)
+	if c.Request().Header.Get("If-None-Match") == etag {
+		return c.NoContent(http.StatusNotModified)
+	}
+	c.Response().Header().Set("ETag", etag)
+	c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	return c.Blob(http.StatusOK, "image/jpeg", thumbData)
+}
+
+func trackArtETag(hash string) string {
+	return `"` + hash + `"`
+}
+
+func trackArtCacheKey(path string, info os.FileInfo) string {
+	basis := fmt.Sprintf("%s|%d|%d", path, info.Size(), info.ModTime().UnixNano())
+	sum := sha256.Sum256([]byte(basis))
+	return hex.EncodeToString(sum[:12])
+}
+
+func (h *LibraryHandler) trackArtPath(hash string) string {
+	return filepath.Join(h.trackArtworkDir, "track-"+hash+".jpg")
+}
+
+func (h *LibraryHandler) serveTrackArtFromPath(c echo.Context, hash, path string) error {
+	etag := trackArtETag(hash)
 	if c.Request().Header.Get("If-None-Match") == etag {
 		return c.NoContent(http.StatusNotModified)
 	}
 
 	c.Response().Header().Set("ETag", etag)
 	c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-	return c.Blob(http.StatusOK, ct, pic.Data)
+	return c.File(path)
 }
 
 // UpdateTrackMeta applies a partial metadata update (PATCH).
@@ -299,13 +543,19 @@ func (h *LibraryHandler) Search(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+	if wantsAdminTrackResponse(c) {
+		return c.JSON(http.StatusOK, adminTrackListItems(tracks))
+	}
+	if wantsCompactTrackResponse(c) {
+		return c.JSON(http.StatusOK, compactTrackListItems(tracks))
+	}
 	return c.JSON(http.StatusOK, tracks)
 }
 
 // TriggerScan kicks off a full library rescan.
 func (h *LibraryHandler) TriggerScan(c echo.Context) error {
 	go h.scanner.ScanAll()
-	return c.JSON(http.StatusAccepted, map[string]string{"status": "scan started"})
+	return c.NoContent(http.StatusAccepted)
 }
 
 // UploadTrack uploads a track to the specified uploads directory.
@@ -463,7 +713,7 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 		CreatedAt:  dbconv.FormatTime(time.Now()),
 	})
 
-	h.hub.Publish(string(models.EventTrackRemoved), track)
+	h.hub.Publish(string(models.EventTrackRemoved), map[string]string{"id": track.ID})
 	return c.NoContent(http.StatusNoContent)
 }
 

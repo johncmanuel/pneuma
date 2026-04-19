@@ -4,6 +4,16 @@ export const RepeatModeEnum = {
   One: 2
 } as const;
 
+export const StreamQualityValues = [
+  "auto",
+  "low",
+  "medium",
+  "high",
+  "original"
+] as const;
+
+export type StreamQuality = (typeof StreamQualityValues)[number];
+
 export const RepeatLabels = ["Off", "All", "One"];
 
 export type RepeatModeEnum =
@@ -56,7 +66,9 @@ export interface PlaylistSummary {
   item_count: number;
   total_duration_ms: number;
   artwork_path: string;
-  owner_id: string;
+  remote_playlist_id?: string;
+  track_count?: number;
+  created_at?: string;
   updated_at: string;
 }
 

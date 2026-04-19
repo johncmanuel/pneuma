@@ -569,7 +569,7 @@ func (q *Queries) RestoreTrack(ctx context.Context, arg RestoreTrackParams) erro
 	return err
 }
 
-const searchTracks = `-- name: SearchTracks :many
+const searchTracksByIDs = `-- name: SearchTracksByIDs :many
 SELECT id, path, title,
     COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
     COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
@@ -582,14 +582,10 @@ SELECT id, path, title,
     deleted_at, created_at, updated_at
 FROM tracks
 WHERE tracks.deleted_at IS NULL
-  AND (title LIKE ?1
-    OR album_name LIKE ?1
-    OR album_artist LIKE ?1
-    OR genre LIKE ?1)
-ORDER BY title COLLATE NOCASE LIMIT 200
+  AND tracks.id IN (/*SLICE:ids*/?)
 `
 
-type SearchTracksRow struct {
+type SearchTracksByIDsRow struct {
 	ID               string
 	Path             string
 	Title            string
@@ -612,15 +608,25 @@ type SearchTracksRow struct {
 	UpdatedAt        string
 }
 
-func (q *Queries) SearchTracks(ctx context.Context, pattern string) ([]SearchTracksRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchTracks, pattern)
+func (q *Queries) SearchTracksByIDs(ctx context.Context, ids []string) ([]SearchTracksByIDsRow, error) {
+	query := searchTracksByIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []SearchTracksRow
+	var items []SearchTracksByIDsRow
 	for rows.Next() {
-		var i SearchTracksRow
+		var i SearchTracksByIDsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Path,
