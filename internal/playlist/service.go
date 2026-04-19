@@ -169,6 +169,21 @@ func (s *Service) AddItem(ctx context.Context, playlistID string, item models.Pl
 	})
 }
 
+// PlaylistStats returns item count and total duration for a playlist.
+func (s *Service) PlaylistStats(ctx context.Context, playlistID string) (int, int64, error) {
+	count, err := s.q.CountPlaylistItems(ctx, playlistID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("count playlist items: %w", err)
+	}
+
+	durationMS, err := s.q.SumPlaylistDuration(ctx, playlistID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("sum playlist duration: %w", err)
+	}
+
+	return int(count), durationMS, nil
+}
+
 // GenerateRandom creates a new playlist filled with randomly selected tracks
 // targeting the given duration in minutes. Only remote tracks are used.
 func (s *Service) GenerateRandom(ctx context.Context, userID, name, description string, durationMinutes int) (*models.Playlist, error) {

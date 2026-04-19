@@ -7,6 +7,7 @@ import {
   resetMissingTrackArtIDs
 } from "./stores/missing-art";
 import {
+  applyPlaylistDelta,
   favoritesPlaylistId,
   loadPlaylists,
   selectedPlaylist,
@@ -124,41 +125,32 @@ function handleMessage(msg: { type: string; payload: any }) {
     case "playlist.created":
     case "playlist.updated":
     case "playlist.deleted":
-      if (msg.type === "playlist.deleted" && msg.payload?.id) {
-        clearMissingPlaylistArtID(String(msg.payload.id));
-      }
+      if (msg.payload?.id) {
+        const playlistID = String(msg.payload.id);
 
-      if (
-        msg.type === "playlist.updated" &&
-        msg.payload?.id &&
-        typeof msg.payload?.artwork_path === "string" &&
-        msg.payload.artwork_path.trim() !== ""
-      ) {
-        clearMissingPlaylistArtID(String(msg.payload.id));
-      }
-
-      libraryVersion.update((n) => n + 1);
-      loadPlaylists().then(() => {
-        // if the favorites playlist was updated, refresh the view
-        const favoritesID = get(favoritesPlaylistId);
-        const selected = get(selectedPlaylist);
-        if (favoritesID && selected?.id === favoritesID) {
-          void selectPlaylist(favoritesID);
+        if (msg.type === "playlist.deleted") {
+          clearMissingPlaylistArtID(playlistID);
         }
-      });
 
-      // refresh the playlist view if selected
-      if (
-        msg.type === "playlist.updated" &&
-        msg.payload &&
-        typeof msg.payload === "object" &&
-        "id" in msg.payload &&
-        typeof msg.payload.id === "string"
-      ) {
-        const sel = get(selectedPlaylist);
-        if (sel?.id === msg.payload.id) {
-          void selectPlaylist(msg.payload.id);
+        if (
+          msg.type === "playlist.updated" &&
+          typeof msg.payload?.artwork_path === "string" &&
+          msg.payload.artwork_path.trim() !== ""
+        ) {
+          clearMissingPlaylistArtID(playlistID);
         }
+
+        libraryVersion.update((n) => n + 1);
+        void applyPlaylistDelta(msg.payload);
+      } else {
+        libraryVersion.update((n) => n + 1);
+        void loadPlaylists().then(() => {
+          const favoritesID = get(favoritesPlaylistId);
+          const selected = get(selectedPlaylist);
+          if (favoritesID && selected?.id === favoritesID) {
+            void selectPlaylist(favoritesID);
+          }
+        });
       }
       break;
   }

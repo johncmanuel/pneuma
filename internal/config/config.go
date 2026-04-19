@@ -20,7 +20,8 @@ type ServerConfig struct {
 
 // DatabaseConfig holds SQLite settings.
 type DatabaseConfig struct {
-	Path string `toml:"path"`
+	Path         string `toml:"path"`
+	MaxOpenConns int    `toml:"max_open_conns"`
 }
 
 // LibraryConfig holds music library settings.
@@ -109,6 +110,7 @@ const (
 	EnvServerHost            = "PNEUMA_SERVER_HOST"
 	EnvServerPort            = "PNEUMA_SERVER_PORT"
 	EnvDatabasePath          = "PNEUMA_DATABASE_PATH"
+	EnvDatabaseMaxOpenConns  = "PNEUMA_DATABASE_MAX_OPEN_CONNS"
 	EnvAuthSecretKey         = "PNEUMA_AUTH_SECRET_KEY"
 	EnvLibraryWatchFolders   = "PNEUMA_LIBRARY_WATCH_FOLDERS"
 	EnvLibraryScanInterval   = "PNEUMA_LIBRARY_SCAN_INTERVAL_MINUTES"
@@ -154,7 +156,8 @@ func DefaultConfig(dataDir string) *Config {
 			Port: ServerPortDefault,
 		},
 		Database: DatabaseConfig{
-			Path: filepath.Join(dataDir, ConfigDatabaseName),
+			Path:         filepath.Join(dataDir, ConfigDatabaseName),
+			MaxOpenConns: 1,
 		},
 		Library: LibraryConfig{
 			WatchFolders:        []string{filepath.Join(dataDir, ConfigMusicDirName)},
@@ -198,6 +201,11 @@ func applyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv(EnvDatabasePath); v != "" {
 		cfg.Database.Path = v
+	}
+	if v := os.Getenv(EnvDatabaseMaxOpenConns); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.Database.MaxOpenConns = n
+		}
 	}
 	if v := os.Getenv(EnvAuthSecretKey); v != "" {
 		cfg.Auth.SecretKey = v

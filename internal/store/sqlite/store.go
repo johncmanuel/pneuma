@@ -22,18 +22,24 @@ type Store struct {
 	db *sql.DB
 }
 
+type OpenOptions struct {
+	EnableFKs    bool
+	MaxOpenConns int
+	MaxIdleConns int
+}
+
 const SqlServerMigrationsDir = "sql/server/migrations"
 
 // OpenRaw opens the SQLite database at path, creates the directory if needed,
 // and applies the standard connection pragmas. NOTE: this does not include migrations logic.
 // See Open (under package sqlite) for the normal server entrypoint.
-func OpenRaw(path string, enableFKs bool) (*sql.DB, error) {
+func OpenRaw(path string, opts OpenOptions) (*sql.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("create db dir: %w", err)
 	}
 
 	fkState := "ON"
-	if !enableFKs {
+	if !opts.EnableFKs {
 		fkState = "OFF"
 	}
 
@@ -58,14 +64,21 @@ func OpenRaw(path string, enableFKs bool) (*sql.DB, error) {
 		return nil, fmt.Errorf("sqlite open %s: %w", path, err)
 	}
 
-	// Limit to a single connection so that all goroutines serialise through
-	// the same underlying SQLite handle. This prevents SQLITE_BUSY / "database
-	// is locked" errors that occur during heavy workloads like uploading large numbers
-	// of tracks and albums
-	// NOTE: could change this later in the future to allow for more connections, but
-	// not sure how to avoid SQLITE_BUSY errors while increasing the number of connections.
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	maxOpenConns := opts.MaxOpenConns
+	if maxOpenConns <= 0 {
+		maxOpenConns = 1
+	}
+
+	maxIdleConns := opts.MaxIdleConns
+	if maxIdleConns <= 0 {
+		maxIdleConns = maxOpenConns
+	}
+	if maxIdleConns > maxOpenConns {
+		maxIdleConns = maxOpenConns
+	}
+
+	db.SetMaxOpenConns(maxOpenConns)
+	db.SetMaxIdleConns(maxIdleConns)
 
 	// for long-lived connections, run PRAGMA optimize=0x10002 on first open
 	// https://www.sqlite.org/pragma.html#pragma_optimize
@@ -79,13 +92,17 @@ func OpenRaw(path string, enableFKs bool) (*sql.DB, error) {
 
 // Open creates or opens the SQLite database at path and applies all pending
 // migrations. This is the normal server entrypoint.
-func Open(path string) (*Store, error) {
+func Open(path string, maxOpenConns int) (*Store, error) {
+	if maxOpenConns <= 0 {
+		maxOpenConns = 1
+	}
+
 	// Disable FK enforcement while migrations run.
 	//
 	// Migration 003 drops and recreates the tracks table; disabling FKs prevents
 	// the cascade-constraint error from tables (e.g. playlist_items) that reference
 	// tracks.
-	db, err := OpenRaw(path, false)
+	db, err := OpenRaw(path, OpenOptions{EnableFKs: false, MaxOpenConns: 1, MaxIdleConns: 1})
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +113,7 @@ func Open(path string) (*Store, error) {
 	}
 	db.Close()
 
-	db, err = OpenRaw(path, true)
+	db, err = OpenRaw(path, OpenOptions{EnableFKs: true, MaxOpenConns: maxOpenConns, MaxIdleConns: maxOpenConns})
 	if err != nil {
 		return nil, err
 	}

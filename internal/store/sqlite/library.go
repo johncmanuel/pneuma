@@ -7,59 +7,33 @@ package sqlite
 
 import (
 	"context"
+	"strings"
 
 	"pneuma/internal/models"
 )
 
 // UnorganizedAlbum is the special album name for unorganized tracks.
-// Includes SQL single quotes for direct use in query concatenation.
 const UnorganizedAlbum = "'__unorganized__'"
 
-// These functions derive album groups directly from the tracks table using
-// GROUP BY, so they work even when the albums table is empty or incomplete.
+// These functions query materialized album group aggregates from
+// track_album_groups.
 
-const trackAlbumGroupKey = `CASE WHEN TRIM(COALESCE(album_name,''))='' THEN ` + UnorganizedAlbum + `
-	ELSE album_name || '|||' || COALESCE(album_artist,'') END`
-
-// ListTrackAlbumGroupsPage returns paginated album groups derived from tracks.
+// ListTrackAlbumGroupsPage returns paginated album groups from materialized cache.
 func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, offset, limit int) ([]*models.TrackAlbumGroup, error) {
-	var q string
-	var args []any
+	query := `SELECT key, name, artist, track_count, first_track_id
+	FROM track_album_groups`
 
-	// The queries below dynamically group tracks into albums using a composite key of the
-	// album name and artist. This allows the application to generate album listings directly
-	// from track metadata, avoiding the need for a separate albums table.
-
-	if filter != "" {
-		q = `SELECT ` + trackAlbumGroupKey + ` AS grp_key,
-			COALESCE(NULLIF(TRIM(album_name),''),'') AS album_name,
-			COALESCE(album_artist,'') AS album_artist,
-			COUNT(*) AS track_count,
-			MIN(id) AS first_track_id
-		FROM tracks
-		WHERE deleted_at IS NULL AND (album_name LIKE ? OR album_artist LIKE ?)
-		GROUP BY grp_key
-		ORDER BY album_name COLLATE NOCASE
-		LIMIT ? OFFSET ?`
-
+	args := make([]any, 0, 4)
+	if strings.TrimSpace(filter) != "" {
 		like := "%" + filter + "%"
-		args = []any{like, like, limit, offset}
-	} else {
-		q = `SELECT ` + trackAlbumGroupKey + ` AS grp_key,
-			COALESCE(NULLIF(TRIM(album_name),''),'') AS album_name,
-			COALESCE(album_artist,'') AS album_artist,
-			COUNT(*) AS track_count,
-			MIN(id) AS first_track_id
-		FROM tracks
-		WHERE deleted_at IS NULL
-		GROUP BY grp_key
-		ORDER BY album_name COLLATE NOCASE
-		LIMIT ? OFFSET ?`
-
-		args = []any{limit, offset}
+		query += ` WHERE name LIKE ? OR artist LIKE ?`
+		args = append(args, like, like)
 	}
 
-	rows, err := s.db.QueryContext(ctx, q, args...)
+	query += ` ORDER BY name COLLATE NOCASE LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -76,19 +50,55 @@ func (s *Store) ListTrackAlbumGroupsPage(ctx context.Context, filter string, off
 	return out, rows.Err()
 }
 
-// CountTrackAlbumGroups returns the total number of distinct album groups in tracks.
+// CountTrackAlbumGroups returns the total number of album groups in the materialized cache.
 func (s *Store) CountTrackAlbumGroups(ctx context.Context, filter string) (int, error) {
 	var n int
 	var err error
 
-	if filter != "" {
+	if strings.TrimSpace(filter) != "" {
 		like := "%" + filter + "%"
 		err = s.db.QueryRowContext(ctx,
-			`SELECT COUNT(DISTINCT `+trackAlbumGroupKey+`) FROM tracks WHERE deleted_at IS NULL AND (album_name LIKE ? OR album_artist LIKE ?)`,
+			`SELECT COUNT(*) FROM track_album_groups WHERE name LIKE ? OR artist LIKE ?`,
 			like, like).Scan(&n)
 	} else {
 		err = s.db.QueryRowContext(ctx,
-			`SELECT COUNT(DISTINCT `+trackAlbumGroupKey+`) FROM tracks WHERE deleted_at IS NULL`).Scan(&n)
+			`SELECT COUNT(*) FROM track_album_groups`).Scan(&n)
 	}
 	return n, err
+}
+
+// SearchTrackIDs performs token/prefix search against the FTS index and
+// returns matching track IDs in relevance order.
+func (s *Store) SearchTrackIDs(ctx context.Context, query string, limit int) ([]string, error) {
+	if strings.TrimSpace(query) == "" {
+		return []string{}, nil
+	}
+
+	if limit <= 0 {
+		limit = 200
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT t.id
+		FROM tracks_fts
+		JOIN tracks t ON t.rowid = tracks_fts.rowid
+		WHERE t.deleted_at IS NULL
+		  AND tracks_fts MATCH ?
+		ORDER BY bm25(tracks_fts), t.title COLLATE NOCASE
+		LIMIT ?`, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]string, 0, limit)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
 }

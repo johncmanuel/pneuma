@@ -53,7 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	store, err := sqlite.Open(cfg.Database.Path)
+	store, err := sqlite.Open(cfg.Database.Path, cfg.Database.MaxOpenConns)
 	if err != nil {
 		slog.Error("db open failed", "err", err)
 		os.Exit(1)

@@ -239,6 +239,23 @@ func (q *Queries) ListPlaylistsByUser(ctx context.Context, userID string) ([]Lis
 	return items, nil
 }
 
+const sumPlaylistDuration = `-- name: SumPlaylistDuration :one
+SELECT CAST(COALESCE(SUM(CASE
+    WHEN pi.source = 'remote' THEN COALESCE(t.duration_ms, 0)
+    ELSE pi.ref_duration_ms
+END), 0) AS INTEGER) AS total_duration_ms
+FROM playlist_items pi
+LEFT JOIN tracks t ON t.id = pi.track_id
+WHERE pi.playlist_id = ?
+`
+
+func (q *Queries) SumPlaylistDuration(ctx context.Context, playlistID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumPlaylistDuration, playlistID)
+	var total_duration_ms int64
+	err := row.Scan(&total_duration_ms)
+	return total_duration_ms, err
+}
+
 const touchPlaylist = `-- name: TouchPlaylist :exec
 UPDATE playlists SET updated_at = ? WHERE id = ?
 `

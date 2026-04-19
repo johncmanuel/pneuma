@@ -286,6 +286,15 @@ Once done so, run `sqlc generate` to generate the Go code equivalent of the quer
 
 The config file, `sqlc.yaml` is found at the root.
 
+### Database concurrency
+
+The server defaults to a single SQLite connection for reliability.
+
+- TOML: set `database.max_open_conns` in `config.toml`
+- ENV: set `PNEUMA_DATABASE_MAX_OPEN_CONNS`
+
+Increase carefully (e.g. `2` or `4`) and monitor for lock contention.
+
 ### Database Migrations
 
 Create new migration SQL files under `internal/store/sqlite/<desktop or server>/migrations/`.

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -55,6 +56,24 @@ type playlistItemResponse struct {
 	Missing        bool   `json:"missing"`
 }
 
+type playlistDeltaPayload struct {
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description,omitempty"`
+	ArtworkPath      string    `json:"artwork_path,omitempty"`
+	RemotePlaylistID string    `json:"remote_playlist_id,omitempty"`
+	CreatedAt        time.Time `json:"created_at,omitempty"`
+	UpdatedAt        time.Time `json:"updated_at,omitempty"`
+	ItemCount        int       `json:"item_count"`
+	DurationMS       int64     `json:"total_duration_ms"`
+	LegacyDurationMS int64     `json:"duration_ms"`
+	LegacyTotalDurMS int64     `json:"total_dur_ms"`
+	TrackCount       int       `json:"track_count"`
+	ItemsChanged     bool      `json:"items_changed"`
+	MetadataChanged  bool      `json:"metadata_changed"`
+	Deleted          bool      `json:"deleted,omitempty"`
+}
+
 func toPlaylistResponse(pl *models.Playlist) *playlistResponse {
 	if pl == nil {
 		return nil
@@ -87,18 +106,6 @@ func toPlaylistResponses(playlists []*models.Playlist) []*playlistResponse {
 	return out
 }
 
-func compactPlaylistEventPayload(payload any) any {
-	if pl, ok := payload.(*models.Playlist); ok {
-		return toPlaylistResponse(pl)
-	}
-
-	if pls, ok := payload.([]*models.Playlist); ok {
-		return toPlaylistResponses(pls)
-	}
-
-	return payload
-}
-
 func toPlaylistItemResponses(items []models.PlaylistItem) []playlistItemResponse {
 	out := make([]playlistItemResponse, 0, len(items))
 	for _, item := range items {
@@ -115,6 +122,50 @@ func toPlaylistItemResponses(items []models.PlaylistItem) []playlistItemResponse
 		})
 	}
 	return out
+}
+
+// toPlaylistDeltaPayload creates a playlistDeltaPayload from a
+// Playlist model and change flags.
+func toPlaylistDeltaPayload(pl *models.Playlist, itemsChanged, metadataChanged bool) *playlistDeltaPayload {
+	if pl == nil {
+		return nil
+	}
+
+	durationMS := pl.DurationMS
+
+	return &playlistDeltaPayload{
+		ID:               pl.ID,
+		Name:             pl.Name,
+		Description:      pl.Description,
+		ArtworkPath:      pl.ArtworkPath,
+		RemotePlaylistID: pl.RemotePlaylistID,
+		CreatedAt:        pl.CreatedAt,
+		UpdatedAt:        pl.UpdatedAt,
+		ItemCount:        pl.ItemCount,
+		DurationMS:       durationMS,
+		LegacyDurationMS: durationMS,
+		LegacyTotalDurMS: durationMS,
+		TrackCount:       pl.ItemCount,
+		ItemsChanged:     itemsChanged,
+		MetadataChanged:  metadataChanged,
+	}
+}
+
+func (h *PlaylistHandler) playlistDeltaPayload(ctx context.Context, playlistID string, itemsChanged, metadataChanged bool) *playlistDeltaPayload {
+	pl, err := h.svc.GetByID(ctx, playlistID)
+	if err != nil || pl == nil {
+		return nil
+	}
+
+	count, durationMS, err := h.svc.PlaylistStats(ctx, playlistID)
+	if err != nil {
+		return toPlaylistDeltaPayload(pl, itemsChanged, metadataChanged)
+	}
+
+	pl.ItemCount = count
+	pl.DurationMS = durationMS
+
+	return toPlaylistDeltaPayload(pl, itemsChanged, metadataChanged)
 }
 
 // NewPlaylistHandler creates a PlaylistHandler.
@@ -196,7 +247,12 @@ func (h *PlaylistHandler) CreatePlaylist(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	h.hub.PublishToUser(claims.UserID, string(models.EventPlaylistCreated), toPlaylistResponse(pl))
+	delta := h.playlistDeltaPayload(c.Request().Context(), pl.ID, false, true)
+	if delta == nil {
+		delta = toPlaylistDeltaPayload(pl, false, true)
+	}
+
+	h.hub.PublishToUser(claims.UserID, string(models.EventPlaylistCreated), delta)
 	return c.JSON(http.StatusCreated, toPlaylistResponse(pl))
 }
 
@@ -222,8 +278,11 @@ func (h *PlaylistHandler) UpdatePlaylist(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	updated, _ := h.svc.GetByID(c.Request().Context(), id)
-	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), toPlaylistResponse(updated))
+	updated := h.playlistDeltaPayload(c.Request().Context(), id, false, true)
+	if updated != nil {
+		h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
+	}
+
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -239,7 +298,7 @@ func (h *PlaylistHandler) DeletePlaylist(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistDeleted), map[string]string{"id": id})
+	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistDeleted), &playlistDeltaPayload{ID: id, Deleted: true})
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -280,8 +339,10 @@ func (h *PlaylistHandler) SetPlaylistItems(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	updated, _ := h.svc.GetByID(c.Request().Context(), id)
-	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), toPlaylistResponse(updated))
+	updated := h.playlistDeltaPayload(c.Request().Context(), id, true, false)
+	if updated != nil {
+		h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
+	}
 
 	return c.NoContent(http.StatusNoContent)
 }
@@ -304,8 +365,11 @@ func (h *PlaylistHandler) AddPlaylistItem(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	updated, _ := h.svc.GetByID(c.Request().Context(), id)
-	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), toPlaylistResponse(updated))
+	updated := h.playlistDeltaPayload(c.Request().Context(), id, true, false)
+	if updated != nil {
+		h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
+	}
+
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -344,8 +408,11 @@ func (h *PlaylistHandler) RemovePlaylistItem(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	updated, _ := h.svc.GetByID(c.Request().Context(), id)
-	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), toPlaylistResponse(updated))
+	updated := h.playlistDeltaPayload(c.Request().Context(), id, true, false)
+	if updated != nil {
+		h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
+	}
+
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -384,8 +451,11 @@ func (h *PlaylistHandler) AppendPlaylistItems(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	updated, _ := h.svc.GetByID(c.Request().Context(), id)
-	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), toPlaylistResponse(updated))
+	updated := h.playlistDeltaPayload(c.Request().Context(), id, true, false)
+	if updated != nil {
+		h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
+	}
+
 	return c.NoContent(http.StatusNoContent)
 }
 
@@ -440,8 +510,10 @@ func (h *PlaylistHandler) UploadPlaylistArt(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	updated, _ := h.svc.GetByID(ctx, pl.ID)
-	h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), toPlaylistResponse(updated))
+	updated := h.playlistDeltaPayload(ctx, pl.ID, false, true)
+	if updated != nil {
+		h.hub.PublishToUser(pl.UserID, string(models.EventPlaylistUpdated), updated)
+	}
 
 	return c.JSON(http.StatusOK, map[string]string{"artwork_path": fileName})
 }
@@ -499,6 +571,11 @@ func (h *PlaylistHandler) GenerateRandom(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
-	h.hub.PublishToUser(claims.UserID, string(models.EventPlaylistCreated), toPlaylistResponse(pl))
+	delta := h.playlistDeltaPayload(c.Request().Context(), pl.ID, true, true)
+	if delta == nil {
+		delta = toPlaylistDeltaPayload(pl, true, true)
+	}
+
+	h.hub.PublishToUser(claims.UserID, string(models.EventPlaylistCreated), delta)
 	return c.JSON(http.StatusCreated, toPlaylistResponse(pl))
 }

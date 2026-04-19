@@ -49,5 +49,14 @@ ORDER BY pi.position;
 -- name: CountPlaylistItems :one
 SELECT COUNT(*) FROM playlist_items WHERE playlist_id = ?;
 
+-- name: SumPlaylistDuration :one
+SELECT CAST(COALESCE(SUM(CASE
+    WHEN pi.source = 'remote' THEN COALESCE(t.duration_ms, 0)
+    ELSE pi.ref_duration_ms
+END), 0) AS INTEGER) AS total_duration_ms
+FROM playlist_items pi
+LEFT JOIN tracks t ON t.id = pi.track_id
+WHERE pi.playlist_id = ?;
+
 -- name: TouchPlaylist :exec
 UPDATE playlists SET updated_at = ? WHERE id = ?;

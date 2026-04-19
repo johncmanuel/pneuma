@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -53,12 +54,70 @@ func (s *Service) CountTracks(ctx context.Context) (int, error) {
 
 // Search performs a text search.
 func (s *Service) Search(ctx context.Context, q string) ([]*models.Track, error) {
-	pattern := "%" + q + "%"
-	rows, err := s.q.SearchTracks(ctx, pattern)
+	query := normalizeSearchQuery(q)
+	if query == "" {
+		return []*models.Track{}, nil
+	}
+
+	ids, err := s.store.SearchTrackIDs(ctx, query, 200)
 	if err != nil {
 		return nil, err
 	}
-	return dbconv.SearchTracksToModels(rows), nil
+
+	rows, err := s.q.SearchTracksByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	byID := make(map[string]*models.Track, len(rows))
+	for _, track := range dbconv.SearchTracksByIDsToModels(rows) {
+		if track == nil {
+			continue
+		}
+
+		byID[track.ID] = track
+	}
+
+	ordered := make([]*models.Track, 0, len(ids))
+	for _, id := range ids {
+		if track, ok := byID[id]; ok {
+			ordered = append(ordered, track)
+		}
+	}
+
+	return ordered, nil
+}
+
+// normalizeSearchQuery transforms a raw search query
+// into a normalized form suitable for FTS prefix search.
+func normalizeSearchQuery(query string) string {
+	trimmed := strings.TrimSpace(query)
+	if trimmed == "" {
+		return ""
+	}
+
+	tokens := strings.Fields(trimmed)
+	if len(tokens) == 0 {
+		return ""
+	}
+
+	prefixed := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+
+		normalizedToken := strings.ReplaceAll(token, `"`, "")
+		normalizedToken = strings.ReplaceAll(normalizedToken, "'", "")
+		if normalizedToken == "" {
+			continue
+		}
+
+		prefixed = append(prefixed, normalizedToken+"*")
+	}
+
+	return strings.Join(prefixed, " ")
 }
 
 // TrackByID returns a single track.

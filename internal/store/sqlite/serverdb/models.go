@@ -99,6 +99,22 @@ type Track struct {
 	UpdatedAt        string
 }
 
+type TrackAlbumGroup struct {
+	Key          string
+	Name         string
+	Artist       string
+	TrackCount   int64
+	FirstTrackID string
+}
+
+type TracksFt struct {
+	Title       string
+	AlbumName   string
+	AlbumArtist string
+	Genre       string
+	TrackID     string
+}
+
 type User struct {
 	ID           string
 	Username     string
