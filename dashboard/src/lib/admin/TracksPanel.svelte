@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { apiFetch, currentUser } from "../api";
-  import { libraryVersion, scanRunning, scanResult } from "../ws";
+  import { libraryDelta, scanRunning, scanResult } from "../ws";
   import { formatDuration, storageKeys } from "@pneuma/shared";
   import { SortButton } from "@pneuma/ui";
 
@@ -148,29 +148,99 @@
 
   onMount(() => {
     loadPersistedState();
-    loadTracks();
+    void loadTracks();
   });
 
-  let _prevLibVer: number | undefined = $state();
-  $effect(() => {
-    const v = $libraryVersion;
+  function normalizeTrackPayload(payload: unknown): Track[] {
+    if (Array.isArray(payload)) {
+      return payload as Track[];
+    }
 
-    // prevent repetitive reloads when libraryVersion changes rapidly (e.g. during bulk upload)
-    if (_prevLibVer !== undefined && v !== _prevLibVer && !uploadActive)
-      loadTracks();
+    if (payload && typeof payload === "object") {
+      const obj = payload as {
+        tracks?: Track[];
+      };
 
-    _prevLibVer = v;
-  });
+      return Array.isArray(obj.tracks) ? obj.tracks : [];
+    }
+
+    return [];
+  }
 
   async function loadTracks() {
     loading = true;
     try {
-      const r = await apiFetch("/api/library/tracks?view=admin-list");
-      if (r.ok) tracks = await r.json();
+      const r = await apiFetch(`/api/library/tracks?view=admin-list`);
+      if (!r.ok) return;
+
+      const payload = await r.json();
+      tracks = normalizeTrackPayload(payload);
+
+      selectedIds = new Set(
+        [...selectedIds].filter((id) => tracks.some((track) => track.id === id))
+      );
     } finally {
       loading = false;
     }
   }
+
+  async function fetchTracksByIDs(ids: string[]): Promise<Track[]> {
+    if (ids.length === 0) return [];
+
+    const r = await apiFetch(
+      `/api/library/tracks?view=admin-list&ids=${encodeURIComponent(ids.join(","))}`
+    );
+    if (!r.ok) return [];
+
+    const payload = await r.json();
+    return Array.isArray(payload) ? (payload as Track[]) : [];
+  }
+
+  async function applyLibraryDelta(type: string, id: string | null) {
+    if (uploadActive) return;
+
+    if (type === "library.deduped") {
+      await loadTracks();
+      return;
+    }
+
+    if (!id) return;
+
+    if (type === "track.removed") {
+      tracks = tracks.filter((track) => track.id !== id);
+      selectedIds = new Set(
+        [...selectedIds].filter((selected) => selected !== id)
+      );
+      return;
+    }
+
+    const updated = await fetchTracksByIDs([id]);
+    const next = updated[0];
+    if (!next) return;
+
+    const index = tracks.findIndex((track) => track.id === id);
+    if (index >= 0) {
+      tracks = [...tracks.slice(0, index), next, ...tracks.slice(index + 1)];
+    } else {
+      tracks = [...tracks, next];
+    }
+  }
+
+  let _prevDeltaSeq: number | undefined = $state();
+  $effect(() => {
+    const delta = $libraryDelta;
+    if (!delta) return;
+    if (_prevDeltaSeq === delta.seq) return;
+
+    _prevDeltaSeq = delta.seq;
+    void applyLibraryDelta(delta.type, delta.id);
+  });
+
+  $effect(() => {
+    if ($scanResult) {
+      void loadTracks();
+    }
+  });
 
   let editingTrack: Track | null = $state(null);
   let editTitle = $state("");
@@ -195,7 +265,17 @@
       })
     });
     if (r.ok) {
-      await loadTracks();
+      const updated = await fetchTracksByIDs([editingTrack.id]);
+      if (updated.length === 1) {
+        const idx = tracks.findIndex((t) => t.id === editingTrack?.id);
+        if (idx >= 0) {
+          tracks = [
+            ...tracks.slice(0, idx),
+            updated[0],
+            ...tracks.slice(idx + 1)
+          ];
+        }
+      }
       editingTrack = null;
     }
   }
@@ -207,7 +287,12 @@
   async function deleteTrack(id: string) {
     if (!confirm("Delete this track?")) return;
     const r = await apiFetch(`/api/library/tracks/${id}`, { method: "DELETE" });
-    if (r.ok) await loadTracks();
+    if (!r.ok) return;
+
+    tracks = tracks.filter((t) => t.id !== id);
+    selectedIds = new Set(
+      [...selectedIds].filter((selected) => selected !== id)
+    );
   }
 
   let allSelected = $derived(
@@ -245,7 +330,10 @@
       else fail++;
     }
     bulkDeleting = false;
+    const deletedIDs = new Set(ids);
     selectedIds = new Set();
+    tracks = tracks.filter((track) => !deletedIDs.has(track.id));
+
     await loadTracks();
     if (fail > 0) alert(`Deleted ${ok}, failed ${fail}`);
   }

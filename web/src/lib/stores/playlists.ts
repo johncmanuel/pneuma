@@ -417,11 +417,12 @@ export async function toggleFavoriteTrack(track: Track | null) {
     return next;
   });
 
-  if (get(selectedPlaylist)?.id === favoritesID) {
-    await selectPlaylist(favoritesID);
-  }
+  await applyPlaylistDelta({
+    id: favoritesID,
+    items_changed: true,
+    updated_at: new Date().toISOString()
+  });
 
-  await loadPlaylists();
   addToast(
     alreadyFavorite
       ? `Removed "${track.title}" from Favorites`
@@ -490,6 +491,19 @@ export async function createPlaylist(
   if (!r.ok) return null;
 
   const data = (await r.json()) as PlaylistSummary;
+  await applyPlaylistDelta({
+    id: data.id,
+    name: data.name,
+    description: data.description,
+    item_count: data.item_count,
+    total_duration_ms: data.total_duration_ms,
+    artwork_path: data.artwork_path,
+    remote_playlist_id: data.remote_playlist_id,
+    created_at: data.created_at,
+    updated_at: data.updated_at,
+    metadata_changed: true
+  });
+
   return data.id ?? null;
 }
 
@@ -501,12 +515,7 @@ export async function deletePlaylist(id: string) {
   }
 
   await apiFetch(`/api/playlists/${id}`, { method: "DELETE" });
-
-  // Clear selection if we deleted the selected playlist
-  if (get(selectedPlaylist)?.id === id) {
-    selectedPlaylist.set(null);
-    selectedPlaylistItems.set([]);
-  }
+  await applyPlaylistDelta({ id, deleted: true });
 }
 
 export async function updatePlaylist(
@@ -525,11 +534,13 @@ export async function updatePlaylist(
     body: JSON.stringify({ name, description })
   });
 
-  // Refresh selected if it's the same playlist
-  if (get(selectedPlaylist)?.id === id) {
-    const r = await apiFetch(`/api/playlists/${id}`);
-    if (r.ok) selectedPlaylist.set(await r.json());
-  }
+  await applyPlaylistDelta({
+    id,
+    name,
+    description,
+    metadata_changed: true,
+    updated_at: new Date().toISOString()
+  });
 }
 
 async function addTracksToPlaylist(playlistId: string, tracks: Track[]) {
@@ -565,10 +576,11 @@ async function addTracksToPlaylist(playlistId: string, tracks: Track[]) {
 
   await appendPlaylistItems(playlistId, newItems);
 
-  // Refresh if this is the selected playlist
-  if (get(selectedPlaylist)?.id === playlistId) {
-    await selectPlaylist(playlistId);
-  }
+  await applyPlaylistDelta({
+    id: playlistId,
+    items_changed: true,
+    updated_at: new Date().toISOString()
+  });
 }
 
 export async function handleAddToPlaylist(

@@ -7,6 +7,7 @@ import {
   tracks
 } from "./library";
 import {
+  applyRemotePlaylistDelta,
   favoritesRemotePlaylistId,
   favoritesSyncEnabled,
   loadPlaylists,
@@ -90,49 +91,114 @@ export function connectWS() {
         }
         case "playlist.updated": {
           const remoteID: string = msg.payload?.id ?? "";
-          if (remoteID) {
-            const shouldRefreshArt =
-              get(favoritesRemotePlaylistId) !== remoteID;
 
-            const refreshPromise = shouldRefreshArt
-              ? RefreshPlaylistArtByRemoteID(remoteID)
-              : Promise.resolve();
-
-            refreshPromise
-              .then(() => loadPlaylists())
-              // if the favorites playlist was updated, refresh the view
+          if (!remoteID) {
+            loadPlaylists()
               .then(async () => {
                 if (!get(favoritesSyncEnabled)) return;
-
-                const favoritesRemoteID = get(favoritesRemotePlaylistId);
-                if (!favoritesRemoteID || favoritesRemoteID === remoteID) {
-                  await syncFavoritesFromServer();
-                }
+                await syncFavoritesFromServer();
               })
               .then(() => {
                 const selId = get(selectedPlaylistId);
                 if (selId) return selectPlaylist(selId);
               })
               .catch((e) =>
-                console.warn("Failed to refresh playlist art from server:", e)
+                console.warn(
+                  "Failed to refresh playlists from server event:",
+                  e
+                )
               );
+            break;
           }
+
+          const shouldRefreshArt = get(favoritesRemotePlaylistId) !== remoteID;
+          const refreshPromise = shouldRefreshArt
+            ? RefreshPlaylistArtByRemoteID(remoteID)
+            : Promise.resolve();
+
+          refreshPromise
+            .then(async () => {
+              const deltaResult = await applyRemotePlaylistDelta(msg.payload);
+
+              if (!deltaResult.applied) {
+                await loadPlaylists();
+
+                if (get(favoritesSyncEnabled)) {
+                  await syncFavoritesFromServer();
+                }
+
+                const selId = get(selectedPlaylistId);
+                if (selId) {
+                  await selectPlaylist(selId);
+                }
+
+                return;
+              }
+
+              const shouldSyncFavorites =
+                get(favoritesSyncEnabled) &&
+                deltaResult.wasFavorites &&
+                deltaResult.itemsChanged;
+
+              if (shouldSyncFavorites) {
+                await syncFavoritesFromServer();
+              }
+
+              const selectedID = get(selectedPlaylistId);
+              if (
+                deltaResult.itemsChanged &&
+                deltaResult.localPlaylistID &&
+                selectedID === deltaResult.localPlaylistID
+              ) {
+                await selectPlaylist(deltaResult.localPlaylistID);
+              }
+            })
+            .catch((e) =>
+              console.warn("Failed to apply remote playlist delta:", e)
+            );
           break;
         }
         case "playlist.created":
         case "playlist.deleted": {
-          loadPlaylists()
-            .then(async () => {
-              if (get(favoritesSyncEnabled)) {
+          applyRemotePlaylistDelta(msg.payload)
+            .then(async (deltaResult) => {
+              if (!deltaResult.applied) {
+                await loadPlaylists();
+
+                if (get(favoritesSyncEnabled)) {
+                  await syncFavoritesFromServer();
+                }
+
+                const selId = get(selectedPlaylistId);
+                if (selId) {
+                  await selectPlaylist(selId);
+                }
+
+                return;
+              }
+
+              const shouldSyncFavorites =
+                get(favoritesSyncEnabled) &&
+                (deltaResult.wasFavorites || msg.type === "playlist.created");
+
+              if (shouldSyncFavorites) {
                 await syncFavoritesFromServer();
               }
-            })
-            .then(() => {
-              const selId = get(selectedPlaylistId);
-              if (selId) return selectPlaylist(selId);
+
+              const selectedID = get(selectedPlaylistId);
+              if (selectedID && deltaResult.localPlaylistID === selectedID) {
+                if (msg.type === "playlist.deleted") {
+                  await loadPlaylists();
+                  return;
+                }
+
+                if (deltaResult.itemsChanged) {
+                  await selectPlaylist(selectedID);
+                }
+              }
             })
             .catch((e) =>
-              console.warn("Failed to refresh playlists from server event:", e)
+              console.warn("Failed to apply remote playlist event delta:", e)
             );
           break;
         }
