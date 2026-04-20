@@ -7,7 +7,7 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(scriptDir, "..");
 const sourceDir = path.resolve(rootDir, "assets/icons");
 
-// exclude appicon.png, which is only used for the desktop build 
+// exclude appicon.png, which is only used for the desktop build
 const browserIconFiles = [
   "favicon.ico",
   "favicon.svg",
@@ -17,11 +17,7 @@ const browserIconFiles = [
   "web-app-manifest-512x512.png"
 ];
 
-const browserTargets = [
-  "web/public",
-  "dashboard/public",
-  "landing/static"
-];
+const browserTargets = ["web/public", "dashboard/public", "landing/static"];
 
 const nativeTargets = [
   { source: "appicon.png", destination: "build/appicon.png" }

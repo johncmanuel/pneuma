@@ -174,6 +174,22 @@
     mobileSidebarOpen = !mobileSidebarOpen;
   }
 
+  let sidebarTouchStartX = 0;
+  function handleSidebarTouchStart(e: TouchEvent) {
+    if (isMobileView && mobileSidebarOpen) {
+      sidebarTouchStartX = e.touches[0].clientX;
+    }
+  }
+
+  function handleSidebarTouchEnd(e: TouchEvent) {
+    if (isMobileView && mobileSidebarOpen) {
+      const touchEndX = e.changedTouches[0].clientX;
+      if (sidebarTouchStartX - touchEndX > 50) {
+        closeMobileSidebar();
+      }
+    }
+  }
+
   async function navigateMobileTab(tab: MobileTab) {
     closeMobileSidebar();
     closePanel();
@@ -420,7 +436,12 @@
       aria-label="Close side panel"
     ></button>
 
-    <div class="sidebar-area">
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="sidebar-area"
+      ontouchstart={handleSidebarTouchStart}
+      ontouchend={handleSidebarTouchEnd}
+    >
       <Sidebar
         activeView={$currentView}
         collapsed={isMobileView ? false : sidebarCollapsed}
@@ -931,6 +952,7 @@
     }
 
     .mobile-sidebar-backdrop {
+      display: block;
       position: fixed;
       inset: 0;
       z-index: 70;

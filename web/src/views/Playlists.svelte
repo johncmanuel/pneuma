@@ -1062,4 +1062,29 @@
       max-width: 100%;
     }
   }
+  @media (max-width: 600px) {
+    .pl-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .pl-card {
+      flex-direction: row;
+      align-items: center;
+      border-radius: var(--r-sm);
+    }
+
+    .pl-art {
+      width: 64px;
+      height: 64px;
+      flex-shrink: 0;
+      font-size: 24px;
+    }
+
+    .pl-info {
+      flex: 1;
+      padding: 0 12px;
+    }
+  }
 </style>

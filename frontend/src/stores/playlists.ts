@@ -209,7 +209,7 @@ function resolveLocalArtworkPath(
   return delta.artwork_path.trim() === "" ? "" : fallbackArtworkPath;
 }
 
-// apply a remote playlist delta to the local playlist state, returning whether the 
+// apply a remote playlist delta to the local playlist state, returning whether the
 // delta was applied and if it affected the currently selected playlist
 function mergeLocalPlaylistFromRemoteDelta(
   fallback: LocalPlaylistSummary,

@@ -26,18 +26,18 @@
 
   <!-- kinda feel iffy about using @html, but should work for now -->
   {@html `<script type="application/ld+json">${seo.structuredDataJson}</script>`}
-  <link rel="shortcut icon" href={asset('/favicon.ico')} />
-  <link rel="icon" type="image/svg+xml" href={asset('/favicon.svg')} />
+  <link rel="shortcut icon" href={asset("/favicon.ico")} />
+  <link rel="icon" type="image/svg+xml" href={asset("/favicon.svg")} />
   <link
     rel="icon"
     type="image/png"
-    href={asset('/favicon-96x96.png')}
+    href={asset("/favicon-96x96.png")}
     sizes="96x96"
   />
   <link
     rel="apple-touch-icon"
     sizes="180x180"
-    href={asset('/apple-touch-icon.png')}
+    href={asset("/apple-touch-icon.png")}
   />
 </svelte:head>
 
