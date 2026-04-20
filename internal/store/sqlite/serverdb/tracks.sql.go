@@ -704,6 +704,17 @@ func (q *Queries) SoftDeleteTrack(ctx context.Context, arg SoftDeleteTrackParams
 	return err
 }
 
+const sumTrackBytes = `-- name: SumTrackBytes :one
+SELECT CAST(COALESCE(SUM(file_size_bytes), 0) AS INTEGER) FROM tracks WHERE deleted_at IS NULL
+`
+
+func (q *Queries) SumTrackBytes(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumTrackBytes)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const trackByFingerprint = `-- name: TrackByFingerprint :one
 SELECT id, path, title,
     COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,

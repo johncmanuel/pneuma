@@ -21,6 +21,7 @@ import (
 	"pneuma/internal/library"
 	"pneuma/internal/media"
 	"pneuma/internal/metadata/parser"
+	"pneuma/internal/metrics"
 	"pneuma/internal/playback"
 	"pneuma/internal/playlist"
 	"pneuma/internal/scanner"
@@ -69,6 +70,7 @@ func main() {
 	metaParser := parser.New(cfg.Transcoding.FFmpegPath)
 	playEngine := playback.New(queries, hub, libSvc)
 	playlistSvc := playlist.New(queries)
+
 	transcoder := media.NewStreamTranscoder(media.TranscodeConfig{
 		FFmpegPath:        cfg.Transcoding.FFmpegPath,
 		CacheDir:          cfg.Transcoding.CacheDir,
@@ -94,7 +96,7 @@ func main() {
 	slog.Info("library scan interval configured", "minutes", scanIntervalMinutes)
 	sched := scanner.NewScheduler(libSvc, metaParser, hub, cfg.Library.WatchFolders, scanInterval)
 
-	// Clean up orphaned temp files from a previous crash
+	// Clean up any temp files that couldn't be cleaned up during previous run
 	tmpUploadsDir := filepath.Join(cfg.Upload.Dir, "tmp")
 	if n := ingestion.CleanupTempUploads(tmpUploadsDir); n > 0 {
 		slog.Info("cleaned up orphaned temp uploads", "count", n)
@@ -103,6 +105,17 @@ func main() {
 	}
 
 	iqQueue := ingestion.New(libSvc, queries, hub, sched, cfg.Upload.QueueCapacity)
+
+	playlistArtDir := filepath.Join(dir, config.ConfigCachePlaylistArtDir)
+	trackArtDir := filepath.Join(playlistArtDir, "tracks")
+
+	diskCollector := metrics.New(
+		queries,
+		cfg.Database.Path,
+		cfg.Transcoding.CacheDir,
+		playlistArtDir,
+		trackArtDir,
+	)
 
 	router := api.NewRouter(api.Services{
 		Library:             libSvc,
@@ -114,10 +127,11 @@ func main() {
 		Scanner:             sched,
 		JWTSecret:           cfg.Auth.SecretKey,
 		UploadsDir:          cfg.Upload.Dir,
-		ArtworkDir:          filepath.Join(dir, config.ConfigCachePlaylistArtDir),
+		ArtworkDir:          playlistArtDir,
 		UploadMaxMB:         cfg.Upload.MaxSizeMB,
 		IngestionQueue:      iqQueue,
 		Transcoder:          transcoder,
+		DiskCollector:       diskCollector,
 		WebUI:               dashboard.FS(),
 		WebPlayerUI:         web.FS(),
 		RateLimitingEnabled: cfg.RateLimiting.Enabled,
@@ -140,6 +154,9 @@ func main() {
 	go watcher.Start(ctx)
 	go store.RunOptimizePeriodically(ctx, 24*time.Hour)
 	go iqQueue.Start(ctx)
+
+	// run every week, keep 100 days worth of history
+	go diskCollector.RunPeriodically(ctx, 7*24*time.Hour, 100)
 
 	go func() {
 		slog.Info("pneuma server listening", "addr", addr)

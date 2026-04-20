@@ -285,3 +285,17 @@ func ParseTime(s string) time.Time {
 	t, _ := time.Parse(time.RFC3339, s)
 	return t
 }
+
+// DiskUsageToModel converts a generated serverdb.DiskUsage row into a domain model.
+func DiskUsageToModel(d serverdb.DiskUsage) *models.DiskUsage {
+	return &models.DiskUsage{
+		TotalBytes:          d.TotalBytes,
+		FreeBytes:           d.FreeBytes,
+		TracksBytes:         d.TracksBytes,
+		DbBytes:             d.DbBytes,
+		TranscodeCacheBytes: d.TranscodeCacheBytes,
+		ArtworkCacheBytes:   d.ArtworkCacheBytes,
+		PlaylistArtBytes:    d.PlaylistArtBytes,
+		RecordedAt:          ParseTime(d.RecordedAt),
+	}
+}

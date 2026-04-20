@@ -24,6 +24,7 @@ import (
 	"pneuma/internal/ingestion"
 	"pneuma/internal/library"
 	"pneuma/internal/media"
+	"pneuma/internal/metrics"
 	"pneuma/internal/models"
 	"pneuma/internal/playback"
 	"pneuma/internal/playlist"
@@ -49,6 +50,7 @@ type Services struct {
 	UploadMaxMB    int    // max upload body size in MB (0 = default 500 MB)
 	IngestionQueue *ingestion.Queue
 	Transcoder     *media.StreamTranscoder
+	DiskCollector  *metrics.Collector
 	WebUI          fs.FS // embedded dashboard assets (nil = disabled)
 	WebPlayerUI    fs.FS // embedded web player assets (nil = disabled)
 
@@ -109,7 +111,7 @@ func NewRouter(svc Services) *echo.Echo {
 	)
 	ph := handlers.NewPlaybackHandler(svc.Playback)
 	uh := handlers.NewUserHandler(svc.User, svc.Queries, secret)
-	ah := handlers.NewAdminHandler(svc.User, svc.Queries)
+	ah := handlers.NewAdminHandler(svc.User, svc.Queries, svc.DiskCollector)
 	plh := handlers.NewPlaylistHandler(svc.Playlist, svc.Hub, svc.ArtworkDir)
 	rh := handlers.NewRecentHandler(svc.Queries)
 
@@ -166,6 +168,8 @@ func NewRouter(svc Services) *echo.Echo {
 	admin.DELETE("/users/:id", ah.DeleteUser)
 	admin.GET("/audit", ah.ListAudit)
 	admin.DELETE("/audit", ah.ClearAudit)
+	admin.GET("/metrics/disk", ah.GetDiskUsage)
+	admin.DELETE("/cache", ah.ClearCache)
 
 	// Library
 	lib := e.Group("/api/library", authMW)

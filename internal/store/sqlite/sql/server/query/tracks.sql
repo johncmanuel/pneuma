@@ -199,3 +199,6 @@ SELECT id, path, title,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ? AND COALESCE(album_artist,'') = ?
 ORDER BY disc_number, track_number, title COLLATE NOCASE;
+
+-- name: SumTrackBytes :one
+SELECT CAST(COALESCE(SUM(file_size_bytes), 0) AS INTEGER) FROM tracks WHERE deleted_at IS NULL;

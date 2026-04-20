@@ -26,6 +26,18 @@ type Device struct {
 	LastActive string
 }
 
+type DiskUsage struct {
+	ID                  string
+	TotalBytes          int64
+	FreeBytes           int64
+	TracksBytes         int64
+	DbBytes             int64
+	TranscodeCacheBytes int64
+	ArtworkCacheBytes   int64
+	PlaylistArtBytes    int64
+	RecordedAt          string
+}
+
 type PlaybackSession struct {
 	ID         string
 	DeviceID   string

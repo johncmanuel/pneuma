@@ -24,8 +24,11 @@ import (
 
 // PlaylistHandler handles /api/playlists/* routes.
 type PlaylistHandler struct {
-	svc        *playlist.Service
-	hub        eventPublisher
+	// svc is the playlist service.
+	svc *playlist.Service
+	// hub is the event publisher.
+	hub eventPublisher
+	// artworkDir is the directory for playlist artwork thumbnails.
 	artworkDir string
 }
 

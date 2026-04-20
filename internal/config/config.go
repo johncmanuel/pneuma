@@ -30,12 +30,6 @@ type LibraryConfig struct {
 	ScanIntervalMinutes int      `toml:"scan_interval_minutes"`
 }
 
-// ArtworkConfig holds artwork cache settings.
-type ArtworkConfig struct {
-	CacheDir  string `toml:"cache_dir"`
-	MaxSizeMB int    `toml:"max_size_mb"`
-}
-
 // AuthConfig holds authentication settings.
 type AuthConfig struct {
 	// SecretKey is used to sign session tokens. Auto-generated on first run.
@@ -80,7 +74,6 @@ type Config struct {
 	Server       ServerConfig       `toml:"server"`
 	Database     DatabaseConfig     `toml:"database"`
 	Library      LibraryConfig      `toml:"library"`
-	Artwork      ArtworkConfig      `toml:"artwork"`
 	Auth         AuthConfig         `toml:"auth"`
 	Upload       UploadConfig       `toml:"upload"`
 	Transcoding  TranscodingConfig  `toml:"transcoding"`
@@ -98,7 +91,6 @@ const (
 	ConfigFileName            = "config.toml"
 	ConfigDatabaseName        = "pneuma.db"
 	ConfigMusicDirName        = "music"
-	ConfigArtworkDirName      = "artwork"
 	ConfigCachePlaylistArtDir = "playlist-artwork"
 	ConfigCacheTranscodeDir   = "transcode-cache"
 	ConfigUploadDirName       = "uploads"
@@ -114,8 +106,6 @@ const (
 	EnvAuthSecretKey         = "PNEUMA_AUTH_SECRET_KEY"
 	EnvLibraryWatchFolders   = "PNEUMA_LIBRARY_WATCH_FOLDERS"
 	EnvLibraryScanInterval   = "PNEUMA_LIBRARY_SCAN_INTERVAL_MINUTES"
-	EnvArtworkCacheDir       = "PNEUMA_ARTWORK_CACHE_DIR"
-	EnvArtworkMaxSizeMB      = "PNEUMA_ARTWORK_MAX_SIZE_MB"
 	EnvUploadDir             = "PNEUMA_UPLOAD_DIR"
 	EnvUploadMaxSizeMB       = "PNEUMA_UPLOAD_MAX_SIZE_MB"
 	EnvUploadQueueCapacity   = "PNEUMA_UPLOAD_QUEUE_CAPACITY"
@@ -162,10 +152,6 @@ func DefaultConfig(dataDir string) *Config {
 		Library: LibraryConfig{
 			WatchFolders:        []string{filepath.Join(dataDir, ConfigMusicDirName)},
 			ScanIntervalMinutes: 120,
-		},
-		Artwork: ArtworkConfig{
-			CacheDir:  filepath.Join(dataDir, ConfigArtworkDirName),
-			MaxSizeMB: 500,
 		},
 		Auth: AuthConfig{
 			SecretKey: generateKey(),
@@ -216,14 +202,6 @@ func applyEnvOverrides(cfg *Config) {
 	if v := os.Getenv(EnvLibraryScanInterval); v != "" {
 		if p, err := strconv.Atoi(v); err == nil {
 			cfg.Library.ScanIntervalMinutes = p
-		}
-	}
-	if v := os.Getenv(EnvArtworkCacheDir); v != "" {
-		cfg.Artwork.CacheDir = v
-	}
-	if v := os.Getenv(EnvArtworkMaxSizeMB); v != "" {
-		if p, err := strconv.Atoi(v); err == nil {
-			cfg.Artwork.MaxSizeMB = p
 		}
 	}
 	if v := os.Getenv(EnvUploadDir); v != "" {

@@ -8,6 +8,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"pneuma/internal/api/http/middleware"
+	"pneuma/internal/metrics"
 	"pneuma/internal/models"
 	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/serverdb"
@@ -16,13 +17,14 @@ import (
 
 // AdminHandler handles /api/admin/* routes.
 type AdminHandler struct {
-	users *user.Service
-	q     *serverdb.Queries
+	users     *user.Service
+	q         *serverdb.Queries
+	collector *metrics.Collector
 }
 
 // NewAdminHandler creates a new AdminHandler.
-func NewAdminHandler(users *user.Service, q *serverdb.Queries) *AdminHandler {
-	return &AdminHandler{users: users, q: q}
+func NewAdminHandler(users *user.Service, q *serverdb.Queries, collector *metrics.Collector) *AdminHandler {
+	return &AdminHandler{users: users, q: q, collector: collector}
 }
 
 // ListUsers lists all users.
@@ -130,4 +132,48 @@ func (h *AdminHandler) ClearAudit(c echo.Context) error {
 	})
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "cleared"})
+}
+
+// GetDiskUsage returns the most recent disk usage snapshot.
+func (h *AdminHandler) GetDiskUsage(c echo.Context) error {
+	ctx := c.Request().Context()
+	row, err := h.q.GetLatestDiskUsage(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, dbconv.DiskUsageToModel(row))
+}
+
+// ClearCache removes transcode and artwork caches, then takes a fresh snapshot.
+func (h *AdminHandler) ClearCache(c echo.Context) error {
+	ctx := c.Request().Context()
+	claims := middleware.GetClaims(c)
+
+	if h.collector == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "disk metrics collector not configured")
+	}
+
+	if err := h.collector.ClearCaches(); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to clear caches: "+err.Error())
+	}
+
+	if err := h.collector.Snapshot(ctx); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cache cleared but snapshot failed: "+err.Error())
+	}
+
+	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
+		ID:         uuid.NewString(),
+		UserID:     claims.UserID,
+		Action:     "clear_cache",
+		TargetType: "system",
+		TargetID:   "",
+		Detail:     dbconv.NullStr("Cleared transcode and artwork caches"),
+		CreatedAt:  dbconv.FormatTime(time.Now()),
+	})
+
+	row, err := h.q.GetLatestDiskUsage(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.JSON(http.StatusOK, dbconv.DiskUsageToModel(row))
 }

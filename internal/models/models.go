@@ -157,6 +157,17 @@ const (
 	EventPlaylistDeleted EventType = "playlist.deleted"
 )
 
+type DiskUsage struct {
+	TotalBytes          int64     `json:"total_bytes"`
+	FreeBytes           int64     `json:"free_bytes"`
+	TracksBytes         int64     `json:"tracks_bytes"`
+	DbBytes             int64     `json:"db_bytes"`
+	TranscodeCacheBytes int64     `json:"transcode_cache_bytes"`
+	ArtworkCacheBytes   int64     `json:"artwork_cache_bytes"`
+	PlaylistArtBytes    int64     `json:"playlist_art_bytes"`
+	RecordedAt          time.Time `json:"recorded_at"`
+}
+
 type Event struct {
 	Type    EventType `json:"type"`
 	Payload any       `json:"payload"`

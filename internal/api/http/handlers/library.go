@@ -420,20 +420,24 @@ func (h *LibraryHandler) ServeTrackArt(c echo.Context) error {
 	return c.Blob(http.StatusOK, "image/jpeg", thumbData)
 }
 
+// trackArtETag returns the ETag for the given hash.
 func trackArtETag(hash string) string {
 	return `"` + hash + `"`
 }
 
+// trackArtCacheKey returns the cache key for the given path and info.
 func trackArtCacheKey(path string, info os.FileInfo) string {
 	basis := fmt.Sprintf("%s|%d|%d", path, info.Size(), info.ModTime().UnixNano())
 	sum := sha256.Sum256([]byte(basis))
 	return hex.EncodeToString(sum[:12])
 }
 
+// trackArtPath returns the path to the cached track art.
 func (h *LibraryHandler) trackArtPath(hash string) string {
 	return filepath.Join(h.trackArtworkDir, "track-"+hash+".jpg")
 }
 
+// serveTrackArtFromPath serves the cached track art from the given path.
 func (h *LibraryHandler) serveTrackArtFromPath(c echo.Context, hash, path string) error {
 	etag := trackArtETag(hash)
 	if c.Request().Header.Get("If-None-Match") == etag {
