@@ -64,6 +64,10 @@ jobs:
       - name: Build wails
         run: wails build -platform ${{ matrix.build.platform }}
 
+      - name: Install NSIS
+        if: runner.os == 'Windows'
+        run: choco install nsis -y
+
       - name: Build Windows NSIS installer
         if: runner.os == 'Windows'
         run: wails build -platform windows/amd64 -nsis -webview2 embed
