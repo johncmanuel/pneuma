@@ -1,7 +1,7 @@
 import { access, copyFile as copyFileFs, mkdir } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:ur/l";
+import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(scriptDir, "..");
