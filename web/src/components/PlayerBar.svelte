@@ -448,6 +448,11 @@
     let nextIdx = idx + 1;
     if (nextIdx >= rq.length) {
       if ($playerState.repeat === 1) {
+        if ($playerState.shuffle) {
+          // let the server handle the reshuffle and next track
+          wsSend("playback.next", {});
+          return;
+        }
         nextIdx = 0;
       } else {
         playerState.update((s) => ({ ...s, paused: true }));

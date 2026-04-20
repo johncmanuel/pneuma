@@ -192,7 +192,20 @@ func (e *Engine) Next(ctx context.Context, userID, deviceID string) (string, int
 	case RepeatOne:
 		s.PositionMS = 0
 	case RepeatQueue:
-		s.QueueIndex = (s.QueueIndex + 1) % len(s.Queue)
+		s.QueueIndex++
+		// if we've reached the end of the queue, wrap around
+		if s.QueueIndex >= len(s.Queue) {
+			s.QueueIndex = 0
+			// if shuffle is on, reshuffle the queue
+			if s.Shuffle && len(s.Queue) > 1 {
+				lastTrackID := s.TrackID
+				rand.Shuffle(len(s.Queue), func(i, j int) { s.Queue[i], s.Queue[j] = s.Queue[j], s.Queue[i] })
+				// don't want the same track from playing twice in a row
+				if s.Queue[0] == lastTrackID && len(s.Queue) > 1 {
+					s.Queue[0], s.Queue[1] = s.Queue[1], s.Queue[0]
+				}
+			}
+		}
 		s.TrackID = s.Queue[s.QueueIndex]
 		s.PositionMS = 0
 	default:
