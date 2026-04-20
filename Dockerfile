@@ -11,6 +11,7 @@ COPY frontend/package.json ./frontend/
 COPY landing/package.json ./landing/
 COPY packages/ ./packages/
 COPY scripts/ ./scripts/
+COPY assets/ ./assets/
 
 RUN bun install --filter "!frontend" --filter "!landing" --frozen-lockfile
 
