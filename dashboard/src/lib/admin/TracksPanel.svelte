@@ -54,6 +54,7 @@
   let searchQuery = $state("");
   let sortKey: SortKey = $state("title");
   let sortDir: SortDir = $state("asc");
+  let concurrencyLimit: number = $state(0);
 
   let selectedIds = $state(new Set<string>());
   let bulkDeleting = $state(false);
@@ -73,12 +74,15 @@
         sortKey?: SortKey;
         sortDir?: SortDir;
         searchQuery?: string;
+        concurrencyLimit?: number;
       };
       if (!s) return;
 
       if (s.sortKey) sortKey = s.sortKey;
       if (s.sortDir) sortDir = s.sortDir;
       if (typeof s.searchQuery === "string") searchQuery = s.searchQuery;
+      if (typeof s.concurrencyLimit === "number")
+        concurrencyLimit = s.concurrencyLimit;
     } catch (e) {
       console.error("Failed to load persisted tracks panel state", e);
     }
@@ -88,7 +92,7 @@
     try {
       localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ sortKey, sortDir, searchQuery })
+        JSON.stringify({ sortKey, sortDir, searchQuery, concurrencyLimit })
       );
     } catch (e) {
       console.error("Failed to persist tracks panel state", e);
@@ -99,6 +103,7 @@
     sortKey;
     sortDir;
     searchQuery;
+    concurrencyLimit;
     persistState();
   });
 
@@ -512,7 +517,10 @@
     const pendingCount = uploadQueue.filter(
       (i) => i.status === "pending"
     ).length;
-    const concurrency = getConcurrencyLevel(pendingCount);
+    const concurrency =
+      concurrencyLimit > 0
+        ? concurrencyLimit
+        : getConcurrencyLevel(pendingCount);
 
     const workers = Array.from({ length: concurrency }, () => uploadWorker());
     await Promise.all(workers);
@@ -669,6 +677,21 @@
       >
         Upload Folder
       </button>
+
+      <select
+        bind:value={concurrencyLimit}
+        class="search-input"
+        style="width: auto"
+        title="Upload Concurrency"
+      >
+        <option value={0}>Auto Concurrency</option>
+        <option value={1}>1 at a time</option>
+        <option value={2}>2 at a time</option>
+        <option value={3}>3 at a time</option>
+        <option value={4}>4 at a time</option>
+        <option value={5}>5 at a time</option>
+        <option value={10}>10 at a time</option>
+      </select>
     {/if}
 
     {#if $currentUser?.is_admin}
