@@ -1,3 +1,5 @@
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/johncmanuel/pneuma)
+
 # pneuma
 
 pneuma is an open-source, self-hostable, and local-first music project, designed to give a Spotify-like experience. It is composed of a desktop application for local music playback, a server for music storage and streaming, and a web player for accessible music playback.
@@ -161,22 +163,6 @@ To build the server without the UI (for faster builds for testing):
 ```bash
 docker build -t pneuma:latest --build-arg EMBED_UI=false .
 docker run -p 8989:8989 pneuma
-```
-
-Some useful Docker sanity check methods:
-
-```bash
-# is the container running?
-docker ps
-
-# review logs
-docker logs -f <container id>
-
-# test if container can be reached
-curl http://localhost:8989 # or whatever port you set it to
-
-# access container filesystem
-docker exec -it <container id> /bin/sh
 ```
 
 ##### Docker Compose (for the server)
