@@ -29,14 +29,34 @@
   }
 
   function actionColor(action: string): string {
-    if (action.includes("delete")) return "var(--danger)";
+    if (action.includes("delete") || action.includes("clear"))
+      return "var(--danger)";
     if (action.includes("upload") || action.includes("create"))
       return "var(--accent)";
     return "var(--text-2)";
   }
+
+  async function clearAudit() {
+    if (!confirm("Are you sure you want to clear all audit logs?")) return;
+    const r = await apiFetch("/api/admin/audit", { method: "DELETE" });
+    if (r.ok) {
+      entries = [];
+      loadAudit();
+    } else {
+      alert("Failed to clear audit logs: " + (await r.text()));
+    }
+  }
 </script>
 
 <div class="panel">
+  <div class="header">
+    <h2>Audit Logs</h2>
+    <button
+      class="danger-btn"
+      onclick={clearAudit}
+      disabled={entries.length === 0}>Clear Logs</button
+    >
+  </div>
   {#if loading}
     <p class="text-3">Loading...</p>
   {:else if entries.length === 0}
@@ -82,6 +102,34 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .header h2 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  .danger-btn {
+    padding: 6px 14px;
+    border-radius: var(--r-md);
+    background: var(--surface-2);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .danger-btn:hover:not(:disabled) {
+    background: var(--danger-soft);
+  }
+  .danger-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 
   .table-wrap {

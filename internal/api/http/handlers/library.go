@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -494,6 +495,27 @@ func (h *LibraryHandler) UpdateTrackMeta(c echo.Context) error {
 	if err := h.lib.UpsertTrack(ctx, track); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
+
+	claims := middleware.GetClaims(c)
+	if claims != nil {
+		_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
+			ID:         uuid.NewString(),
+			UserID:     claims.UserID,
+			Action:     "update",
+			TargetType: "track",
+			TargetID:   track.ID,
+			Detail:     dbconv.NullStr(track.Title),
+			CreatedAt:  dbconv.FormatTime(time.Now()),
+		})
+	}
+
+	_ = h.q.UpdatePlaylistItemsReferences(ctx, serverdb.UpdatePlaylistItemsReferencesParams{
+		RefTitle:       track.Title,
+		RefAlbum:       track.AlbumName,
+		RefAlbumArtist: track.AlbumArtist,
+		TrackID:        sql.NullString{String: track.ID, Valid: true},
+	})
+
 	return c.JSON(http.StatusOK, track)
 }
 
@@ -554,6 +576,19 @@ func (h *LibraryHandler) Search(c echo.Context) error {
 
 // TriggerScan kicks off a full library rescan.
 func (h *LibraryHandler) TriggerScan(c echo.Context) error {
+	claims := middleware.GetClaims(c)
+	if claims != nil {
+		_ = h.q.InsertAuditEntry(c.Request().Context(), serverdb.InsertAuditEntryParams{
+			ID:         uuid.NewString(),
+			UserID:     claims.UserID,
+			Action:     "scan",
+			TargetType: "library",
+			TargetID:   "",
+			Detail:     dbconv.NullStr("Full library scan triggered"),
+			CreatedAt:  dbconv.FormatTime(time.Now()),
+		})
+	}
+
 	go h.scanner.ScanAll()
 	return c.NoContent(http.StatusAccepted)
 }
@@ -675,6 +710,119 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusAccepted, map[string]any{"status": "queued", "id": t.ID})
+}
+
+// ReplaceTrackFile replaces the underlying audio file for an existing track.
+func (h *LibraryHandler) ReplaceTrackFile(c echo.Context) error {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "missing token")
+	}
+	ctx := c.Request().Context()
+
+	trackID := c.Param("id")
+	existing, err := h.lib.TrackByID(ctx, trackID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if existing == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "track not found")
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "file field required")
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if !media.IsSupportedAudio(ext) {
+		return echo.NewHTTPError(http.StatusBadRequest, "unsupported audio format: "+ext)
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer src.Close()
+
+	// create temp file for streaming hash
+	tmp, err := os.CreateTemp(h.tmpDir, "replace-*"+ext)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	tmpPath := tmp.Name()
+
+	hasher := sha256.New()
+	if _, err = io.Copy(tmp, io.TeeReader(src, hasher)); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	tmp.Close()
+
+	hash := hex.EncodeToString(hasher.Sum(nil))
+
+	dup, err := h.lib.TrackByFingerprint(ctx, hash)
+	if err != nil {
+		os.Remove(tmpPath)
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if dup != nil && dup.ID != existing.ID && dup.DeletedAt == nil {
+		os.Remove(tmpPath)
+		return c.JSON(http.StatusConflict, map[string]any{
+			"error": "duplicate file belongs to another track",
+			"track": dup,
+		})
+	}
+
+	now := time.Now()
+	info, _ := os.Stat(tmpPath)
+	finalPath := filepath.Join(h.uploadsDir, hash+ext)
+	oldPath := existing.Path
+
+	// Move the temp file to its final location atomically.
+	if err := os.Rename(tmpPath, finalPath); err != nil {
+		os.Remove(tmpPath)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to move file: "+err.Error())
+	}
+
+	// UPDATE the existing row by ID.
+	// can't do via UpsertTrack which is ON CONFLICT(path).
+	if err := h.q.ReplaceTrackFile(ctx, serverdb.ReplaceTrackFileParams{
+		Path:          finalPath,
+		Fingerprint:   sql.NullString{String: hash, Valid: true},
+		FileSizeBytes: sql.NullInt64{Int64: info.Size(), Valid: true},
+		LastModified:  dbconv.FormatTime(info.ModTime()),
+		UpdatedAt:     dbconv.FormatTime(now),
+		ID:            existing.ID,
+	}); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
+		ID:         uuid.NewString(),
+		UserID:     claims.UserID,
+		Action:     "replace_file",
+		TargetType: "track",
+		TargetID:   existing.ID,
+		Detail:     dbconv.NullStr(file.Filename),
+		CreatedAt:  dbconv.FormatTime(now),
+	})
+
+	// Remove the old file after a short delay to let any in-flight streams finish.
+	if oldPath != finalPath && oldPath != "" {
+		go func(p string) {
+			time.Sleep(1 * time.Minute)
+			os.Remove(p)
+		}(oldPath)
+	}
+
+	// Re-scan the new file in the background to update duration, bitrate, tags, etc.
+	go h.scanner.ScanPath(finalPath)
+
+	h.hub.Publish(string(models.EventTrackUpdated), map[string]string{"id": existing.ID})
+
+	return c.JSON(http.StatusAccepted, map[string]any{"status": "queued", "id": existing.ID})
 }
 
 // DeleteTrack DELETE /api/library/tracks/:id.

@@ -129,6 +129,11 @@ UPDATE tracks SET deleted_at = ?, updated_at = ? WHERE id = ?;
 -- name: RestoreTrack :exec
 UPDATE tracks SET deleted_at = NULL, updated_at = ? WHERE id = ?;
 
+-- name: ReplaceTrackFile :exec
+UPDATE tracks
+SET path = ?, fingerprint = ?, file_size_bytes = ?, last_modified = ?, updated_at = ?
+WHERE id = ?;
+
 -- name: DeleteDuplicateFingerprints :execresult
 DELETE FROM tracks
 WHERE fingerprint != '' AND fingerprint IS NOT NULL

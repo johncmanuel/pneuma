@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { apiFetch, currentUser } from "../api";
   import { libraryDelta, scanRunning, scanResult } from "../ws";
-  import { formatDuration, storageKeys } from "@pneuma/shared";
+  import { formatDuration, storageKeys, addToast } from "@pneuma/shared";
   import { SortButton } from "@pneuma/ui";
 
   interface Track {
@@ -202,7 +202,7 @@
   }
 
   async function applyLibraryDelta(type: string, id: string | null) {
-    if (uploadActive) return;
+    if (uploadActive || $scanRunning) return;
 
     if (type === "library.deduped") {
       await loadTracks();
@@ -270,6 +270,7 @@
       })
     });
     if (r.ok) {
+      addToast("Track updated successfully", "success");
       const updated = await fetchTracksByIDs([editingTrack.id]);
       if (updated.length === 1) {
         const idx = tracks.findIndex((t) => t.id === editingTrack?.id);
@@ -588,7 +589,7 @@
 
   // Auto-clear scan result after 8 seconds
   const timeoutMs = 8000;
-  let scanResultTimer: ReturnType<typeof setTimeout> | undefined = $state();
+  let scanResultTimer: ReturnType<typeof setTimeout> | undefined;
   $effect(() => {
     if ($scanResult) {
       if (scanResultTimer) clearTimeout(scanResultTimer);
@@ -625,6 +626,33 @@
       }
     }
   }
+  let replaceInput: HTMLInputElement | undefined = $state();
+  let replacingTrack: Track | null = $state(null);
+
+  async function handleReplaceFileInput() {
+    const file = replaceInput?.files?.[0];
+    const track = replacingTrack;
+    if (file && track) {
+      const form = new FormData();
+      form.append("file", file);
+      try {
+        const r = await apiFetch(`/api/library/tracks/${track.id}/file`, {
+          method: "PUT",
+          body: form
+        });
+        if (!r.ok) {
+          const text = await r.text().catch(() => "Unknown error");
+          addToast("Failed to replace file: " + text, "error");
+        } else {
+          addToast("File replacement queued successfully", "success");
+        }
+      } catch (e: any) {
+        addToast("Upload error: " + (e.message || "Network error"), "error");
+      }
+    }
+    if (replaceInput) replaceInput.value = "";
+    replacingTrack = null;
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -646,6 +674,13 @@
     />
 
     {#if canUpload}
+      <input
+        type="file"
+        accept={AUDIO_ACCEPT}
+        bind:this={replaceInput}
+        onchange={handleReplaceFileInput}
+        style="display:none"
+      />
       <input
         type="file"
         accept={AUDIO_ACCEPT}
@@ -917,6 +952,15 @@
                       <button class="sm-btn" onclick={() => startEdit(t)}
                         >Edit</button
                       >
+                      {#if canUpload}
+                        <button
+                          class="sm-btn"
+                          onclick={() => {
+                            replacingTrack = t;
+                            replaceInput?.click();
+                          }}>Replace</button
+                        >
+                      {/if}
                     {/if}
                     {#if canDelete}
                       <button

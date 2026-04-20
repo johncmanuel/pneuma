@@ -109,3 +109,25 @@ func (h *AdminHandler) ListAudit(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, entries)
 }
+
+// ClearAudit clears all audit entries.
+func (h *AdminHandler) ClearAudit(c echo.Context) error {
+	ctx := c.Request().Context()
+	claims := middleware.GetClaims(c)
+
+	if err := h.q.ClearAuditEntries(ctx); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	_ = h.q.InsertAuditEntry(ctx, serverdb.InsertAuditEntryParams{
+		ID:         uuid.NewString(),
+		UserID:     claims.UserID,
+		Action:     "clear_audit",
+		TargetType: "audit",
+		TargetID:   "",
+		Detail:     dbconv.NullStr("Cleared all audit logs"),
+		CreatedAt:  dbconv.FormatTime(time.Now()),
+	})
+
+	return c.JSON(http.StatusOK, map[string]string{"status": "cleared"})
+}

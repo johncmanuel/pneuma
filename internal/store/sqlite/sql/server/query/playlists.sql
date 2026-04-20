@@ -60,3 +60,6 @@ WHERE pi.playlist_id = ?;
 
 -- name: TouchPlaylist :exec
 UPDATE playlists SET updated_at = ? WHERE id = ?;
+
+-- name: UpdatePlaylistItemsReferences :exec
+UPDATE playlist_items SET ref_title = ?, ref_album = ?, ref_album_artist = ? WHERE track_id = ?;

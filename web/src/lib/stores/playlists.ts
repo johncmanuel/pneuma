@@ -516,6 +516,7 @@ export async function deletePlaylist(id: string) {
 
   await apiFetch(`/api/playlists/${id}`, { method: "DELETE" });
   await applyPlaylistDelta({ id, deleted: true });
+  addToast("Playlist deleted", "success");
 }
 
 export async function updatePlaylist(

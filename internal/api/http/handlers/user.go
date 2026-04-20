@@ -7,19 +7,23 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/google/uuid"
 	"pneuma/internal/api/http/middleware"
+	"pneuma/internal/store/sqlite/dbconv"
+	"pneuma/internal/store/sqlite/serverdb"
 	"pneuma/internal/user"
 )
 
 // UserHandler handles /api/auth/* routes.
 type UserHandler struct {
 	users  *user.Service
+	q      *serverdb.Queries
 	secret string
 }
 
 // NewUserHandler creates a new UserHandler.
-func NewUserHandler(users *user.Service, jwtSecret string) *UserHandler {
-	return &UserHandler{users: users, secret: jwtSecret}
+func NewUserHandler(users *user.Service, q *serverdb.Queries, jwtSecret string) *UserHandler {
+	return &UserHandler{users: users, q: q, secret: jwtSecret}
 }
 
 // Register registers a new user with body {username, password}
@@ -92,6 +96,16 @@ func (h *UserHandler) Login(c echo.Context) error {
 	}
 
 	h.setSessionCookie(c, token)
+
+	_ = h.q.InsertAuditEntry(c.Request().Context(), serverdb.InsertAuditEntryParams{
+		ID:         uuid.NewString(),
+		UserID:     u.ID,
+		Action:     "login",
+		TargetType: "user",
+		TargetID:   u.ID,
+		Detail:     dbconv.NullStr("IP: " + c.RealIP()),
+		CreatedAt:  dbconv.FormatTime(time.Now()),
+	})
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"user":  u,

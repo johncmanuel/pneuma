@@ -293,3 +293,24 @@ func (q *Queries) UpdatePlaylist(ctx context.Context, arg UpdatePlaylistParams) 
 	)
 	return err
 }
+
+const updatePlaylistItemsReferences = `-- name: UpdatePlaylistItemsReferences :exec
+UPDATE playlist_items SET ref_title = ?, ref_album = ?, ref_album_artist = ? WHERE track_id = ?
+`
+
+type UpdatePlaylistItemsReferencesParams struct {
+	RefTitle       string
+	RefAlbum       string
+	RefAlbumArtist string
+	TrackID        sql.NullString
+}
+
+func (q *Queries) UpdatePlaylistItemsReferences(ctx context.Context, arg UpdatePlaylistItemsReferencesParams) error {
+	_, err := q.db.ExecContext(ctx, updatePlaylistItemsReferences,
+		arg.RefTitle,
+		arg.RefAlbum,
+		arg.RefAlbumArtist,
+		arg.TrackID,
+	)
+	return err
+}

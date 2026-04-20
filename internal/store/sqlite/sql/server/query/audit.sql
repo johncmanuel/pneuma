@@ -15,3 +15,6 @@ SELECT
     created_at
 FROM audit_log
 ORDER BY created_at DESC LIMIT ?;
+
+-- name: ClearAuditEntries :exec
+DELETE FROM audit_log;

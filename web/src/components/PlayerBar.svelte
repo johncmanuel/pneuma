@@ -15,6 +15,7 @@
     storageKeys,
     updateMediaSessionMetadata,
     isLocalID,
+    shuffle,
     RepeatLabels
   } from "@pneuma/shared";
   import {
@@ -448,12 +449,57 @@
     let nextIdx = idx + 1;
     if (nextIdx >= rq.length) {
       if ($playerState.repeat === 1) {
-        if ($playerState.shuffle) {
-          // let the server handle the reshuffle and next track
-          wsSend("playback.next", {});
-          return;
+        // On wrap with shuffle, reset to baseQueue to discard injected tracks
+        // and reshuffle client-side instead of delegating to the server
+        const base = $playerState.baseQueue;
+        const source = base.length > 0 ? base : rq;
+
+        // build a deduplicated shuffled queue starting with a random track
+        // that isn't the same as the last track played
+        let newQueue: string[];
+        if ($playerState.shuffle && source.length > 1) {
+          const lastTrack = rq[rq.length - 1];
+          const rest = source.filter((id) => id !== lastTrack);
+          newQueue = [
+            rest[Math.floor(Math.random() * rest.length)],
+            ...shuffle(rest)
+          ];
+
+          // deduplicate the first pick (it's also in the shuffled rest)
+          const seen = new Set<string>();
+          newQueue = newQueue.filter((id) => {
+            if (seen.has(id)) return false;
+            seen.add(id);
+            return true;
+          });
+
+          // ensure all source tracks are present
+          for (const id of source) {
+            if (!seen.has(id)) newQueue.push(id);
+          }
+        } else {
+          newQueue = [...source];
         }
-        nextIdx = 0;
+
+        playerState.update((s) => ({
+          ...s,
+          queue: newQueue,
+          queueIndex: 0,
+          trackId: newQueue[0],
+          track: null,
+          positionMs: 0,
+          paused: false
+        }));
+
+        wsSend("playback.queue", {
+          track_ids: newQueue,
+          start_index: 0
+        });
+        wsSend("playback.play", {
+          track_id: newQueue[0],
+          position_ms: 0
+        });
+        return;
       } else {
         playerState.update((s) => ({ ...s, paused: true }));
         return;

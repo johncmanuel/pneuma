@@ -14,7 +14,7 @@
     setPlayingPlaylistContext
   } from "../lib/stores/playlists";
   import { selectedPlaylistView, pushNav } from "../lib/stores/ui";
-  import { playerState } from "../lib/stores/playback";
+  import { playerState, appendTrackToQueue } from "../lib/stores/playback";
   import { loadRecent, recordRecentPlaylist } from "../lib/stores/recent";
   import { wsSend } from "../lib/ws";
   import { Heart } from "@lucide/svelte";
@@ -110,6 +110,7 @@
       trackId: tracks[idx >= 0 ? idx : 0].id,
       track: tracks[idx >= 0 ? idx : 0],
       queue: queueIds,
+      baseQueue: queueIds,
       queueIndex: idx >= 0 ? idx : 0,
       positionMs: 0,
       paused: false
@@ -254,7 +255,7 @@
               hideFavoriteIcon={true}
               onPlay={() => handlePlay(item)}
               onSelect={() => {}}
-              onAddToQueue={() => {}}
+              onAddToQueue={(t) => t && appendTrackToQueue(t)}
               onRemove={() => handleRemove(item)}
               onToggleFavorite={toggleFavoriteTrack}
             />

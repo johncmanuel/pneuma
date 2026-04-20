@@ -24,7 +24,7 @@
     pushNav,
     initialDataLoaded
   } from "../lib/stores/ui";
-  import { playerState } from "../lib/stores/playback";
+  import { playerState, appendTrackToQueue } from "../lib/stores/playback";
   import { playlistArtUrl, uploadPlaylistArtwork } from "../lib/api";
   import { wsSend } from "../lib/ws";
   import {
@@ -224,6 +224,7 @@
       trackId: tracks[idx >= 0 ? idx : 0].id,
       track: tracks[idx >= 0 ? idx : 0],
       queue: queueIds,
+      baseQueue: queueIds,
       queueIndex: idx >= 0 ? idx : 0,
       positionMs: 0,
       paused: false
@@ -452,7 +453,7 @@
                 playlists={$playlists}
                 onPlay={() => handlePlay(item)}
                 onSelect={() => {}}
-                onAddToQueue={() => {}}
+                onAddToQueue={(t) => t && appendTrackToQueue(t)}
                 onRemove={() => handleRemove(item)}
                 onAddToPlaylist={(t, id) => handleAddToPlaylist(t, id)}
                 onToggleFavorite={toggleFavoriteTrack}

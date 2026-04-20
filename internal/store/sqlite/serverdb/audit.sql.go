@@ -10,6 +10,15 @@ import (
 	"database/sql"
 )
 
+const clearAuditEntries = `-- name: ClearAuditEntries :exec
+DELETE FROM audit_log
+`
+
+func (q *Queries) ClearAuditEntries(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, clearAuditEntries)
+	return err
+}
+
 const insertAuditEntry = `-- name: InsertAuditEntry :exec
 INSERT INTO audit_log (
     id, user_id, action, target_type, target_id, detail, created_at

@@ -1,6 +1,12 @@
 import { writable } from "svelte/store";
-import { type PlayerState, type Track, isLocalID } from "@pneuma/shared";
+import {
+  type PlayerState,
+  type Track,
+  isLocalID,
+  addToast
+} from "@pneuma/shared";
 import { apiFetch } from "../api";
+import { wsSend } from "../ws";
 
 const initial: PlayerState = {
   trackId: "",
@@ -113,4 +119,23 @@ export function handlePlaybackChanged(payload: any): boolean {
   });
 
   return false;
+}
+
+export function appendTrackToQueue(track: Track) {
+  playerState.update((s) => {
+    const insertAt = s.queueIndex + 1;
+    const newQueue = [
+      ...s.queue.slice(0, insertAt),
+      track.id,
+      ...s.queue.slice(insertAt)
+    ];
+
+    wsSend("playback.queue", {
+      track_ids: newQueue,
+      start_index: s.queueIndex
+    });
+
+    return { ...s, queue: newQueue };
+  });
+  addToast(`Added "${track.title}" to queue.`, "success");
 }

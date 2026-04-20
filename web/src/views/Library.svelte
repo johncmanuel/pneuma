@@ -10,7 +10,7 @@
     loadMoreAlbumGroups,
     fetchAlbumTracks
   } from "../lib/stores/library";
-  import { playerState } from "../lib/stores/playback";
+  import { playerState, appendTrackToQueue } from "../lib/stores/playback";
   import { selectedAlbum, pushNav } from "../lib/stores/ui";
   import {
     visiblePlaylistsForAddMenu,
@@ -203,6 +203,7 @@
       trackId: track.id,
       track,
       queue: finalQueue,
+      baseQueue: queueIds,
       queueIndex: 0,
       positionMs: 0,
       paused: false
@@ -215,24 +216,6 @@
     wsSend("playback.play", {
       track_id: track.id,
       position_ms: 0
-    });
-  }
-
-  function addToQueue(track: Track) {
-    playerState.update((s) => {
-      const insertAt = s.queueIndex + 1;
-      const newQueue = [
-        ...s.queue.slice(0, insertAt),
-        track.id,
-        ...s.queue.slice(insertAt)
-      ];
-
-      wsSend("playback.queue", {
-        track_ids: newQueue,
-        start_index: s.queueIndex
-      });
-
-      return { ...s, queue: newQueue };
     });
   }
 
@@ -378,7 +361,7 @@
                     playlists={$playlistsStore}
                     onPlay={(t) => t && playTrack(t)}
                     onSelect={() => {}}
-                    onAddToQueue={(t) => t && addToQueue(t)}
+                    onAddToQueue={(t) => t && appendTrackToQueue(t)}
                     onAddToPlaylist={(t, id) => handleAddToPlaylist(t, id)}
                     onToggleFavorite={toggleFavoriteTrack}
                   />

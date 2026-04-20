@@ -108,7 +108,7 @@ func NewRouter(svc Services) *echo.Echo {
 		svc.Transcoder,
 	)
 	ph := handlers.NewPlaybackHandler(svc.Playback)
-	uh := handlers.NewUserHandler(svc.User, secret)
+	uh := handlers.NewUserHandler(svc.User, svc.Queries, secret)
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries)
 	plh := handlers.NewPlaylistHandler(svc.Playlist, svc.Hub, svc.ArtworkDir)
 	rh := handlers.NewRecentHandler(svc.Queries)
@@ -165,6 +165,7 @@ func NewRouter(svc Services) *echo.Echo {
 	admin.PUT("/users/:id/permissions", ah.UpdatePermissions)
 	admin.DELETE("/users/:id", ah.DeleteUser)
 	admin.GET("/audit", ah.ListAudit)
+	admin.DELETE("/audit", ah.ClearAudit)
 
 	// Library
 	lib := e.Group("/api/library", authMW)
@@ -181,6 +182,7 @@ func NewRouter(svc Services) *echo.Echo {
 	uploadBodyLimit := echomw.BodyLimit(fmt.Sprintf("%dM", uploadMaxMB))
 
 	lib.POST("/tracks/upload", lh.UploadTrack, middleware.RequirePerm(secret, "can_upload"), uploadBodyLimit)
+	lib.PUT("/tracks/:id/file", lh.ReplaceTrackFile, middleware.RequirePerm(secret, "can_edit"), uploadBodyLimit)
 	lib.DELETE("/tracks/:id", lh.DeleteTrack, middleware.RequirePerm(secret, "can_delete"))
 	lib.GET("/albumgroups", lh.ListAlbumGroups)
 	lib.GET("/search", lh.Search)

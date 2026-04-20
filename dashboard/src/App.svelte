@@ -5,7 +5,7 @@
   import Login from "./lib/components/Login.svelte";
   import Sidebar from "./lib/components/Sidebar.svelte";
   import Admin from "./pages/Admin.svelte";
-  import { ThemeToggle } from "@pneuma/ui";
+  import { ThemeToggle, Toasts } from "@pneuma/ui";
 
   let ready = $state(false);
 
@@ -46,13 +46,18 @@
     </header>
 
     <main class="content">
-      <Admin />
+      <main class="content">
+        <Admin />
+      </main>
+
+      <Toasts />
     </main>
   </div>
 {:else}
   <div class="login-shell">
     <div class="overlay-theme"><ThemeToggle /></div>
     <Login />
+    <Toasts />
   </div>
 {/if}
 

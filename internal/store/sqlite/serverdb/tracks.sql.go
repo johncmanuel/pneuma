@@ -555,6 +555,33 @@ func (q *Queries) ListTracksPage(ctx context.Context, arg ListTracksPageParams) 
 	return items, nil
 }
 
+const replaceTrackFile = `-- name: ReplaceTrackFile :exec
+UPDATE tracks
+SET path = ?, fingerprint = ?, file_size_bytes = ?, last_modified = ?, updated_at = ?
+WHERE id = ?
+`
+
+type ReplaceTrackFileParams struct {
+	Path          string
+	Fingerprint   sql.NullString
+	FileSizeBytes sql.NullInt64
+	LastModified  string
+	UpdatedAt     string
+	ID            string
+}
+
+func (q *Queries) ReplaceTrackFile(ctx context.Context, arg ReplaceTrackFileParams) error {
+	_, err := q.db.ExecContext(ctx, replaceTrackFile,
+		arg.Path,
+		arg.Fingerprint,
+		arg.FileSizeBytes,
+		arg.LastModified,
+		arg.UpdatedAt,
+		arg.ID,
+	)
+	return err
+}
+
 const restoreTrack = `-- name: RestoreTrack :exec
 UPDATE tracks SET deleted_at = NULL, updated_at = ? WHERE id = ?
 `
