@@ -1,6 +1,6 @@
 <script lang="ts">
   import { currentUser } from "../lib/api";
-  import TracksPanel from "../lib/admin/TracksPanel.svelte";
+  import TracksPanel from "../lib/admin/TracksPanel/index.svelte";
   import UsersPanel from "../lib/admin/UsersPanel.svelte";
   import AuditPanel from "../lib/admin/AuditPanel.svelte";
   import DiskUsagePanel from "../lib/admin/DiskUsagePanel.svelte";

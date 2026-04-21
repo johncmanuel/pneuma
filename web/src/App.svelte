@@ -22,7 +22,7 @@
     canGoForward
   } from "./lib/stores/ui";
   import Sidebar from "./components/Sidebar.svelte";
-  import PlayerBar from "./components/PlayerBar.svelte";
+  import PlayerBar from "./components/PlayerBar/index.svelte";
   import QueuePanel from "./components/QueuePanel.svelte";
   import SearchBar from "./components/SearchBar.svelte";
   import SearchView from "./views/Search.svelte";
