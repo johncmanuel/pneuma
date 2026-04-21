@@ -25,7 +25,7 @@ Bun is used for package management in Svelte and TypeScript environments. Do not
 
 ## Building
 
-See the section, `Setting up the environment`, in the README.md for details
+Run `bun server` to build and start the server. Run `wails dev` to run the desktop application. Run `bun build` to build the desktop application.
 
 ## Styling
 
@@ -41,9 +41,8 @@ Some general styling guidelines:
   - Use `Boolean()` instead of `!!` for readability.
   - Avoid empty blocks, especially in `try/catch` statements; use console.log or equivalent to fill in the blocks.
 - Go
-  - Run `go vet ./...` when making changes to the codebase.
   - Always handle errors explicitly; never ignore them with `_` unless there's a deliberate, commented reason. Prefer early returns over nested `if` blocks.
-  - Use `camelCase` for unexported identifiers and `PascalCase` for exported ones. Any acronyms should be all caps.
+  - Use `go doc` and `gopls` for API and doc inspection
   - Group `const` and `var` variables into a single declaration block using parentheses.
   - Avoid using naked returns, unless the function is very short.
 - Svelte
