@@ -14,6 +14,7 @@
   import Toolbar from "./Toolbar.svelte";
   import UploadStatBar from "./UploadStatBar.svelte";
   import TrackTable from "./TrackTable.svelte";
+  import BulkEditModal from "./BulkEditModal.svelte";
 
   let tracks: Track[] = $state([]);
   let loading = $state(false);
@@ -24,6 +25,8 @@
 
   let selectedIds = $state(new Set<string>());
   let bulkDeleting = $state(false);
+  let showBulkEditModal = $state(false);
+  let bulkSaving = $state(false);
 
   let canUpload = $derived(
     !!($currentUser?.is_admin || $currentUser?.can_upload)
@@ -279,11 +282,14 @@
   async function bulkDelete() {
     const ids = [...selectedIds];
     if (!ids.length) return;
+
     if (!confirm(`Delete ${ids.length} track${ids.length > 1 ? "s" : ""}?`))
       return;
+
     bulkDeleting = true;
     let ok = 0;
     let fail = 0;
+
     for (const id of ids) {
       const r = await apiFetch(`/api/library/tracks/${id}`, {
         method: "DELETE"
@@ -291,12 +297,52 @@
       if (r.ok) ok++;
       else fail++;
     }
+
     bulkDeleting = false;
+
     const deletedIDs = new Set(ids);
+
     selectedIds = new Set();
     tracks = tracks.filter((track) => !deletedIDs.has(track.id));
+
     await loadTracks();
     if (fail > 0) alert(`Deleted ${ok}, failed ${fail}`);
+  }
+
+  async function handleBulkEditSave(patch: Record<string, string | number>) {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+
+    bulkSaving = true;
+    let ok = 0;
+    let fail = 0;
+
+    for (const id of ids) {
+      const r = await apiFetch(`/api/library/tracks/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch)
+      });
+      if (r.ok) ok++;
+      else fail++;
+    }
+
+    bulkSaving = false;
+    showBulkEditModal = false;
+    selectedIds = new Set();
+
+    await loadTracks();
+
+    if (fail > 0) {
+      addToast(
+        `Bulk edit: updated ${ok}, failed ${fail}`,
+        fail === ids.length ? "error" : "success"
+      );
+    } else {
+      addToast(
+        `Bulk updated ${ok} track${ok === 1 ? "" : "s"} successfully`,
+        "success"
+      );
+    }
   }
 
   let uploadQueue: UploadItem[] = $state([]);
@@ -477,6 +523,7 @@
     bind:searchQuery
     bind:concurrencyLimit
     {canUpload}
+    {canEdit}
     {canDelete}
     selectedCount={selectedIds.size}
     {bulkDeleting}
@@ -485,8 +532,18 @@
     onUploadFiles={enqueueFiles}
     onReplaceTrack={handleReplaceTrack}
     onTriggerScan={triggerScan}
+    onBulkEdit={() => (showBulkEditModal = true)}
     onBulkDelete={bulkDelete}
   />
+
+  {#if showBulkEditModal}
+    <BulkEditModal
+      selectedCount={selectedIds.size}
+      saving={bulkSaving}
+      onSave={handleBulkEditSave}
+      onClose={() => (showBulkEditModal = false)}
+    />
+  {/if}
 
   {#if $scanResult}
     <p class="scan-result">

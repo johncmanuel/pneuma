@@ -8,6 +8,7 @@
     searchQuery: string;
     concurrencyLimit: number;
     canUpload: boolean;
+    canEdit: boolean;
     canDelete: boolean;
     selectedCount: number;
     bulkDeleting: boolean;
@@ -15,6 +16,7 @@
     onUploadFiles: (files: File[]) => void;
     onReplaceTrack: (file: File, track: Track) => void;
     onTriggerScan: () => void;
+    onBulkEdit: () => void;
     onBulkDelete: () => void;
     replacingTrack: Track | null;
   }
@@ -23,6 +25,7 @@
     searchQuery = $bindable(),
     concurrencyLimit = $bindable(),
     canUpload,
+    canEdit,
     canDelete,
     selectedCount,
     bulkDeleting,
@@ -30,6 +33,7 @@
     onUploadFiles,
     onReplaceTrack,
     onTriggerScan,
+    onBulkEdit,
     onBulkDelete,
     replacingTrack = $bindable()
   }: Props = $props();
@@ -134,6 +138,12 @@
   {#if $currentUser?.is_admin}
     <button class="action-btn" onclick={onTriggerScan} disabled={$scanRunning}>
       {$scanRunning ? "Scanning..." : "Scan"}
+    </button>
+  {/if}
+
+  {#if canEdit && selectedCount > 0}
+    <button class="action-btn" onclick={onBulkEdit} disabled={bulkDeleting}>
+      Edit {selectedCount}
     </button>
   {/if}
 
