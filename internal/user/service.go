@@ -23,12 +23,13 @@ var (
 
 // Service manages user accounts and devices.
 type Service struct {
-	q *serverdb.Queries
+	q  *serverdb.Queries
+	db *sql.DB
 }
 
 // New creates a user Service.
-func New(q *serverdb.Queries) *Service {
-	return &Service{q: q}
+func New(q *serverdb.Queries, db *sql.DB) *Service {
+	return &Service{q: q, db: db}
 }
 
 // Register creates a new user. The first registered user becomes admin.
@@ -159,5 +160,37 @@ func (s *Service) DeleteUser(ctx context.Context, callerID, targetID string) err
 	if err != nil {
 		return err
 	}
-	return s.q.DeleteUser(ctx, targetID)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// clear tracks upload attribution
+	if _, err := tx.ExecContext(ctx, "UPDATE tracks SET uploaded_by_user_id = '' WHERE uploaded_by_user_id = ?", targetID); err != nil {
+		return err
+	}
+
+	// then delete user collections and references
+	if _, err := tx.ExecContext(ctx, "DELETE FROM playlists WHERE user_id = ?", targetID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM watch_folders WHERE user_id = ?", targetID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM playback_sessions WHERE user_id = ?", targetID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM audit_log WHERE user_id = ? OR target_id = ?", targetID, targetID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM devices WHERE user_id = ?", targetID); err != nil {
+		return err
+	}
+
+	if err := s.q.WithTx(tx).DeleteUser(ctx, targetID); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }

@@ -66,7 +66,7 @@ func main() {
 	hub := apws.New()
 	queries := serverdb.New(store.DB())
 	libSvc := library.New(queries, store)
-	userSvc := user.New(queries)
+	userSvc := user.New(queries, store.DB())
 	metaParser := parser.New(cfg.Transcoding.FFmpegPath)
 	playEngine := playback.New(queries, hub, libSvc)
 	playlistSvc := playlist.New(queries)
