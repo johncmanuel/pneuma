@@ -4,16 +4,6 @@ export const RepeatModeEnum = {
   One: 2
 } as const;
 
-export const StreamQualityValues = [
-  "auto",
-  "low",
-  "medium",
-  "high",
-  "original"
-] as const;
-
-export type StreamQuality = (typeof StreamQualityValues)[number];
-
 export const RepeatLabels = ["Off", "All", "One"];
 
 export type RepeatModeEnum =
@@ -47,13 +37,6 @@ export interface AlbumGroup {
 
 export interface AlbumGroupsResponse {
   groups: AlbumGroup[];
-  total: number;
-  offset: number;
-  limit: number;
-}
-
-export interface TracksResponse {
-  tracks: Track[];
   total: number;
   offset: number;
   limit: number;
@@ -107,16 +90,6 @@ export interface LocalPlaylistItem extends PlaylistItem {
   resolved: boolean;
 }
 
-export interface PlaybackState {
-  playing: boolean;
-  track_id: string;
-  position_ms: number;
-  queue: string[];
-  queue_index: number;
-  repeat: RepeatModeEnum;
-  shuffle: boolean;
-}
-
 export interface PlayerState {
   trackId: string;
   track: Track | null;
@@ -127,9 +100,4 @@ export interface PlayerState {
   paused: boolean;
   repeat: RepeatModeEnum;
   shuffle: boolean;
-}
-
-export interface SearchResult {
-  tracks: Track[];
-  albums: AlbumGroup[];
 }
