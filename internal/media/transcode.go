@@ -232,11 +232,8 @@ func (t *StreamTranscoder) canTranscode(track *models.Track, quality StreamQuali
 
 // shouldTranscodeTrack evaluates whether a specific track should be transcoded based on its codec
 // and bitrate relative to the target bitrate.
-// TODO: Thinking of using service.go in package media to fill in the hardcoded extensions
 func shouldTranscodeTrack(track *models.Track, targetBitrate int) bool {
-	codec := strings.ToLower(strings.TrimSpace(track.Codec))
-	switch codec {
-	case "flac", "pcm", "aiff", "wav", "alac", "ape", "wavpack":
+	if IsLosslessCodec(strings.TrimSpace(track.Codec)) {
 		return true
 	}
 

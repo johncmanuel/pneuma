@@ -19,6 +19,26 @@ var supportedAudioExts = map[string]struct{}{
 	".aiff": {},
 }
 
+// losslessCodecs is a set of lossless or uncompressed audio codecs that should
+// always be transcoded to a lossy format, as they typically exceed target bitrates.
+var losslessCodecs = map[string]struct{}{
+	"flac":    {},
+	"pcm":     {},
+	"aiff":    {},
+	"wav":     {},
+	"alac":    {},
+	"ape":     {},
+	"wavpack": {},
+}
+
+// IsLosslessCodec reports whether the given codec is a lossless or uncompressed format
+// that should always be transcoded. The list of codecs can be found in the losslessCodecs map.
+func IsLosslessCodec(codec string) bool {
+	codec = strings.ToLower(codec)
+	_, exists := losslessCodecs[codec]
+	return exists
+}
+
 // contentTypes maps supported audio extensions to their standard MIME types.
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types/Common_types
 var contentTypes = map[string]string{
