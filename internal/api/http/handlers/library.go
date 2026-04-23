@@ -300,8 +300,7 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 			c.Response().Header().Set("Content-Type", media.MimeFromExt(".ogg"))
 			c.Response().Header().Set("Cache-Control", "private, no-store")
 			c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.NormalizeStreamQuality(quality)))
-			normalizeRangeHeader(c.Request(), cachedInfo.Size())
-			http.ServeContent(c.Response(), c.Request(), cachedInfo.Name(), cachedInfo.ModTime(), cachedFile)
+			handleContentRange(c.Response(), c.Request(), cachedFile, cachedInfo.Size(), cachedInfo.Name(), cachedInfo.ModTime())
 			return nil
 		}
 
@@ -319,8 +318,7 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 	c.Response().Header().Set("Content-Type", media.MimeFromExt(ext))
 	c.Response().Header().Set("Cache-Control", "private, no-store")
 	c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.StreamQualityOriginal))
-	normalizeRangeHeader(c.Request(), info.Size())
-	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
+	handleContentRange(c.Response(), c.Request(), f, info.Size(), info.Name(), info.ModTime())
 
 	return nil
 }
@@ -361,6 +359,42 @@ func parseRangeStart(value string) (int64, bool) {
 	}
 
 	return start, true
+}
+
+// initialChunkSize defines the default byte range size to serve when a Range header is present.
+const initialChunkSize = 512 * 1024
+
+// handleContentRange serves the requested byte range of the file, or the whole file if no valid Range header is present.
+func handleContentRange(w http.ResponseWriter, r *http.Request, f *os.File, size int64, name string, modTime time.Time) {
+	rangeHeader := r.Header.Get("Range")
+	if rangeHeader == "" {
+		http.ServeContent(w, r, name, modTime, f)
+		return
+	}
+
+	start, ok := parseRangeStart(rangeHeader)
+	if !ok || start >= size {
+		http.ServeContent(w, r, name, modTime, f)
+		return
+	}
+
+	end := size - 1
+	if start < initialChunkSize {
+		if size < initialChunkSize {
+			end = size - 1
+		} else {
+			end = initialChunkSize - 1
+		}
+	}
+
+	contentLen := end - start + 1
+
+	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, size))
+	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Content-Length", strconv.FormatInt(contentLen, 10))
+	w.WriteHeader(http.StatusPartialContent)
+
+	io.CopyN(w, io.LimitReader(f, contentLen), contentLen)
 }
 
 // ServeTrackArt returns embedded album art from the audio file.
