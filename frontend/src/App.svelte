@@ -156,9 +156,9 @@
     }
   });
 
-  function handleNavigate(view: DesktopView) {
+  function handleNavigate(view: string) {
     pushNav({
-      view: view,
+      view: view as DesktopView,
       tab: "library",
       subTab: "albums",
       albumKey: null,
