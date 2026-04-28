@@ -136,9 +136,8 @@ export async function autoReconnect(onSuccess?: () => void) {
     console.warn("Auto-restore failed, starting reconnect loop");
   }
 
-  // poll every 5 seconds
-  // TODO: might make this configurable or instead have this stop at a certain point
-  // but seems good for now
+  let retries = 0;
+  const maxRetries = 3;
   const pollLoopTimeMs = 5000;
 
   reconnectInterval = setInterval(async () => {
@@ -155,6 +154,8 @@ export async function autoReconnect(onSuccess?: () => void) {
       return;
     }
 
+    retries++;
+
     try {
       await RestoreSession(s.url, s.token);
       await refreshConnection();
@@ -163,12 +164,21 @@ export async function autoReconnect(onSuccess?: () => void) {
         saveSession(s.url, get(authToken));
         stopAutoReconnect();
         onSuccess?.();
+        return;
       }
     } catch (e) {
       if (e instanceof Error && e.message.includes("session expired")) {
         clearSession();
         stopAutoReconnect();
+        return;
       }
+    }
+
+    if (!get(connected) && retries >= maxRetries) {
+      console.warn(
+        `Max auto-reconnect retries (${maxRetries}) reached, stopping.`
+      );
+      stopAutoReconnect();
     }
   }, pollLoopTimeMs);
 }
@@ -222,7 +232,11 @@ export async function serverFetch(
  * Remote tracks stream from the server using a token query parameter because
  * the desktop <audio> element cannot set Authorization headers.
  */
-export function streamUrl(trackId: string, localPath?: string): string {
+export function streamUrl(
+  trackId: string,
+  localPath?: string,
+  quality?: string
+): string {
   const p = get(localPort);
 
   // If the track ID looks like a filesystem path, use the local server
@@ -241,7 +255,11 @@ export function streamUrl(trackId: string, localPath?: string): string {
   const base = get(serverURL);
   const token = get(authToken);
   if (base && token) {
-    return `${base}/api/stream/tracks/${trackId}?token=${encodeURIComponent(token)}`;
+    const qualityParam =
+      quality && quality !== "auto"
+        ? `&quality=${encodeURIComponent(quality)}`
+        : "";
+    return `${base}/api/stream/tracks/${trackId}?token=${encodeURIComponent(token)}${qualityParam}`;
   }
 
   return "";
