@@ -73,7 +73,11 @@ func (h *Hub) transformedPayload(eventType string, payload any) any {
 // Publish sends an event to every connected client.
 func (h *Hub) Publish(eventType string, payload any) {
 	env := Envelope{Type: eventType, Payload: h.transformedPayload(eventType, payload)}
-	data := mustMarshal(env)
+	data, err := json.Marshal(env)
+	if err != nil {
+		h.log.Error("ws marshal", "type", eventType, "err", err)
+		return
+	}
 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -88,7 +92,11 @@ func (h *Hub) Publish(eventType string, payload any) {
 // PublishToUser sends an event only to clients authenticated as the given user.
 func (h *Hub) PublishToUser(userID, eventType string, payload any) {
 	env := Envelope{Type: eventType, Payload: h.transformedPayload(eventType, payload)}
-	data := mustMarshal(env)
+	data, err := json.Marshal(env)
+	if err != nil {
+		h.log.Error("ws marshal", "type", eventType, "err", err)
+		return
+	}
 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -105,7 +113,11 @@ func (h *Hub) PublishToUser(userID, eventType string, payload any) {
 // PublishToDevice sends an event only to a specific device of a user.
 func (h *Hub) PublishToDevice(userID, deviceID, eventType string, payload any) {
 	env := Envelope{Type: eventType, Payload: h.transformedPayload(eventType, payload)}
-	data := mustMarshal(env)
+	data, err := json.Marshal(env)
+	if err != nil {
+		h.log.Error("ws marshal", "type", eventType, "err", err)
+		return
+	}
 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -236,13 +248,3 @@ func (c *client) writePump() {
 	}
 }
 
-// mustMarshal is a wrapper function around json.Marshal(...) that panics if an error occurs.
-func mustMarshal(v any) []byte {
-	data, err := json.Marshal(v)
-
-	if err != nil {
-		panic("ws marshal: " + err.Error())
-	}
-
-	return data
-}
