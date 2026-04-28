@@ -3,7 +3,7 @@
   import { playerState } from "../../lib/stores/playback";
   import { streamUrl } from "../../lib/api";
   import { wsSend } from "../../lib/ws";
-  import type { StreamQuality } from "../../lib/stream-quality";
+  import type { StreamQuality } from "@pneuma/shared";
 
   interface Props {
     audio: HTMLAudioElement;

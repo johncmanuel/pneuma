@@ -2,9 +2,9 @@ import { writable, derived } from "svelte/store";
 import {
   decodeJWT,
   getOrCreateDeviceID,
-  type CurrentUser
+  type CurrentUser,
+  type StreamQuality
 } from "@pneuma/shared";
-import { type StreamQuality } from "./stream-quality";
 
 export const currentUser = writable<CurrentUser | null>(null);
 export const loggedIn = derived(currentUser, ($u) => Boolean($u));
