@@ -140,12 +140,12 @@ type RemotePlaylistDeltaResult = {
 type PlaylistTrackInput =
   | Track
   | {
-    path: string;
-    title: string;
-    album: string;
-    album_artist: string;
-    duration_ms: number;
-  };
+      path: string;
+      title: string;
+      album: string;
+      album_artist: string;
+      duration_ms: number;
+    };
 
 let favoritesSyncPromise: Promise<void> | null = null;
 
@@ -683,10 +683,10 @@ export async function applyRemotePlaylistDelta(
       list.map((playlist) =>
         playlist.id === local.id
           ? {
-            ...playlist,
-            remote_playlist_id: "",
-            updated_at: unlinkTime
-          }
+              ...playlist,
+              remote_playlist_id: "",
+              updated_at: unlinkTime
+            }
           : playlist
       )
     );
@@ -694,10 +694,10 @@ export async function applyRemotePlaylistDelta(
     selectedPlaylist.update((selected) =>
       selected?.id === local.id
         ? {
-          ...selected,
-          remote_playlist_id: "",
-          updated_at: unlinkTime
-        }
+            ...selected,
+            remote_playlist_id: "",
+            updated_at: unlinkTime
+          }
         : selected
     );
 
@@ -829,8 +829,8 @@ export async function toggleFavoriteTrack(track: Track | null) {
         ? await removeRemotePlaylistItemByPosition(remoteID, position)
         : true
       : await appendRemotePlaylistItems(remoteID, [
-        toFavoritesWriteItemFromTrack(track)
-      ]);
+          toFavoritesWriteItemFromTrack(track)
+        ]);
 
     if (!ok) {
       console.error(
@@ -854,28 +854,28 @@ export async function toggleFavoriteTrack(track: Track | null) {
   } else {
     const nextItems = localAlreadyFavorite
       ? currentItems.filter(
-        (item) =>
-          !(
-            (item.source === "remote" && item.track_id === track.id) ||
-            (item.source === "local_ref" && item.local_path === track.id)
-          )
-      )
+          (item) =>
+            !(
+              (item.source === "remote" && item.track_id === track.id) ||
+              (item.source === "local_ref" && item.local_path === track.id)
+            )
+        )
       : [
-        ...currentItems,
-        {
-          position: currentItems.length,
-          source: isLocalTrack ? "local_ref" : "remote",
-          track_id: isLocalTrack ? "" : track.id,
-          local_path: isLocalTrack ? track.id : "",
-          ref_title: track.title,
-          ref_album: track.album_name,
-          ref_album_artist: track.album_artist,
-          ref_duration_ms: track.duration_ms,
-          added_at: "",
-          resolved: false,
-          missing: false
-        }
-      ];
+          ...currentItems,
+          {
+            position: currentItems.length,
+            source: isLocalTrack ? "local_ref" : "remote",
+            track_id: isLocalTrack ? "" : track.id,
+            local_path: isLocalTrack ? track.id : "",
+            ref_title: track.title,
+            ref_album: track.album_name,
+            ref_album_artist: track.album_artist,
+            ref_duration_ms: track.duration_ms,
+            added_at: "",
+            resolved: false,
+            missing: false
+          }
+        ];
 
     await SetLocalPlaylistItems(
       localID,
