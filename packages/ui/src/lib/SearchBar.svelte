@@ -2,6 +2,7 @@
   import { onDestroy } from "svelte";
   import { Music, Search, ChevronRight } from "@lucide/svelte";
   import { portal } from "@pneuma/shared";
+  import "@pneuma/ui/css/components.css";
   import type { Track, AlbumGroup } from "@pneuma/shared";
 
   interface PlaylistMenuItem {
@@ -429,22 +430,6 @@
     width: 100%;
   }
 
-  .search-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 5px 14px;
-    max-width: 420px;
-    width: 100%;
-    transition: border-color 0.15s;
-  }
-  .search-bar:focus-within {
-    border-color: var(--accent);
-  }
-
   input {
     flex: 1;
     background: none;
@@ -495,16 +480,6 @@
     font-size: 13px;
   }
 
-  .section-label {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-3);
-    padding: 10px 14px 4px;
-    margin: 0;
-  }
-
   .album-row {
     display: flex;
     align-items: center;
@@ -522,30 +497,6 @@
   .album-row:focus {
     background: var(--surface-hover);
     outline: none;
-  }
-
-  .album-thumb {
-    width: 36px;
-    height: 36px;
-    border-radius: 4px;
-    background: var(--surface-2);
-    flex-shrink: 0;
-    overflow: hidden;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .album-thumb img {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 1;
-  }
-  .album-thumb-ph {
-    font-size: 14px;
-    color: var(--text-3);
   }
 
   .album-info {
@@ -604,52 +555,5 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .ctx-menu {
-    position: fixed;
-    z-index: 9999;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: 4px 0;
-    box-shadow: var(--shadow-pop);
-    min-width: 160px;
-  }
-  .ctx-menu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 8px 14px;
-    font-size: 13px;
-    color: var(--text-1);
-    border-radius: 0;
-    cursor: pointer;
-    background: none;
-    border: none;
-  }
-  .ctx-menu button:hover {
-    background: var(--surface-hover);
-  }
-  .ctx-submenu-wrap {
-    position: relative;
-  }
-  .has-sub {
-    display: flex !important;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .ctx-submenu {
-    position: absolute;
-    top: -4px;
-    left: 100%;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: 4px 0;
-    box-shadow: var(--shadow-pop);
-    min-width: 160px;
-    max-height: 240px;
-    overflow-y: auto;
   }
 </style>

@@ -3,6 +3,7 @@
   import SortButton from "./SortButton.svelte";
   import { Music } from "@lucide/svelte";
   import { formatTotalDuration } from "./utils";
+  import "@pneuma/ui/css/components.css";
 
   interface Track {
     id: string;
@@ -254,33 +255,6 @@
     margin-bottom: 20px;
   }
 
-  .album-art-hero {
-    width: 160px;
-    height: 160px;
-    flex-shrink: 0;
-    border-radius: 8px;
-    overflow: hidden;
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-  }
-
-  .album-art-hero img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    position: relative;
-    z-index: 1;
-  }
-
-  .album-art-hero-placeholder {
-    position: absolute;
-    font-size: 48px;
-    color: var(--text-3);
-  }
-
   .album-detail-info {
     display: flex;
     flex-direction: column;
@@ -303,31 +277,6 @@
 
   .album-filter-bar {
     margin-top: 12px;
-  }
-
-  .album-filter-input {
-    width: 100%;
-    max-width: 280px;
-    padding: 6px 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    color: var(--fg);
-    font-size: 13px;
-    outline: none;
-    transition: border-color 0.15s;
-  }
-
-  .album-filter-input:focus {
-    border-color: var(--accent);
-  }
-
-  .album-filter-input::placeholder {
-    color: var(--text-3);
-  }
-
-  .album-filter-input::-webkit-search-cancel-button {
-    display: none;
   }
 
   .track-headers {

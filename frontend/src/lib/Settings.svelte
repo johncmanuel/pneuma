@@ -288,7 +288,6 @@
     font-weight: 600;
   }
 
-  /* ── Streaming Quality panel ────────────────────────────────── */
   .quality-panel {
     display: flex;
     flex-direction: column;
