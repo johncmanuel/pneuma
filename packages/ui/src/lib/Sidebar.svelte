@@ -9,6 +9,7 @@
     Settings as SettingsIcon,
     SquareLibrary
   } from "@lucide/svelte";
+  import "@pneuma/ui/css/components.css";
 
   interface NavItem {
     id: string;
@@ -276,30 +277,6 @@
   .recent-item.collapsed-item {
     justify-content: center;
     padding: 4px;
-  }
-
-  .recent-art {
-    width: 36px;
-    height: 36px;
-    border-radius: 4px;
-    background: var(--surface-2);
-    flex-shrink: 0;
-    overflow: hidden;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .recent-art img {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 1;
-  }
-  .recent-art-ph {
-    font-size: 14px;
-    color: var(--text-3);
   }
 
   .recent-info {

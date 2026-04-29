@@ -1,7 +1,6 @@
 import { writable } from "svelte/store";
-import { type StreamQuality, isStreamQuality } from "../stream-quality";
-
-const streamQualityStorageKey = "pneuma_stream_quality";
+import { type StreamQuality, isStreamQuality } from "./stream-quality";
+import { storageKeys } from "./storage";
 
 const streamQualityDefault: StreamQuality = "auto";
 
@@ -16,12 +15,12 @@ function parseStreamQuality(raw: string | null): StreamQuality {
 const initialQuality = parseStreamQuality(
   typeof localStorage === "undefined"
     ? null
-    : localStorage.getItem(streamQualityStorageKey)
+    : localStorage.getItem(storageKeys.streamQuality)
 );
 
 export const streamQuality = writable<StreamQuality>(initialQuality);
 
 streamQuality.subscribe((value) => {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(streamQualityStorageKey, value);
+  localStorage.setItem(storageKeys.streamQuality, value);
 });

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Search, X, Music, FolderOpen } from "@lucide/svelte";
   import type { Snippet } from "svelte";
+  import "@pneuma/ui/css/components.css";
 
   interface AlbumGroup {
     key: string;
@@ -202,23 +203,6 @@
     font-weight: 700;
   }
 
-  .album-grid-search {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 5px 12px;
-    margin-bottom: 16px;
-    max-width: 280px;
-    transition: border-color 0.15s;
-  }
-
-  .album-grid-search:focus-within {
-    border-color: var(--accent);
-  }
-
   .album-grid-filter {
     flex: 1;
     background: none;
@@ -271,34 +255,6 @@
 
   .album-card:hover .album-art {
     border-color: var(--accent);
-  }
-
-  .album-art {
-    aspect-ratio: 1;
-    border-radius: 6px;
-    overflow: hidden;
-    border: 2px solid transparent;
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 8px;
-    transition: border-color 0.15s;
-    position: relative;
-  }
-
-  .album-art img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    position: relative;
-    z-index: 1;
-  }
-
-  .album-art-placeholder {
-    position: absolute;
-    font-size: 36px;
-    color: var(--text-3);
   }
 
   .album-title {

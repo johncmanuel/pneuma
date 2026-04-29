@@ -195,7 +195,7 @@
         trackRowComponent={TrackRow}
         onPlayTrack={(t: any) => playTrack(t)}
         onAddToQueue={(t: any) => appendTrackToQueue(t)}
-        onToggleFavorite={toggleFavoriteTrack}
+        onToggleFavorite={(t: any) => toggleFavoriteTrack(t)}
       />
     {:else}
       <AlbumGrid

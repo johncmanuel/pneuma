@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Sidebar } from "@pneuma/ui";
-  import { pushNav, selectedPlaylistView } from "../stores/ui";
+  import { pushNav, type DesktopView } from "../stores/ui";
   import {
     ensureFavoritesPlaylist,
     favoritesPlaylistId
@@ -14,10 +14,10 @@
   import { serverURL, authToken } from "../utils/api";
 
   interface Props {
-    activeView?: string;
+    activeView?: DesktopView;
     collapsed?: boolean;
     onToggleCollapse?: () => void;
-    onNavigate?: (id: string) => void;
+    onNavigate?: (id: DesktopView) => void;
   }
 
   let {
@@ -87,7 +87,7 @@
       return;
     }
 
-    onNavigate?.(id);
+    onNavigate?.(id as DesktopView);
   }
 
   function handleRecentClick(item: { key: string }) {

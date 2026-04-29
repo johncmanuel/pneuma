@@ -1,5 +1,6 @@
 <script lang="ts">
   import { formatDuration, portal } from "@pneuma/shared";
+  import "@pneuma/ui/css/components.css";
   import { onDestroy, onMount } from "svelte";
   import { ChevronRight, Heart } from "@lucide/svelte";
   import type { Track } from "@pneuma/shared";
@@ -277,68 +278,5 @@
   }
   .track-row:hover .fav-indicator.visible {
     opacity: 1;
-  }
-
-  .ctx-menu {
-    position: fixed;
-    z-index: 9999;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: 4px 0;
-    box-shadow: var(--shadow-pop);
-    min-width: 160px;
-  }
-  .ctx-menu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 8px 14px;
-    font-size: 13px;
-    color: var(--text-1);
-    border-radius: 0;
-  }
-  .ctx-menu button:hover {
-    background: var(--surface-hover);
-  }
-
-  .ctx-sep {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 4px 0;
-  }
-  .ctx-danger {
-    color: var(--danger) !important;
-  }
-  .ctx-danger:hover {
-    background: var(--danger-soft) !important;
-  }
-  .ctx-disabled {
-    color: var(--text-3) !important;
-    cursor: default;
-  }
-
-  .ctx-submenu-wrap {
-    position: relative;
-  }
-
-  .has-sub {
-    display: flex !important;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .ctx-submenu {
-    position: absolute;
-    top: -4px;
-    left: 100%;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--r-md);
-    padding: 4px 0;
-    box-shadow: var(--shadow-pop);
-    min-width: 160px;
-    max-height: 240px;
-    overflow-y: auto;
   }
 </style>

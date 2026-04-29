@@ -31,19 +31,29 @@ type InboundMessage struct {
 // userID is the authenticated user extracted at connection time.
 type InboundHandler func(userID, deviceID string, msg InboundMessage)
 
+// OutboundHandler is called for every non-empty message sent to a client.
+type OutboundHandler func(eventType string, payload any) any
+
 // Hub manages connected WebSocket clients and broadcasts messages.
 type Hub struct {
 	// mu controls concurrent access to the clients map.
 	// Multiple goroutines interact with the map in http handlers, so ensure
 	// proper locking during read/writes.
 	mu sync.RWMutex
-
-	clients   map[*client]struct{}
-	log       *slog.Logger
+	// clients contains all active WebSocket clients.
+	clients map[*client]struct{}
+	// log is the logger for the hub.
+	log *slog.Logger
+	// onMessage is the callback for inbound client messages.
 	onMessage InboundHandler
-	transform func(eventType string, payload any) any
+	// transform is the callback for outbound client messages.
+	transform OutboundHandler
 }
 
+// messageReadLimit is the maximum size of a message (in bytes) that can be read from the WebSocket.
+const messageReadLimit = 65536
+
+// New creates and returns a new Hub.
 func New() *Hub {
 	return &Hub{
 		clients: make(map[*client]struct{}),
@@ -58,10 +68,12 @@ func (h *Hub) SetMessageHandler(handler InboundHandler) {
 
 // SetOutboundPayloadTransformer registers a callback that can compact/transform
 // outbound payloads per event type before they are marshaled and sent.
-func (h *Hub) SetOutboundPayloadTransformer(transform func(eventType string, payload any) any) {
+func (h *Hub) SetOutboundPayloadTransformer(transform OutboundHandler) {
 	h.transform = transform
 }
 
+// transformedPayload returns the payload transformed by the outbound handler.
+// It is called before the payload is marshaled and sent to clients.
 func (h *Hub) transformedPayload(eventType string, payload any) any {
 	if h.transform == nil {
 		return payload
@@ -73,7 +85,11 @@ func (h *Hub) transformedPayload(eventType string, payload any) any {
 // Publish sends an event to every connected client.
 func (h *Hub) Publish(eventType string, payload any) {
 	env := Envelope{Type: eventType, Payload: h.transformedPayload(eventType, payload)}
-	data := mustMarshal(env)
+	data, err := json.Marshal(env)
+	if err != nil {
+		h.log.Error("ws marshal", "type", eventType, "err", err)
+		return
+	}
 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -81,6 +97,7 @@ func (h *Hub) Publish(eventType string, payload any) {
 		select {
 		case c.send <- data:
 		default:
+			h.log.Warn("client send buffer full, dropping message", "userID", c.userID, "deviceID", c.deviceID, "eventType", eventType)
 		}
 	}
 }
@@ -88,7 +105,11 @@ func (h *Hub) Publish(eventType string, payload any) {
 // PublishToUser sends an event only to clients authenticated as the given user.
 func (h *Hub) PublishToUser(userID, eventType string, payload any) {
 	env := Envelope{Type: eventType, Payload: h.transformedPayload(eventType, payload)}
-	data := mustMarshal(env)
+	data, err := json.Marshal(env)
+	if err != nil {
+		h.log.Error("ws marshal", "type", eventType, "err", err)
+		return
+	}
 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -97,6 +118,7 @@ func (h *Hub) PublishToUser(userID, eventType string, payload any) {
 			select {
 			case c.send <- data:
 			default:
+				h.log.Warn("client send buffer full, dropping message", "userID", c.userID, "deviceID", c.deviceID, "eventType", eventType)
 			}
 		}
 	}
@@ -105,15 +127,22 @@ func (h *Hub) PublishToUser(userID, eventType string, payload any) {
 // PublishToDevice sends an event only to a specific device of a user.
 func (h *Hub) PublishToDevice(userID, deviceID, eventType string, payload any) {
 	env := Envelope{Type: eventType, Payload: h.transformedPayload(eventType, payload)}
-	data := mustMarshal(env)
+
+	data, err := json.Marshal(env)
+	if err != nil {
+		h.log.Error("ws marshal", "type", eventType, "err", err)
+		return
+	}
 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
+
 	for c := range h.clients {
 		if c.userID == userID && c.deviceID == deviceID {
 			select {
 			case c.send <- data:
 			default:
+				h.log.Warn("client send buffer full, dropping message", "userID", c.userID, "deviceID", c.deviceID, "eventType", eventType)
 			}
 		}
 	}
@@ -178,9 +207,10 @@ type client struct {
 func (c *client) readPump() {
 	defer c.hub.unregister(c)
 
+	// defines the period of inactivity allowed before a connection is closed.
 	deadline := 60 * time.Second
 
-	c.conn.SetReadLimit(65536)
+	c.conn.SetReadLimit(messageReadLimit)
 	c.conn.SetReadDeadline(time.Now().Add(deadline))
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(deadline))
@@ -234,15 +264,4 @@ func (c *client) writePump() {
 			}
 		}
 	}
-}
-
-// mustMarshal is a wrapper function around json.Marshal(...) that panics if an error occurs.
-func mustMarshal(v any) []byte {
-	data, err := json.Marshal(v)
-
-	if err != nil {
-		panic("ws marshal: " + err.Error())
-	}
-
-	return data
 }

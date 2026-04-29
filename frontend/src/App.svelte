@@ -11,7 +11,8 @@
     goBack,
     goForward,
     canGoBack,
-    canGoForward
+    canGoForward,
+    type DesktopView
   } from "./stores/ui";
 
   import Sidebar from "./lib/Sidebar.svelte";
@@ -157,7 +158,7 @@
 
   function handleNavigate(view: string) {
     pushNav({
-      view: view,
+      view: view as DesktopView,
       tab: "library",
       subTab: "albums",
       albumKey: null,

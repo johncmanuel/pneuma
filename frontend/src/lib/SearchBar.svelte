@@ -8,12 +8,18 @@
     type LocalAlbumGroup,
     localTrackToTrack
   } from "../stores/localLibrary";
-  import type { Track } from "@pneuma/shared";
+  import type { Track, AlbumGroup } from "@pneuma/shared";
   import { playerState } from "../stores/player";
   import { connected, serverFetch, artworkUrl, localBase } from "../utils/api";
   import { wsSend } from "../stores/ws";
   import { pushNav } from "../stores/ui";
-  import { setPlayingPlaylistContext } from "../stores/playlists";
+  import {
+    setPlayingPlaylistContext,
+    playlists,
+    toggleFavoriteTrack,
+    favoriteTrackIDs,
+    addTracksToPlaylist
+  } from "../stores/playlists";
 
   interface TaggedTrack extends Track {
     _source: "remote" | "local";
@@ -141,6 +147,62 @@
     });
   }
 
+  function handleAddToQueue(track: Track) {
+    playerState.update((s) => {
+      const insertAt = s.queueIndex + 1;
+      const newQueue = [
+        ...s.queue.slice(0, insertAt),
+        track.id,
+        ...s.queue.slice(insertAt)
+      ];
+      return { ...s, queue: newQueue };
+    });
+  }
+
+  async function handleToggleFavorite(track: Track) {
+    await toggleFavoriteTrack(track);
+  }
+
+  function handleIsFavorite(track: Track): boolean {
+    return $favoriteTrackIDs.has(track.id);
+  }
+
+  async function handleAddToPlaylist(track: Track, playlistId: string) {
+    const tagged = track as TaggedTrack;
+    const isLocal = tagged._source === "local";
+    await addTracksToPlaylist(playlistId, [track], isLocal);
+  }
+
+  async function handleAddAlbumToPlaylist(
+    album: AlbumGroup,
+    playlistId: string
+  ) {
+    const isLocal = album.key.endsWith("-local");
+    const parts = album.key.replace("-local", "").split("|||");
+    let tracksToAdd: Track[] = [];
+
+    if (isLocal) {
+      tracksToAdd = await fetchLocalAlbumTracks(
+        parts[0] ?? "",
+        parts[1] ?? ""
+      ).then((locals) => locals.map(localTrackToTrack));
+    } else {
+      const params = new URLSearchParams();
+      params.set("album_name", parts[0] ?? "");
+
+      if (parts[1]) params.set("album_artist", parts[1]);
+      const r = await serverFetch(`/api/library/tracks?${params}`);
+
+      if (r.ok) {
+        const data = await r.json();
+        tracksToAdd = Array.isArray(data) ? data : (data.tracks ?? []);
+      } else {
+        return;
+      }
+    }
+    await addTracksToPlaylist(playlistId, tracksToAdd, isLocal);
+  }
+
   export function focus() {
     searchBar?.focus();
   }
@@ -156,6 +218,12 @@
   {searchFn}
   onPlayTrack={(track) => playTrack(track as TaggedTrack)}
   onOpenAlbum={openAlbum}
+  onAddToQueue={handleAddToQueue}
+  onToggleFavorite={handleToggleFavorite}
+  isFavorite={handleIsFavorite}
+  playlists={$playlists.map((p) => ({ id: p.id, name: p.name }))}
+  onAddToPlaylist={handleAddToPlaylist}
+  onAddAlbumToPlaylist={handleAddAlbumToPlaylist}
   artworkUrl={(id) => {
     if (!id) return "";
     if (id.includes("/") || id.includes(":")) {

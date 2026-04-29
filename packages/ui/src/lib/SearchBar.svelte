@@ -1,7 +1,14 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
-  import { Music, Search } from "@lucide/svelte";
+  import { Music, Search, ChevronRight } from "@lucide/svelte";
+  import { portal } from "@pneuma/shared";
+  import "@pneuma/ui/css/components.css";
   import type { Track, AlbumGroup } from "@pneuma/shared";
+
+  interface PlaylistMenuItem {
+    id: string;
+    name: string;
+  }
 
   interface SearchResult {
     tracks: Track[];
@@ -14,6 +21,11 @@
     onPlayTrack?: (track: Track) => void;
     onOpenAlbum?: (album: AlbumGroup) => void;
     onAddToQueue?: (track: Track) => void;
+    onToggleFavorite?: (track: Track) => void;
+    isFavorite?: (track: Track) => boolean;
+    playlists?: PlaylistMenuItem[];
+    onAddToPlaylist?: (track: Track, playlistId: string) => void;
+    onAddAlbumToPlaylist?: (album: AlbumGroup, playlistId: string) => void;
     artworkUrl?: (trackId: string) => string;
     onAlbumArtError?: (album: AlbumGroup) => void;
   }
@@ -24,6 +36,11 @@
     onPlayTrack,
     onOpenAlbum,
     onAddToQueue,
+    onToggleFavorite,
+    isFavorite = () => false,
+    playlists = [],
+    onAddToPlaylist,
+    onAddAlbumToPlaylist,
     artworkUrl = () => "",
     onAlbumArtError
   }: Props = $props();
@@ -38,6 +55,12 @@
   let trackResults: Track[] = $state([]);
   let albumResults: AlbumGroup[] = $state([]);
   let activeResultKey: string | null = $state(null);
+
+  let trackMenu: { track: Track; x: number; y: number } | null = $state(null);
+  let albumMenu: { album: AlbumGroup; x: number; y: number } | null =
+    $state(null);
+  let playlistSub = $state(false);
+  let albumPlaylistSub = $state(false);
 
   const NAV_INTERVAL_MS = 80;
   let lastNavAt = 0;
@@ -191,6 +214,60 @@
     }
   }
 
+  function handleTrackContext(e: MouseEvent, track: Track) {
+    e.preventDefault();
+    e.stopPropagation();
+    trackMenu = { track, x: e.clientX, y: e.clientY };
+    albumMenu = null;
+    playlistSub = false;
+    const close = () => {
+      trackMenu = null;
+      window.removeEventListener("click", close);
+    };
+    window.addEventListener("click", close);
+  }
+
+  function handleAlbumContext(e: MouseEvent, album: AlbumGroup) {
+    e.preventDefault();
+    e.stopPropagation();
+    albumMenu = { album, x: e.clientX, y: e.clientY };
+    trackMenu = null;
+    albumPlaylistSub = false;
+    const close = () => {
+      albumMenu = null;
+      window.removeEventListener("click", close);
+    };
+    window.addEventListener("click", close);
+  }
+
+  function handleAddTrackToQueue() {
+    if (trackMenu) {
+      onAddToQueue?.(trackMenu.track);
+      trackMenu = null;
+    }
+  }
+
+  function handleToggleTrackFavorite() {
+    if (trackMenu) {
+      onToggleFavorite?.(trackMenu.track);
+      trackMenu = null;
+    }
+  }
+
+  function handleAddTrackToPlaylist(playlistId: string) {
+    if (trackMenu) {
+      onAddToPlaylist?.(trackMenu.track, playlistId);
+      trackMenu = null;
+    }
+  }
+
+  function handleAddAlbumToPlaylist(playlistId: string) {
+    if (albumMenu) {
+      onAddAlbumToPlaylist?.(albumMenu.album, playlistId);
+      albumMenu = null;
+    }
+  }
+
   onDestroy(() => {
     clearTimeout(debounce);
   });
@@ -217,6 +294,74 @@
     {/if}
   </div>
 
+  {#if trackMenu}
+    <div
+      class="ctx-menu"
+      use:portal
+      style="left:{trackMenu.x}px;top:{trackMenu.y}px"
+    >
+      {#if onAddToQueue}
+        <button onclick={handleAddTrackToQueue}>Add to queue</button>
+      {/if}
+      {#if onToggleFavorite}
+        <button onclick={handleToggleTrackFavorite}
+          >{isFavorite(trackMenu.track) ? "Unfavorite" : "Favorite"}</button
+        >
+      {/if}
+      {#if playlists.length > 0 && onAddToPlaylist}
+        <div
+          role="presentation"
+          class="ctx-submenu-wrap"
+          onmouseenter={() => (playlistSub = true)}
+          onmouseleave={() => (playlistSub = false)}
+        >
+          <button class="has-sub"
+            >Add to playlist <ChevronRight size={14} /></button
+          >
+          {#if playlistSub}
+            <div class="ctx-submenu">
+              {#each playlists as pl (pl.id)}
+                <button onclick={() => handleAddTrackToPlaylist(pl.id)}
+                  >{pl.name}</button
+                >
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  {#if albumMenu}
+    <div
+      class="ctx-menu"
+      use:portal
+      style="left:{albumMenu.x}px;top:{albumMenu.y}px"
+    >
+      {#if playlists.length > 0 && onAddAlbumToPlaylist}
+        <div
+          role="presentation"
+          class="ctx-submenu-wrap"
+          onmouseenter={() => (albumPlaylistSub = true)}
+          onmouseleave={() => (albumPlaylistSub = false)}
+        >
+          <button class="has-sub"
+            >Add all to playlist <ChevronRight size={14} /></button
+          >
+          {#if albumPlaylistSub}
+            <div class="ctx-submenu">
+              {#each playlists as pl (pl.id)}
+                <button onclick={() => handleAddAlbumToPlaylist(pl.id)}
+                  >{pl.name}</button
+                >
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
+
   {#if showResults}
     <div class="search-results" bind:this={resultsEl}>
       {#if hasAnyResults}
@@ -228,6 +373,7 @@
               class="album-row"
               data-result-key={key}
               onclick={() => onOpenAlbum?.(album)}
+              oncontextmenu={(e) => handleAlbumContext(e, album)}
               onfocus={() => {
                 activeResultKey = key;
               }}
@@ -259,6 +405,7 @@
               class="track-row"
               data-result-key={key}
               onclick={() => onPlayTrack?.(track)}
+              oncontextmenu={(e) => handleTrackContext(e, track)}
               onfocus={() => {
                 activeResultKey = key;
               }}
@@ -281,22 +428,6 @@
   .search-container {
     position: relative;
     width: 100%;
-  }
-
-  .search-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 5px 14px;
-    max-width: 420px;
-    width: 100%;
-    transition: border-color 0.15s;
-  }
-  .search-bar:focus-within {
-    border-color: var(--accent);
   }
 
   input {
@@ -349,16 +480,6 @@
     font-size: 13px;
   }
 
-  .section-label {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-3);
-    padding: 10px 14px 4px;
-    margin: 0;
-  }
-
   .album-row {
     display: flex;
     align-items: center;
@@ -376,30 +497,6 @@
   .album-row:focus {
     background: var(--surface-hover);
     outline: none;
-  }
-
-  .album-thumb {
-    width: 36px;
-    height: 36px;
-    border-radius: 4px;
-    background: var(--surface-2);
-    flex-shrink: 0;
-    overflow: hidden;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .album-thumb img {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    z-index: 1;
-  }
-  .album-thumb-ph {
-    font-size: 14px;
-    color: var(--text-3);
   }
 
   .album-info {

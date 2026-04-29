@@ -29,7 +29,6 @@ import { RefreshPlaylistArtByRemoteID } from "../../wailsjs/go/desktop/App";
 export const serverDisconnected = writable(false);
 
 let socket: WebSocket | null = null;
-const reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let intentionalClose = false;
 
 export function connectWS() {
@@ -288,7 +287,6 @@ export function connectWS() {
 export function disconnectWS() {
   console.info("[WS] Intentional disconnect");
   intentionalClose = true;
-  if (reconnectTimer) clearTimeout(reconnectTimer);
   serverDisconnected.set(false);
   socket?.close();
 }

@@ -8,7 +8,14 @@
     currentView,
     pushNav
   } from "../stores/ui";
-  import { favoritesPlaylistId, playingPlaylistId } from "../stores/playlists";
+  import {
+    favoritesPlaylistId,
+    playingPlaylistId,
+    playlists,
+    toggleFavoriteTrack,
+    favoriteTrackIDs,
+    addTracksToPlaylist
+  } from "../stores/playlists";
   import {
     formatDuration,
     setupMediaSessionActions,
@@ -22,7 +29,8 @@
     isLocalID,
     RepeatModeEnum,
     addToast,
-    RepeatLabels
+    RepeatLabels,
+    streamQuality
   } from "@pneuma/shared";
   import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { wsSend } from "../stores/ws";
@@ -255,6 +263,68 @@
     }
 
     jumpToAlbum();
+  }
+
+  let showCtxMenu = $state(false);
+  let ctxMenuX = $state(0);
+  let ctxMenuY = $state(0);
+  let playlistSub = $state(false);
+
+  function handleNowPlayingContext(e: MouseEvent) {
+    if (!track) return;
+    e.preventDefault();
+
+    let x = e.clientX;
+    let y = e.clientY;
+
+    const menuHeightPx = 200;
+    const menuWidthPx = 180;
+
+    if (y + menuHeightPx > window.innerHeight) {
+      y = window.innerHeight - menuHeightPx - 8;
+    }
+    if (x + menuWidthPx > window.innerWidth) {
+      x = window.innerWidth - menuWidthPx - 8;
+    }
+
+    ctxMenuX = x;
+    ctxMenuY = y;
+
+    showCtxMenu = true;
+    playlistSub = false;
+
+    const close = () => {
+      showCtxMenu = false;
+      window.removeEventListener("click", close);
+    };
+
+    window.addEventListener("click", close);
+  }
+
+  function handleCtxAddToQueue() {
+    if (!track) return;
+    playerState.update((s) => {
+      const insertAt = s.queueIndex + 1;
+      const newQueue = [
+        ...s.queue.slice(0, insertAt),
+        track.id,
+        ...s.queue.slice(insertAt)
+      ];
+      return { ...s, queue: newQueue };
+    });
+    showCtxMenu = false;
+  }
+
+  async function handleCtxToggleFavorite() {
+    if (!track) return;
+    await toggleFavoriteTrack(track);
+    showCtxMenu = false;
+  }
+
+  async function handleCtxAddToPlaylist(playlistId: string) {
+    if (!track) return;
+    await addTracksToPlaylist(playlistId, [track], isLocal);
+    showCtxMenu = false;
   }
 
   function togglePause() {
@@ -563,7 +633,11 @@
         seekSyncTimer = null;
       }
 
-      const url = streamUrl($playerState.trackId, $playerState.track?.path);
+      const url = streamUrl(
+        $playerState.trackId,
+        $playerState.track?.path,
+        $streamQuality
+      );
 
       if (currentAudioSrc !== url && url) {
         currentAudioSrc = url;
@@ -668,7 +742,11 @@
     onerror={onAudioError}
     preload="metadata"
   ></audio>
-  <div class="now-playing">
+  <div
+    class="now-playing"
+    role="presentation"
+    oncontextmenu={handleNowPlayingContext}
+  >
     <div class="art">
       {#if track}
         <img
@@ -703,6 +781,36 @@
       {/if}
     </div>
   </div>
+
+  {#if showCtxMenu}
+    <div class="ctx-menu" style="left:{ctxMenuX}px;top:{ctxMenuY}px">
+      <button onclick={handleCtxAddToQueue}>Add to queue</button>
+      <button onclick={handleCtxToggleFavorite}
+        >{track && $favoriteTrackIDs.has(track.id)
+          ? "Unfavorite"
+          : "Favorite"}</button
+      >
+      {#if $playlists.length > 0}
+        <div
+          role="presentation"
+          class="ctx-submenu-wrap"
+          onmouseenter={() => (playlistSub = true)}
+          onmouseleave={() => (playlistSub = false)}
+        >
+          <button class="has-sub">Add to playlist</button>
+          {#if playlistSub}
+            <div class="ctx-submenu">
+              {#each $playlists as pl (pl.id)}
+                <button onclick={() => handleCtxAddToPlaylist(pl.id)}
+                  >{pl.name}</button
+                >
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <div class="center">
     <div class="controls">
@@ -965,5 +1073,52 @@
   }
   .queue-toggle:hover {
     color: var(--text-1);
+  }
+
+  .ctx-menu {
+    position: fixed;
+    z-index: 9999;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px 0;
+    box-shadow: var(--shadow-pop);
+    min-width: 160px;
+  }
+  .ctx-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-1);
+    border-radius: 0;
+    cursor: pointer;
+    background: none;
+    border: none;
+  }
+  .ctx-menu button:hover {
+    background: var(--surface-hover);
+  }
+  .ctx-submenu-wrap {
+    position: relative;
+  }
+  .has-sub {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .ctx-submenu {
+    position: absolute;
+    left: 100%;
+    top: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px 0;
+    box-shadow: var(--shadow-pop);
+    min-width: 160px;
+    max-height: 240px;
+    overflow-y: auto;
   }
 </style>
