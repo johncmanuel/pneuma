@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createVirtualizer } from "@tanstack/svelte-virtual";
-  import { derived } from "svelte/store";
+  import { derived, get } from "svelte/store";
   import {
     favoritesPlaylistId,
     selectedPlaylist,
@@ -21,7 +21,12 @@
   import TrackRow from "../components/TrackRow.svelte";
   import { SortButton } from "@pneuma/ui";
   import "@pneuma/ui/css/track-list.css";
-  import { totalDuration, addToast, type PlaylistItem } from "@pneuma/shared";
+  import {
+    totalDuration,
+    addToast,
+    shuffle,
+    type PlaylistItem
+  } from "@pneuma/shared";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -88,12 +93,57 @@
     })
   );
 
-  function handlePlay(item: PlaylistItem) {
+  // Returns a new queue and index based on shuffle settings
+  // pinStart means the clicked track will be first, and the rest shuffled, usually
+  // when clicking play on a specific track.
+  function buildQueueWithShuffle(
+    queueIds: string[],
+    startIndex: number,
+    shuffleEnabled: boolean,
+    pinStart: boolean = true
+  ) {
+    if (queueIds.length === 0) return { queue: queueIds, queueIndex: 0 };
+
+    const safeIndex = Math.min(
+      Math.max(startIndex, 0),
+      Math.max(0, queueIds.length - 1)
+    );
+
+    if (!shuffleEnabled || queueIds.length === 1) {
+      return { queue: queueIds, queueIndex: safeIndex };
+    }
+
+    if (!pinStart) {
+      const shuffled = shuffle([...queueIds]);
+      return { queue: shuffled, queueIndex: 0 };
+    }
+
+    const currentId = queueIds[safeIndex];
+    const rest = [
+      ...queueIds.slice(0, safeIndex),
+      ...queueIds.slice(safeIndex + 1)
+    ];
+    const shuffledRest = shuffle(rest);
+    return { queue: [currentId, ...shuffledRest], queueIndex: 0 };
+  }
+
+  function handlePlay(item: PlaylistItem, pinStart: boolean = true) {
     const tracks = $selectedPlaylistItems.map(itemToTrack);
     const idx = $selectedPlaylistItems.findIndex(
       (i) => i.position === item.position
     );
+    if (tracks.length === 0) return;
+
+    const safeIndex = Math.min(Math.max(idx, 0), tracks.length - 1);
     const queueIds = tracks.map((track) => track.id);
+    const shuffleEnabled = get(playerState).shuffle;
+    const { queue, queueIndex } = buildQueueWithShuffle(
+      queueIds,
+      safeIndex,
+      shuffleEnabled,
+      pinStart
+    );
+    const selectedTrack = tracks[safeIndex];
 
     if ($selectedPlaylist?.id) {
       recordRecentPlaylist({
@@ -107,21 +157,21 @@
 
     playerState.update((s) => ({
       ...s,
-      trackId: tracks[idx >= 0 ? idx : 0].id,
-      track: tracks[idx >= 0 ? idx : 0],
-      queue: queueIds,
+      trackId: selectedTrack.id,
+      track: selectedTrack,
+      queue,
       baseQueue: queueIds,
-      queueIndex: idx >= 0 ? idx : 0,
+      queueIndex,
       positionMs: 0,
       paused: false
     }));
 
     wsSend("playback.queue", {
-      track_ids: queueIds,
-      start_index: idx >= 0 ? idx : 0
+      track_ids: queue,
+      start_index: queueIndex
     });
     wsSend("playback.play", {
-      track_id: tracks[idx >= 0 ? idx : 0].id,
+      track_id: selectedTrack.id,
       position_ms: 0
     });
   }
@@ -181,7 +231,7 @@
         class="action-btn primary"
         onclick={() => {
           if ($selectedPlaylistItems.length > 0)
-            handlePlay($selectedPlaylistItems[0]);
+            handlePlay($selectedPlaylistItems[0], false); // full shuffle
         }}
         disabled={$selectedPlaylistItems.length === 0}
       >
