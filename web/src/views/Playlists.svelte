@@ -250,7 +250,13 @@
       shuffleEnabled,
       pinStart
     );
-    const selectedTrack = tracks[safeIndex];
+
+    // When full shuffle, play the first track in the shuffled queue
+    // Otherwise, play the selected track
+    const playingTrack =
+      !pinStart && shuffleEnabled
+        ? (tracks.find((t) => t.id === queue[queueIndex]) ?? tracks[0])
+        : tracks[safeIndex];
 
     if ($selectedPlaylist) {
       recordRecentPlaylist({
@@ -264,8 +270,8 @@
 
     playerState.update((s) => ({
       ...s,
-      trackId: selectedTrack.id,
-      track: selectedTrack,
+      trackId: playingTrack.id,
+      track: playingTrack,
       queue,
       baseQueue: queueIds,
       queueIndex,
@@ -278,7 +284,7 @@
       start_index: queueIndex
     });
     wsSend("playback.play", {
-      track_id: selectedTrack.id,
+      track_id: playingTrack.id,
       position_ms: 0
     });
   }
@@ -375,7 +381,7 @@
             <SquarePen size={24} />
           </div>
         </button>
-        <div class="detail-meta">
+        <div class="album-detail-info">
           {#if editingId === $selectedPlaylist.id}
             <input
               class="edit-input title-input"
@@ -406,6 +412,14 @@
               {/if}
             </p>
           {/if}
+          <div class="album-filter-bar">
+            <input
+              type="search"
+              class="album-filter-input"
+              placeholder="Filter tracks..."
+              bind:value={filter}
+            />
+          </div>
         </div>
       </div>
 
@@ -434,13 +448,6 @@
         >
           Delete
         </button>
-        <div class="filter-spacer"></div>
-        <input
-          type="text"
-          class="filter-input"
-          placeholder="Filter tracks..."
-          bind:value={filter}
-        />
       </div>
     </div>
 
@@ -823,10 +830,12 @@
     color: var(--text-3);
   }
 
-  .detail-meta {
+  .album-detail-info {
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
+    flex: 1;
+    min-width: 0;
   }
 
   .detail-name {
@@ -850,8 +859,34 @@
     margin-top: 12px;
   }
 
-  .filter-spacer {
-    flex: 1;
+  .detail-actions:empty {
+    display: none;
+  }
+
+  .album-filter-bar {
+    margin-top: 12px;
+  }
+
+  .album-filter-input {
+    width: 100%;
+    max-width: 280px;
+    padding: 6px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    color: var(--text-1);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .album-filter-input:focus {
+    border-color: var(--accent);
+  }
+  .album-filter-input::placeholder {
+    color: var(--text-3);
+  }
+  .album-filter-input::-webkit-search-cancel-button {
+    display: none;
   }
 
   .action-btn {
@@ -927,16 +962,6 @@
     background: var(--surface);
     color: var(--text-1);
     border: 1px solid var(--border);
-  }
-
-  .filter-input {
-    width: 200px;
-    padding: 6px 10px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--text-1);
-    font-size: 12px;
   }
 
   .virtual-row {
@@ -1045,15 +1070,9 @@
       font-size: 12px;
     }
 
-    .filter-spacer {
-      display: none;
-    }
-
-    .filter-input {
+    .album-filter-input {
       width: 100%;
-      flex-basis: 100%;
-      order: 5;
-      margin-top: 2px;
+      max-width: none;
     }
 
     .track-headers {

@@ -143,7 +143,13 @@
       shuffleEnabled,
       pinStart
     );
-    const selectedTrack = tracks[safeIndex];
+
+    // When full shuffle, play the first track in the shuffled queue
+    // Otherwise, play the selected track
+    const playingTrack =
+      !pinStart && shuffleEnabled
+        ? (tracks.find((t) => t.id === queue[queueIndex]) ?? tracks[0])
+        : tracks[safeIndex];
 
     if ($selectedPlaylist?.id) {
       recordRecentPlaylist({
@@ -157,8 +163,8 @@
 
     playerState.update((s) => ({
       ...s,
-      trackId: selectedTrack.id,
-      track: selectedTrack,
+      trackId: playingTrack.id,
+      track: playingTrack,
       queue,
       baseQueue: queueIds,
       queueIndex,
@@ -171,7 +177,7 @@
       start_index: queueIndex
     });
     wsSend("playback.play", {
-      track_id: selectedTrack.id,
+      track_id: playingTrack.id,
       position_ms: 0
     });
   }
