@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { playerState } from "../../lib/stores/playback";
+  import { playerState, appendTrackToQueue } from "../../lib/stores/playback";
   import { wsSend } from "../../lib/ws";
   import {
     markMissingTrackArtID,
@@ -11,7 +11,8 @@
     isLocalID,
     shuffle,
     RepeatLabels,
-    RepeatModeEnum
+    RepeatModeEnum,
+    streamQuality
   } from "@pneuma/shared";
   import {
     activePanel,
@@ -21,9 +22,13 @@
   import { currentView, pushNav } from "../../lib/stores/ui";
   import {
     favoritesPlaylistId,
-    playingPlaylistId
+    playingPlaylistId,
+    playlists,
+    toggleFavoriteTrack,
+    visiblePlaylistsForAddMenu,
+    favoriteTrackIDs,
+    handleAddTracksToPlaylist
   } from "../../lib/stores/playlists";
-  import { streamQuality } from "../../lib/stores/settings";
   import { artworkUrl } from "../../lib/api";
   import { VolumeX, Volume1, Volume2, List } from "@lucide/svelte";
 
@@ -442,6 +447,11 @@
       onHideArtworkAndRememberMissing={hideArtworkAndRememberMissing}
       onResetArtworkVisibility={resetArtworkVisibility}
       onJumpFromNowPlaying={jumpFromNowPlaying}
+      onAddToQueue={(t) => appendTrackToQueue(t)}
+      onToggleFavorite={(t) => toggleFavoriteTrack(t)}
+      isFavorite={(t) => $favoriteTrackIDs.has(t.id)}
+      playlists={visiblePlaylistsForAddMenu($playlists)}
+      onAddToPlaylist={(t, pid) => handleAddTracksToPlaylist([t], pid)}
     />
 
     <div class="center">

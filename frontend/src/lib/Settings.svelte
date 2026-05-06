@@ -19,10 +19,19 @@
     favoritesSyncEnabled,
     setFavoritesSyncEnabled
   } from "../stores/playlists";
+  import {
+    streamQuality,
+    type StreamPresetOption,
+    streamPresetOptions,
+    addToast
+  } from "@pneuma/shared";
   import { db } from "../utils/db";
-  import { addToast } from "@pneuma/shared";
-  import { RotateCcw } from "@lucide/svelte";
+  import { RotateCcw, Check, CircleAlert } from "@lucide/svelte";
   import { BrowserOpenURL } from "../../wailsjs/runtime";
+
+  function handlePresetClick(option: StreamPresetOption) {
+    streamQuality.set(option.value);
+  }
 
   let connectURL = $state("http://127.0.0.1:8989");
   let connectUser = $state("");
@@ -32,6 +41,8 @@
 
   let cacheCleared = $state(false);
   let changingFavoritesSync = $state(false);
+
+  const githubUrl = "https://github.com/johncmanuel/pneuma";
 
   async function connect() {
     connectErr = "";
@@ -95,6 +106,7 @@
 
 <section>
   <h2>Settings</h2>
+
   <div class="group">
     <h3>Server Connection</h3>
     {#if $connected}
@@ -177,6 +189,53 @@
     </label>
   </div>
 
+  <article class="quality-panel" aria-labelledby="stream-quality-heading">
+    <header class="quality-header">
+      <h3 id="stream-quality-heading">Streaming Quality</h3>
+      <p class="panel-note text-3">
+        <CircleAlert size={14} aria-hidden="true" />
+        <span>
+          Quality changes on the next track. If a higher-quality cached copy is
+          already available, playback may continue at that quality.
+        </span>
+      </p>
+    </header>
+
+    <section class="quality-group" aria-labelledby="wifi-streaming-heading">
+      <h4 id="wifi-streaming-heading">Wi-Fi streaming quality</h4>
+      <p class="group-description text-3">
+        Choose the quality used while streaming from your library.
+      </p>
+
+      <ul class="preset-list" aria-label="Available streaming quality presets">
+        {#each streamPresetOptions as option}
+          <li>
+            <button
+              type="button"
+              class="preset-item"
+              class:active={option.value === $streamQuality}
+              aria-pressed={option.value === $streamQuality}
+              onclick={() => handlePresetClick(option)}
+            >
+              <div class="preset-main">
+                <span class="preset-label">{option.label}</span>
+                <span class="preset-meta text-3">{option.meta}</span>
+                <span class="preset-description text-3"
+                  >{option.description}</span
+                >
+              </div>
+              <span class="check-slot" aria-hidden="true">
+                {#if option.value === $streamQuality}
+                  <Check size={18} class="check-icon" />
+                {/if}
+              </span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    </section>
+  </article>
+
   <div class="group">
     <h3>About</h3>
     <p class="text-3">
@@ -187,7 +246,7 @@
       Source code available on <button
         onclick={(e) => {
           e.preventDefault();
-          handleOpenUrl("https://github.com/johncmanuel/pneuma");
+          handleOpenUrl(githubUrl);
         }}
         aria-label="GitHub repository"
         style="text-decoration: underline;"
@@ -221,6 +280,138 @@
     margin: 0;
     font-size: 14px;
     font-weight: 600;
+  }
+
+  h4 {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .quality-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0;
+    border: none;
+    background: transparent;
+  }
+
+  .quality-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .panel-note {
+    margin: 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .panel-note :global(svg) {
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  .quality-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .group-description {
+    margin: 0;
+    font-size: 12px;
+  }
+
+  .preset-list {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0;
+  }
+
+  .preset-list li {
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  }
+
+  .preset-list li:first-child {
+    border-top: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  }
+
+  .preset-item {
+    border: 1px solid transparent;
+    border-radius: 6px;
+    padding: 8px 6px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    width: 100%;
+    transition:
+      background 0.12s,
+      border-color 0.12s;
+  }
+
+  .preset-item:hover {
+    background: color-mix(in srgb, var(--surface-hover) 70%, transparent);
+  }
+
+  .preset-item:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .preset-item.active {
+    border-color: color-mix(in srgb, var(--accent) 44%, var(--border));
+    background: color-mix(in srgb, var(--accent) 11%, transparent);
+  }
+
+  .preset-main {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .preset-label {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .preset-meta {
+    font-size: 12px;
+    line-height: 1.3;
+  }
+
+  .preset-description {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .check-slot {
+    min-height: 20px;
+    min-width: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  .check-slot :global(.check-icon) {
+    color: var(--accent);
   }
 
   .connect-form {

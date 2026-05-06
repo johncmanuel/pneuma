@@ -3,6 +3,7 @@
   import SortButton from "./SortButton.svelte";
   import { Music } from "@lucide/svelte";
   import { formatTotalDuration } from "./utils";
+  import "@pneuma/ui/css/components.css";
 
   interface Track {
     id: string;
@@ -32,6 +33,7 @@
     showFavoriteState?: boolean;
     favoriteTrackIds?: Set<string>;
     onPlayTrack?: (track: Track) => void;
+    onPlayAlbum?: (tracks: Track[]) => void;
     onSelectTrack?: (track: Track) => void;
     onAddToQueue?: (track: Track) => void;
     onToggleFavorite?: (track: Track) => void;
@@ -50,6 +52,7 @@
     showFavoriteState = false,
     favoriteTrackIds = new Set(),
     onPlayTrack = () => {},
+    onPlayAlbum = undefined,
     onSelectTrack = () => {},
     onAddToQueue = () => {},
     onToggleFavorite = () => {},
@@ -124,6 +127,15 @@
     if (track) onPlayTrack(track);
   }
 
+  function handlePlayAlbum() {
+    if (!tracks.length || loading) return;
+    if (onPlayAlbum) {
+      onPlayAlbum(tracks);
+      return;
+    }
+    onPlayTrack(tracks[0]);
+  }
+
   function handleQueue(track: Track | null) {
     if (track) onAddToQueue(track);
   }
@@ -160,6 +172,16 @@
         />
       </div>
     </div>
+  </div>
+
+  <div class="detail-actions">
+    <button
+      class="action-btn primary"
+      onclick={handlePlayAlbum}
+      disabled={tracks.length === 0 || loading}
+    >
+      Play
+    </button>
   </div>
 
   <div class="track-headers hide-album">
@@ -251,34 +273,7 @@
     flex-direction: row;
     align-items: flex-start;
     gap: 20px;
-    margin-bottom: 20px;
-  }
-
-  .album-art-hero {
-    width: 160px;
-    height: 160px;
-    flex-shrink: 0;
-    border-radius: 8px;
-    overflow: hidden;
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-  }
-
-  .album-art-hero img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    position: relative;
-    z-index: 1;
-  }
-
-  .album-art-hero-placeholder {
-    position: absolute;
-    font-size: 48px;
-    color: var(--text-3);
+    margin-bottom: 16px;
   }
 
   .album-detail-info {
@@ -305,29 +300,83 @@
     margin-top: 12px;
   }
 
-  .album-filter-input {
-    width: 100%;
-    max-width: 280px;
-    padding: 6px 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    color: var(--fg);
-    font-size: 13px;
-    outline: none;
-    transition: border-color 0.15s;
+  .detail-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 16px;
   }
 
-  .album-filter-input:focus {
-    border-color: var(--accent);
-  }
-
-  .album-filter-input::placeholder {
-    color: var(--text-3);
-  }
-
-  .album-filter-input::-webkit-search-cancel-button {
+  .detail-actions:empty {
     display: none;
+  }
+
+  .action-btn {
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--surface);
+    color: var(--text-1);
+    border: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+
+  .action-btn:hover {
+    background: var(--surface-hover);
+  }
+
+  .action-btn.primary {
+    background: var(--accent-dim);
+    color: var(--on-accent-dim);
+    border: none;
+  }
+
+  .action-btn.primary:hover {
+    filter: brightness(1.1);
+  }
+
+  .action-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  @media (max-width: 980px) {
+    .album-detail-header {
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+
+    .album-art-hero {
+      width: 104px;
+      height: 104px;
+      border-radius: 10px;
+    }
+
+    .album-detail-title {
+      font-size: 20px;
+    }
+
+    .detail-actions {
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .action-btn {
+      padding: 7px 12px;
+      font-size: 12px;
+    }
+
+    .album-filter-input {
+      width: 100%;
+      max-width: none;
+    }
+
+    .track-headers {
+      display: none;
+    }
   }
 
   .track-headers {

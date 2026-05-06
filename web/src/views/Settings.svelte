@@ -1,52 +1,12 @@
 <script lang="ts">
   import { Check, CircleAlert } from "@lucide/svelte";
-  import { type StreamQuality } from "../lib/stream-quality";
-  import { streamQuality } from "../lib/stores/settings";
+  import {
+    type StreamPresetOption,
+    streamPresetOptions,
+    streamQuality
+  } from "@pneuma/shared";
 
-  type StreamPresetOption = {
-    value: StreamQuality;
-    label: string;
-    meta: string;
-    description: string;
-  };
-
-  const streamPresetOptions: StreamPresetOption[] = [
-    {
-      value: "auto",
-      label: "Auto",
-      meta: "Adaptive quality",
-      description:
-        "Adjusts Opus quality to suit your connection while avoiding source-quality spikes."
-    },
-    {
-      value: "low",
-      label: "Low",
-      meta: "64 kbps",
-      description:
-        "Lowest bandwidth. Best for weak connections and strict data limits."
-    },
-    {
-      value: "medium",
-      label: "Medium",
-      meta: "96 kbps",
-      description:
-        "Balanced quality and bandwidth. Recommended for most phones."
-    },
-    {
-      value: "high",
-      label: "High",
-      meta: "160 kbps",
-      description:
-        "Higher quality with more data usage and decode cost than Medium."
-    },
-    {
-      value: "original",
-      label: "Original",
-      meta: "Source quality • variable data usage",
-      description:
-        "Streams the source file as-is (for example, FLAC). Highest quality and largest transfer size."
-    }
-  ];
+  const githubUrl = "https://github.com/johncmanuel/pneuma";
 
   function handlePresetClick(option: StreamPresetOption) {
     streamQuality.set(option.value);
@@ -56,7 +16,7 @@
 <section class="settings-view">
   <article class="quality-panel" aria-labelledby="stream-quality-heading">
     <header class="panel-header">
-      <h1 id="stream-quality-heading">Audio streaming quality</h1>
+      <h1 id="stream-quality-heading">Settings</h1>
       <p class="panel-note text-2">
         <CircleAlert size={16} aria-hidden="true" />
         <span>
@@ -100,6 +60,25 @@
       </ul>
     </section>
   </article>
+
+  <div class="group">
+    <h3>About</h3>
+    <p class="text-3">
+      pneuma, an open-source, self-hostable, and local-first music player and
+      server.
+    </p>
+    <p class="text-3">
+      Source code available on <a
+        target="_blank"
+        rel="noopener noreferrer"
+        href={githubUrl}
+        aria-label="GitHub repository"
+        style="text-decoration: underline;"
+      >
+        GitHub
+      </a>.
+    </p>
+  </div>
 </section>
 
 <style>

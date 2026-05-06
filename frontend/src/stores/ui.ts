@@ -1,11 +1,10 @@
 import { writable, derived, get } from "svelte/store";
 
 type PanelName = "queue" | null;
+export type DesktopView = "library" | "favorites" | "playlists" | "settings";
 
 export const activePanel = writable<PanelName>(null);
-
-/** The currently active main view (library | downloads | settings). */
-export const currentView = writable<string>("library");
+export const currentView = writable<DesktopView>("library");
 
 function togglePanel(name: "queue") {
   activePanel.update((v) => (v === name ? null : name));
@@ -30,7 +29,7 @@ export const selectedAlbum = writable<string | null>(null);
 export const selectedPlaylistView = writable<string | null>(null);
 
 interface NavState {
-  view: string;
+  view: DesktopView;
   tab: LibTab;
   subTab: LocalSubTab;
   albumKey: string | null;

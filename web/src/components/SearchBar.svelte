@@ -1,14 +1,25 @@
 <script lang="ts">
   import { SearchBar } from "@pneuma/ui";
-  import { searchTracks, searchAlbumGroups } from "../lib/stores/library";
+  import {
+    searchTracks,
+    searchAlbumGroups,
+    fetchAlbumTracks
+  } from "../lib/stores/library";
   import { artworkUrl, apiFetch } from "../lib/api";
   import {
     markMissingTrackArtID,
     missingTrackArtIDs
   } from "../lib/stores/missing-art";
   import { pushNav } from "../lib/stores/ui";
-  import { playerState } from "../lib/stores/playback";
-  import { setPlayingPlaylistContext } from "../lib/stores/playlists";
+  import { playerState, appendTrackToQueue } from "../lib/stores/playback";
+  import {
+    visiblePlaylistsForAddMenu,
+    handleAddTracksToPlaylist,
+    toggleFavoriteTrack,
+    playlists,
+    setPlayingPlaylistContext,
+    favoriteTrackIDs
+  } from "../lib/stores/playlists";
   import { wsSend } from "../lib/ws";
   import type { Track, AlbumGroup } from "@pneuma/shared";
 
@@ -99,6 +110,30 @@
     }
   }
 
+  function handleAddToQueue(track: Track) {
+    appendTrackToQueue(track);
+  }
+
+  async function handleToggleFavorite(track: Track) {
+    await toggleFavoriteTrack(track);
+  }
+
+  function handleIsFavorite(track: Track): boolean {
+    return $favoriteTrackIDs.has(track.id);
+  }
+
+  async function handleAddToPlaylist(track: Track, playlistId: string) {
+    await handleAddTracksToPlaylist([track], playlistId);
+  }
+
+  async function handleAddAlbumToPlaylist(
+    album: AlbumGroup,
+    playlistId: string
+  ) {
+    const tracks = await fetchAlbumTracks(album.name, album.artist);
+    await handleAddTracksToPlaylist(tracks, playlistId);
+  }
+
   export function focus() {
     searchBar?.focus();
   }
@@ -111,4 +146,10 @@
   onOpenAlbum={openAlbum}
   artworkUrl={artworkUrlWithMissingSuppression}
   onAlbumArtError={handleAlbumArtError}
+  onAddToQueue={handleAddToQueue}
+  onToggleFavorite={handleToggleFavorite}
+  isFavorite={handleIsFavorite}
+  playlists={visiblePlaylistsForAddMenu($playlists)}
+  onAddToPlaylist={handleAddToPlaylist}
+  onAddAlbumToPlaylist={handleAddAlbumToPlaylist}
 />

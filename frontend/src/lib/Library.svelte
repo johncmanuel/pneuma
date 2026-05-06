@@ -549,6 +549,11 @@
     if (track) addToQueue(track);
   }
 
+  function handlePlayAlbum() {
+    if (!albumDetailTracks.length) return;
+    playTrack(albumDetailTracks[0], albumDetailTracks);
+  }
+
   let isScrolling = $state(false);
   let scrollTimer: ReturnType<typeof setTimeout>;
 
@@ -615,6 +620,16 @@
               />
             </div>
           </div>
+        </div>
+
+        <div class="detail-actions">
+          <button
+            class="action-btn primary"
+            onclick={handlePlayAlbum}
+            disabled={albumDetailTracks.length === 0}
+          >
+            Play
+          </button>
         </div>
 
         <div class="track-headers hide-album">
@@ -1119,7 +1134,7 @@
     flex-direction: row;
     align-items: flex-start;
     gap: 20px;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
   .album-detail-info {
@@ -1168,6 +1183,48 @@
     margin-top: 12px;
   }
 
+  .detail-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 12px 0 16px;
+  }
+
+  .detail-actions:empty {
+    display: none;
+  }
+
+  .action-btn {
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--surface);
+    color: var(--text-1);
+    border: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+
+  .action-btn:hover {
+    background: var(--surface-hover);
+  }
+
+  .action-btn.primary {
+    background: var(--accent-dim);
+    color: var(--on-accent-dim);
+    border: none;
+  }
+
+  .action-btn.primary:hover {
+    filter: brightness(1.1);
+  }
+
+  .action-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
   .album-filter-input {
     width: 100%;
     max-width: 280px;
@@ -1175,7 +1232,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 16px;
-    color: var(--fg);
+    color: var(--text-1);
     font-size: 13px;
     outline: none;
     transition: border-color 0.15s;

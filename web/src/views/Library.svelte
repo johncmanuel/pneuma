@@ -111,8 +111,40 @@
     if (img) img.style.display = "none";
   }
 
-  async function playTrack(track: Track) {
+  function buildQueueWithShuffle(
+    queueIds: string[],
+    startIndex: number,
+    shuffleEnabled: boolean,
+    pinStart: boolean = true
+  ) {
+    if (queueIds.length === 0) return { queue: queueIds, queueIndex: 0 };
+
+    const safeIndex = Math.min(
+      Math.max(startIndex, 0),
+      Math.max(0, queueIds.length - 1)
+    );
+
+    if (!shuffleEnabled || queueIds.length === 1) {
+      return { queue: queueIds, queueIndex: safeIndex };
+    }
+
+    if (!pinStart) {
+      const shuffled = shuffle([...queueIds]);
+      return { queue: shuffled, queueIndex: 0 };
+    }
+
+    const currentId = queueIds[safeIndex];
+    const rest = [
+      ...queueIds.slice(0, safeIndex),
+      ...queueIds.slice(safeIndex + 1)
+    ];
+    const shuffledRest = shuffle(rest);
+    return { queue: [currentId, ...shuffledRest], queueIndex: 0 };
+  }
+
+  async function playTrack(track: Track, pinStart: boolean = true) {
     const queueIds = albumDetailTracks.map((t) => t.id);
+    if (queueIds.length === 0) return;
 
     if (currentAlbumGroup) {
       recordRecentAlbum({
@@ -123,30 +155,38 @@
     }
 
     const currentShuffle = get(playerState).shuffle;
-    const finalQueue =
-      currentShuffle && queueIds.length > 1
-        ? [track.id, ...shuffle(queueIds.filter((id) => id !== track.id))]
-        : queueIds;
+    const startIndex = queueIds.indexOf(track.id);
+    const { queue: finalQueue, queueIndex } = buildQueueWithShuffle(
+      queueIds,
+      startIndex >= 0 ? startIndex : 0,
+      currentShuffle,
+      pinStart
+    );
+    const playingTrack =
+      !pinStart && currentShuffle
+        ? (albumDetailTracks.find((t) => t.id === finalQueue[queueIndex]) ??
+          track)
+        : track;
 
     setPlayingPlaylistContext(null);
 
     playerState.update((s) => ({
       ...s,
-      trackId: track.id,
-      track,
+      trackId: playingTrack.id,
+      track: playingTrack,
       queue: finalQueue,
       baseQueue: queueIds,
-      queueIndex: 0,
+      queueIndex,
       positionMs: 0,
       paused: false
     }));
 
     wsSend("playback.queue", {
       track_ids: finalQueue,
-      start_index: 0
+      start_index: queueIndex
     });
     wsSend("playback.play", {
-      track_id: track.id,
+      track_id: playingTrack.id,
       position_ms: 0
     });
   }
@@ -194,8 +234,9 @@
           handleImgError(e, currentAlbumGroup?.first_track_id)}
         trackRowComponent={TrackRow}
         onPlayTrack={(t: any) => playTrack(t)}
+        onPlayAlbum={(tracks: any) => playTrack(tracks[0], false)}
         onAddToQueue={(t: any) => appendTrackToQueue(t)}
-        onToggleFavorite={toggleFavoriteTrack}
+        onToggleFavorite={(t: any) => toggleFavoriteTrack(t)}
       />
     {:else}
       <AlbumGrid

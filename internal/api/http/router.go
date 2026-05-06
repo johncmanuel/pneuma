@@ -340,7 +340,9 @@ func setSPAStaticCacheHeader(h http.Header, path string) {
 func playbackWSDispatch(engine *playback.Engine) apws.InboundHandler {
 	log := slog.Default().With("component", "ws-dispatch")
 	return func(userID, deviceID string, msg apws.InboundMessage) {
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
 		switch msg.Type {
 		case "playback.play":
 			var p struct {
@@ -400,6 +402,10 @@ func playbackWSDispatch(engine *playback.Engine) apws.InboundHandler {
 // newRateLimiter returns an IP-based rate limiter Echo middleware.
 // r is the sustained rate (requests/second), burst is the max burst size,
 // and expiresIn controls how long an idle IP is kept in memory.
+//
+// IMO, it is much better to delegate rate limiting to reverse proxies, which is what most
+// homelabs have in their setup (i think? don't wanna overgeneralize here). But, I do want to
+// leave this as a option for those who want to do rate limiting at the application layer.
 func newRateLimiter(r rate.Limit, burst int, expiresIn time.Duration) echo.MiddlewareFunc {
 	retryAfterSecs := strconv.Itoa(int(math.Ceil(float64(burst) / float64(r))))
 	return echomw.RateLimiterWithConfig(echomw.RateLimiterConfig{

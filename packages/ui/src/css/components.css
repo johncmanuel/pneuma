@@ -1,0 +1,246 @@
+.ctx-menu {
+  position: fixed;
+  z-index: 9999;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 4px 0;
+  box-shadow: var(--shadow-pop);
+  min-width: 160px;
+}
+
+.ctx-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-1);
+  border-radius: 0;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+.ctx-menu button:hover {
+  background: var(--surface-hover);
+}
+
+.ctx-sep {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+}
+
+.ctx-danger {
+  color: var(--danger) !important;
+}
+
+.ctx-danger:hover {
+  background: var(--danger-soft) !important;
+}
+
+.ctx-disabled {
+  color: var(--text-3) !important;
+  cursor: default;
+}
+
+.ctx-submenu-wrap {
+  position: relative;
+}
+
+.has-sub {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ctx-submenu {
+  position: absolute;
+  top: -4px;
+  left: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 4px 0;
+  box-shadow: var(--shadow-pop);
+  min-width: 160px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.recent-art {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.recent-art img {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.recent-art-ph {
+  font-size: 14px;
+  color: var(--text-3);
+}
+
+.album-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.album-thumb img {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 1;
+}
+
+.album-thumb-ph {
+  font-size: 14px;
+  color: var(--text-3);
+}
+
+.album-art {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+  transition: border-color 0.15s;
+  position: relative;
+}
+
+.album-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: relative;
+  z-index: 1;
+}
+
+.album-art-placeholder {
+  position: absolute;
+  font-size: 36px;
+  color: var(--text-3);
+}
+
+.album-art-hero {
+  width: 160px;
+  height: 160px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.album-art-hero img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: relative;
+  z-index: 1;
+}
+
+.album-art-hero-placeholder {
+  position: absolute;
+  font-size: 48px;
+  color: var(--text-3);
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 14px;
+  max-width: 420px;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+.search-bar:focus-within {
+  border-color: var(--accent);
+}
+
+.album-grid-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 5px 12px;
+  margin-bottom: 16px;
+  max-width: 280px;
+  transition: border-color 0.15s;
+}
+
+.album-grid-search:focus-within {
+  border-color: var(--accent);
+}
+
+.album-filter-input {
+  width: 100%;
+  max-width: 280px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--fg);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.album-filter-input:focus {
+  border-color: var(--accent);
+}
+
+.album-filter-input::placeholder {
+  color: var(--text-3);
+}
+
+.album-filter-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  padding: 10px 14px 4px;
+  margin: 0;
+}
