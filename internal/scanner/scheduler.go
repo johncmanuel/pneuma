@@ -2,9 +2,6 @@ package scanner
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"io"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -24,6 +21,7 @@ type Scheduler struct {
 	lib      *library.Service
 	parser   *parser.Parser
 	bus      EventBus
+	ingestor *Ingestor
 	dirs     []string
 	interval time.Duration
 	log      *slog.Logger
@@ -35,6 +33,7 @@ func NewScheduler(lib *library.Service, p *parser.Parser, bus EventBus, dirs []s
 		lib:      lib,
 		parser:   p,
 		bus:      bus,
+		ingestor: NewIngestor(lib, p, bus),
 		dirs:     dirs,
 		interval: interval,
 		log:      slog.Default().With("component", "scheduler"),
@@ -71,72 +70,17 @@ func (sc *Scheduler) ScanAll() {
 func (sc *Scheduler) ScanPath(path string) {
 	ctx := context.Background()
 
-	track, err := sc.parser.ParseFile(ctx, path)
+	result, err := sc.ingestor.Ingest(ctx, path, nil)
 	if err != nil {
-		sc.log.Error("ScanPath parse error", "path", path, "err", err)
+		sc.log.Error("ScanPath ingest error", "path", path, "err", err)
 		return
 	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		sc.log.Error("ScanPath open error", "path", path, "err", err)
-		return
-	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		sc.log.Error("ScanPath fingerprint error", "path", path, "err", err)
-		return
-	}
-
-	fingerprint := hex.EncodeToString(h.Sum(nil))
-
-	dup, err := sc.lib.TrackByFingerprint(ctx, fingerprint)
-	if err != nil {
-		sc.log.Error("ScanPath fingerprint lookup error", "path", path, "err", err)
-		return
-	}
-	if dup != nil && dup.DeletedAt == nil && dup.Path != path {
-		sc.log.Info("ScanPath skipping duplicate (fingerprint match)", "path", path, "existing", dup.Path)
-		return
-	}
-
-	track.Fingerprint = fingerprint
-
-	existing, err := sc.lib.TrackByPath(ctx, path)
-	if err != nil {
-		sc.log.Error("ScanPath db lookup error", "path", path, "err", err)
-		return
-	}
-
-	isNew := existing == nil
-	if existing != nil {
-		// Preserve stable identity so the upsert overwrites rather than duplicates.
-		track.ID = existing.ID
-		track.CreatedAt = existing.CreatedAt
-		track.UploadedByUserID = existing.UploadedByUserID
-
-		// preserve existing title if the parser fell back to the filename
-		// (e.g. hash filename for uploads)
-		baseName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-		if track.Title == baseName && existing.Title != "" {
-			track.Title = existing.Title
-		}
-	}
-
-	if err := sc.lib.UpsertTrack(ctx, track); err != nil {
-		sc.log.Error("ScanPath upsert error", "path", path, "err", err)
-		return
-	}
-
-	if isNew {
-		sc.bus.Publish("track.added", compactTrackEventPayload(track))
-	} else {
-		sc.bus.Publish("track.updated", compactTrackEventPayload(track))
+	if result != nil && result.Skipped {
+		sc.log.Info("ScanPath skipping duplicate (fingerprint match)", "path", path, "existing", result.DuplicatePath)
 	}
 }
 
+// scan performs a full scan of all configured directories, parsing and upserting tracks as needed, and publishing events for added or updated tracks.
 func (sc *Scheduler) scan(ctx context.Context) {
 	sc.bus.Publish("scan.started", nil)
 	start := time.Now()
@@ -147,6 +91,9 @@ func (sc *Scheduler) scan(ctx context.Context) {
 			sc.log.Warn("watch dir unavailable", "dir", dir, "err", err)
 			continue
 		}
+
+		// TODO: Might not be memory efficient if the user has a large music directory since filepath.WalkDir
+		// reads directories into memory before walking them. Find a more memory-efficient way to do this if it becomes an issue.
 		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return err
@@ -173,63 +120,22 @@ func (sc *Scheduler) scan(ctx context.Context) {
 				return nil
 			}
 
-			track, err := sc.parser.ParseFile(ctx, path)
+			result, err := sc.ingestor.Ingest(ctx, path, existing)
 			if err != nil {
-				sc.log.Error("parse error in scan", "path", path, "err", err)
+				sc.log.Error("ingest error in scan", "path", path, "err", err)
+				return nil
+			}
+			if result != nil && result.Skipped {
+				sc.log.Info("skipping duplicate (fingerprint match)", "path", path, "existing", result.DuplicatePath)
 				return nil
 			}
 
-			f, err := os.Open(path)
-			if err != nil {
-				sc.log.Error("ScanPath open error", "path", path, "err", err)
-				return nil
-			}
-			defer f.Close()
-
-			h := sha256.New()
-			if _, err := io.Copy(h, f); err != nil {
-				sc.log.Error("ScanPath fingerprint error", "path", path, "err", err)
-				return nil
-			}
-
-			fingerprint := hex.EncodeToString(h.Sum(nil))
-			track.Fingerprint = fingerprint
-			isNew := existing == nil
-
-			// Preserve stable identity fields so the upsert matches on ID.
-			if existing != nil {
-				track.ID = existing.ID
-				track.CreatedAt = existing.CreatedAt
-				track.UploadedByUserID = existing.UploadedByUserID
-
-				baseName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-				if track.Title == baseName && existing.Title != "" {
-					track.Title = existing.Title
-				}
-			}
-
-			dup, err := sc.lib.TrackByFingerprint(ctx, fingerprint)
-			if err != nil {
-				sc.log.Error("fingerprint lookup error in scan", "path", path, "err", err)
-				return nil
-			}
-			if dup != nil && dup.DeletedAt == nil && dup.Path != path {
-				sc.log.Info("skipping duplicate (fingerprint match)", "path", path, "existing", dup.Path)
-				return nil
-			}
-
-			if err := sc.lib.UpsertTrack(ctx, track); err != nil {
-				sc.log.Error("upsert error in scan", "path", path, "err", err)
-				return nil
-			}
-
-			if isNew {
+			if result != nil && result.IsNew {
 				added++
-				sc.bus.Publish("track.added", compactTrackEventPayload(track))
 			} else {
 				updated++
-				sc.bus.Publish("track.updated", compactTrackEventPayload(track))
 			}
+
 			return nil
 		})
 		if err != nil {

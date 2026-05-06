@@ -2,11 +2,7 @@ package scanner
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"io"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -20,15 +16,17 @@ import (
 	"pneuma/internal/models"
 )
 
+// trackEventPayload represents the payload for track-related events, containing only the track ID for simplicity.
 type trackEventPayload struct {
+	// ID is the unique identifier of the track associated with the event.
 	ID string `json:"id"`
 }
 
+// compactTrackEventPayload creates a trackEventPayload with only the ID field populated, used for events where only the track ID is needed.
 func compactTrackEventPayload(track *models.Track) trackEventPayload {
 	if track == nil {
 		return trackEventPayload{}
 	}
-
 	return trackEventPayload{ID: track.ID}
 }
 
@@ -39,13 +37,14 @@ type EventBus interface {
 
 // Watcher monitors directories for audio file changes using OS-level events.
 type Watcher struct {
-	lib     *library.Service
-	parser  *parser.Parser
-	bus     EventBus
-	watcher *fsnotify.Watcher
-	mu      sync.Mutex
-	pending map[string]time.Time
-	log     *slog.Logger
+	lib      *library.Service
+	parser   *parser.Parser
+	bus      EventBus
+	ingestor *Ingestor
+	watcher  *fsnotify.Watcher
+	mu       sync.Mutex
+	pending  map[string]time.Time
+	log      *slog.Logger
 }
 
 // NewWatcher creates a Watcher.
@@ -56,12 +55,13 @@ func NewWatcher(lib *library.Service, p *parser.Parser, bus EventBus) (*Watcher,
 	}
 
 	return &Watcher{
-		lib:     lib,
-		parser:  p,
-		bus:     bus,
-		watcher: fw,
-		pending: make(map[string]time.Time),
-		log:     slog.Default().With("component", "watcher"),
+		lib:      lib,
+		parser:   p,
+		bus:      bus,
+		ingestor: NewIngestor(lib, p, bus),
+		watcher:  fw,
+		pending:  make(map[string]time.Time),
+		log:      slog.Default().With("component", "watcher"),
 	}, nil
 }
 
@@ -142,61 +142,17 @@ func (w *Watcher) flush(ctx context.Context) {
 
 // ingestFile parses and stores a track, handling duplicates and errors.
 func (w *Watcher) ingestFile(ctx context.Context, path string) {
-	track, err := w.parser.ParseFile(ctx, path)
+	result, err := w.ingestor.Ingest(ctx, path, nil)
 	if err != nil {
-		w.log.Error("parse failed", "path", path, "err", err)
+		w.log.Error("ingest failed", "path", path, "err", err)
 		return
 	}
-
-	f, err := os.Open(path)
-	if err != nil {
-		w.log.Error("ScanPath open error", "path", path, "err", err)
+	if result != nil && result.Skipped {
+		w.log.Info("skipping duplicate (fingerprint match)", "path", path, "existing", result.DuplicatePath)
 		return
 	}
-	defer f.Close()
-
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		w.log.Error("ScanPath fingerprint error", "path", path, "err", err)
-		return
-	}
-
-	fingerprint := hex.EncodeToString(h.Sum(nil))
-
-	existing, err := w.lib.TrackByPath(ctx, path)
-	if err != nil {
-		w.log.Error("lookup failed", "path", path, "err", err)
-		return
-	}
-
-	isNew := existing == nil
-	if existing != nil {
-		track.ID = existing.ID
-		track.CreatedAt = existing.CreatedAt
-		track.UploadedByUserID = existing.UploadedByUserID
-	}
-
-	dup, err := w.lib.TrackByFingerprint(ctx, fingerprint)
-	if err != nil {
-		w.log.Error("fingerprint lookup failed", "path", path, "err", err)
-		return
-	}
-	if dup != nil && dup.DeletedAt == nil && dup.Path != path {
-		w.log.Info("skipping duplicate (fingerprint match)", "path", path, "existing", dup.Path)
-		return
-	}
-
-	track.Fingerprint = fingerprint
-
-	if err := w.lib.UpsertTrack(ctx, track); err != nil {
-		w.log.Error("upsert failed", "path", path, "err", err)
-		return
-	}
-	w.log.Info("ingested", "path", path, "title", track.Title)
-	if isNew {
-		w.bus.Publish("track.added", compactTrackEventPayload(track))
-	} else {
-		w.bus.Publish("track.updated", compactTrackEventPayload(track))
+	if result != nil && result.Track != nil {
+		w.log.Info("ingested", "path", path, "title", result.Track.Title)
 	}
 }
 
