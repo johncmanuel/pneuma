@@ -633,11 +633,10 @@
         seekSyncTimer = null;
       }
 
-      const url = streamUrl(
-        $playerState.trackId,
-        $playerState.track?.path,
-        $streamQuality
-      );
+      const url = streamUrl($playerState.trackId, {
+        localPath: $playerState.track?.path,
+        quality: $streamQuality
+      });
 
       if (currentAudioSrc !== url && url) {
         currentAudioSrc = url;

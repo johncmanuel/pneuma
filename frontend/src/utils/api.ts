@@ -1,5 +1,10 @@
 import { writable, get } from "svelte/store";
-import { getOrCreateDeviceID, storageKeys, isLocalID } from "@pneuma/shared";
+import {
+  createApiClient,
+  getOrCreateDeviceID,
+  storageKeys,
+  isLocalID
+} from "@pneuma/shared";
 import { initLocalLibrary } from "../stores/localLibrary";
 import { initRecentAlbums } from "../stores/recentAlbums";
 import {
@@ -191,17 +196,17 @@ export function stopAutoReconnect() {
   isReconnecting.set(false);
 }
 
+// Below, I'm keeping the original methods (now as wrappers lol) here to avoid changing the
+// imports in other files, mainly cause laziness.
+
 /** Base URL for the local streaming server. */
 export function localBase(): string {
-  const p = get(localPort);
-  return p ? `http://127.0.0.1:${p}` : "";
+  return client.localBase();
 }
 
 /** Base WebSocket URL for the remote server (ws:// or wss://). */
 export function wsBase(): string {
-  const url = get(serverURL);
-  if (!url) return "";
-  return url.replace(/^http/, "ws");
+  return client.wsBase();
 }
 
 /** Fetch from the remote server with Authorization header. */
@@ -209,20 +214,8 @@ export async function serverFetch(
   path: string,
   init: RequestInit = {}
 ): Promise<Response> {
-  const base = get(serverURL);
-
-  if (!base) throw new Error("Not connected to server");
-
-  const token = get(authToken);
-  const headers = new Headers(init.headers);
-
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  headers.set("X-Device-ID", deviceId);
-
-  if (!headers.has("Content-Type") && init.body) {
-    headers.set("Content-Type", "application/json");
-  }
-  return fetch(`${base}${path}`, { ...init, headers });
+  if (!get(serverURL)) throw new Error("Not connected to server");
+  return client.apiFetch(path, init);
 }
 
 /**
@@ -237,57 +230,26 @@ export function streamUrl(
   localPath?: string,
   quality?: string
 ): string {
-  const p = get(localPort);
-
-  // If the track ID looks like a filesystem path, use the local server
-  if (isLocalID(trackId) && p) {
-    return `http://127.0.0.1:${p}/local/stream?path=${encodeURIComponent(trackId)}`;
-  }
-
-  // If an explicit local path is provided and the port is available, use the local server.
-  // Only applies when the trackId is a local (path-style) ID; remote tracks with UUID IDs
-  // have server-side paths that the desktop app can never access.
-  if (localPath && isLocalID(trackId) && p) {
-    return `http://127.0.0.1:${p}/local/stream?path=${encodeURIComponent(localPath)}`;
-  }
-
-  // remote track
-  const base = get(serverURL);
-  const token = get(authToken);
-  if (base && token) {
-    const qualityParam =
-      quality && quality !== "auto"
-        ? `&quality=${encodeURIComponent(quality)}`
-        : "";
-    return `${base}/api/stream/tracks/${trackId}?token=${encodeURIComponent(token)}${qualityParam}`;
-  }
-
-  return "";
+  return client.streamUrl(trackId, { localPath, quality });
 }
 
 /** Returns the artwork URL for a track. Local tracks route to the local art server. */
 export function artworkUrl(trackId: string): string {
-  const p = get(localPort);
-
-  if (isLocalID(trackId) && p) {
-    return `http://127.0.0.1:${p}/local/art?path=${encodeURIComponent(trackId)}`;
-  }
-
-  const base = get(serverURL);
-  const token = get(authToken);
-
-  if (base && token) {
-    return `${base}/api/library/tracks/${trackId}/art?token=${encodeURIComponent(token)}`;
-  }
-  return "";
+  return client.artworkUrl(trackId);
 }
 
 /** URL for a locally stored playlist artwork file. */
 export function playlistArtUrl(artworkPath: string): string {
-  if (!artworkPath) return "";
-
-  const p = get(localPort);
-  if (!p) return "";
-
-  return `http://127.0.0.1:${p}/local/playlist-art?file=${encodeURIComponent(artworkPath)}`;
+  return client.playlistArtUrl(artworkPath);
 }
+
+const client = createApiClient({
+  apiBase: () => get(serverURL),
+  getDeviceId: () => deviceId,
+  getAuthToken: () => get(authToken),
+  getLocalPort: () => get(localPort),
+  isLocalTrackId: isLocalID,
+  playlistArtMode: "local",
+  useCredentials: false,
+  useLocationForEmptyBase: false
+});

@@ -1,4 +1,4 @@
-import { initApiClient } from "@pneuma/shared";
+import { initApiClient, getOrCreateDeviceID } from "@pneuma/shared";
 
 export {
   currentUser,
@@ -8,8 +8,15 @@ export {
   login,
   register,
   logout,
-  tryAutoAuth
+  tryAutoAuth,
+  streamUrl,
+  artworkUrl,
+  playlistArtUrl,
+  uploadPlaylistArtwork,
+  generateRandomPlaylist
 } from "@pneuma/shared";
+
+const deviceId = getOrCreateDeviceID();
 
 /**
  * API base URL.
@@ -21,5 +28,6 @@ export function apiBase(): string {
 }
 
 initApiClient({
-  apiBase
+  apiBase,
+  getDeviceId: () => deviceId
 });
