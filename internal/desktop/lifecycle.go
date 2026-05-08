@@ -59,6 +59,7 @@ func (a *App) Startup(ctx context.Context) {
 	}
 
 	a.client = NewServerClient(a.ctx)
+	a.playlistManager = NewPlaylistManager(a.ctx, a.store, a.streamer, a.client)
 
 	slog.Info("pneuma desktop started", "local_stream_port", port)
 }

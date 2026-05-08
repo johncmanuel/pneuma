@@ -23,6 +23,9 @@ type App struct {
 
 	// client manages the optional remote server connection and all outbound API calls.
 	client *ServerClient
+
+	// playlistManager owns all playlist business logic: CRUD, random generation, and remote syncing.
+	playlistManager *PlaylistManager
 }
 
 // NewApp creates a new App.

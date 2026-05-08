@@ -1,7 +1,6 @@
 package desktop
 
 import (
-	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,20 +171,9 @@ func (a *App) OpenLocalFolder() ([]string, error) {
 
 // ResolvePlaylistItems attempts to match local_ref items to actual local files.
 func (a *App) ResolvePlaylistItems(playlistID string) ([]LocalPlaylistItem, error) {
-	items, err := a.GetLocalPlaylistItems(playlistID)
+	pm, err := a.pm()
 	if err != nil {
 		return nil, err
 	}
-
-	if a.store == nil {
-		return items, nil
-	}
-
-	allTracks, err := a.store.queries().ListAllLocalTracks(a.ctx)
-	if err != nil {
-		slog.Warn("ResolvePlaylistItems: failed to list tracks", "err", err)
-		return items, nil
-	}
-
-	return resolvePlaylistItems(items, allTracks), nil
+	return pm.ResolvePlaylistItems(playlistID)
 }
