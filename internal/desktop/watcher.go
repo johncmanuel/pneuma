@@ -23,12 +23,12 @@ type LocalWatcher struct {
 	mu             sync.RWMutex
 
 	ctx     context.Context
-	store   LocalStore
+	store   *AppStore
 	scanner *Scanner
 }
 
 // NewLocalWatcher creates the fsnotify watcher and starts the event loop.
-func NewLocalWatcher(ctx context.Context, store LocalStore, scanner *Scanner) (*LocalWatcher, error) {
+func NewLocalWatcher(ctx context.Context, store *AppStore, scanner *Scanner) (*LocalWatcher, error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err

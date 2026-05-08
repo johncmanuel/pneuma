@@ -14,15 +14,15 @@ import (
 )
 
 // Scanner traverses the local file system, parses audio metadata, and
-// hands each track to a LocalStore via a TrackConsumer callback.
+// hands each track to an AppStore via a TrackConsumer callback.
 // It also emits Wails events so the frontend can display scan progress.
 type Scanner struct {
 	ctx   context.Context
-	store LocalStore
+	store *AppStore
 }
 
-// NewScanner creates a Scanner with the given Wails context and LocalStore.
-func NewScanner(ctx context.Context, store LocalStore) *Scanner {
+// NewScanner creates a Scanner with the given Wails context and AppStore.
+func NewScanner(ctx context.Context, store *AppStore) *Scanner {
 	return &Scanner{ctx: ctx, store: store}
 }
 
