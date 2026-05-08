@@ -56,6 +56,22 @@ func (a *App) ClearLocalFolder(folder string) error {
 	return a.store.deleteLocalTracksByFolder(folder)
 }
 
+// WatchLocalFolder adds a directory to the fsnotify watcher.
+func (a *App) WatchLocalFolder(dir string) error {
+	if a.watcher != nil {
+		return a.watcher.WatchFolder(dir)
+	}
+	return nil
+}
+
+// UnwatchLocalFolder removes a directory from the fsnotify watcher.
+func (a *App) UnwatchLocalFolder(dir string) error {
+	if a.watcher != nil {
+		return a.watcher.UnwatchFolder(dir)
+	}
+	return nil
+}
+
 // GetRecentAlbums returns all recently played albums.
 func (a *App) GetRecentAlbums() []RecentAlbum {
 	if a.store == nil {

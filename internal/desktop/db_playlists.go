@@ -424,7 +424,11 @@ func (a *App) PickPlaylistArtwork(playlistID string) (string, error) {
 	artHash := "pl-" + hex.EncodeToString(sum[:])[:24]
 	fileName := artHash + ".jpg"
 
-	if err := artwork.WriteThumbnail(a.thumbDir, fileName, thumbData); err != nil {
+	if a.streamer == nil {
+		return "", fmt.Errorf("local streamer not initialized")
+	}
+
+	if err := artwork.WriteThumbnail(a.streamer.ThumbDir(), fileName, thumbData); err != nil {
 		return "", err
 	}
 
@@ -554,7 +558,11 @@ func (a *App) RefreshPlaylistArtFromServer(playlistID string) error {
 	hashPrefix := hex.EncodeToString(sum[:])[:24]
 
 	fileName := "pl-" + hashPrefix + ".jpg"
-	if err := artwork.WriteThumbnail(a.thumbDir, fileName, thumbData); err != nil {
+	if a.streamer == nil {
+		return fmt.Errorf("local streamer not initialized")
+	}
+
+	if err := artwork.WriteThumbnail(a.streamer.ThumbDir(), fileName, thumbData); err != nil {
 		return fmt.Errorf("write artwork: %w", err)
 	}
 

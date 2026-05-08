@@ -3,8 +3,6 @@ package desktop
 import (
 	"context"
 	"log/slog"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -34,43 +32,35 @@ func (a *App) Startup(ctx context.Context) {
 		a.store = NewAppStore(db)
 	}
 
+	var thumbDir string
 	if cacheDir, err := os.UserCacheDir(); err == nil {
-		a.thumbDir = filepath.Join(cacheDir, desktopAppDir(profile), ThumbnailsCacheDir)
+		thumbDir = filepath.Join(cacheDir, desktopAppDir(profile), ThumbnailsCacheDir)
 	} else {
-		a.thumbDir = filepath.Join(os.TempDir(), thumbnailsTempDir(profile))
-		slog.Warn("UserCacheDir unavailable, using temp dir for thumbnails", "dir", a.thumbDir)
+		thumbDir = filepath.Join(os.TempDir(), thumbnailsTempDir(profile))
+		slog.Warn("UserCacheDir unavailable, using temp dir for thumbnails", "dir", thumbDir)
 	}
-	if err := os.MkdirAll(a.thumbDir, 0o755); err != nil {
-		slog.Error("failed to create thumbnail cache dir", "dir", a.thumbDir, "err", err)
+	if err := os.MkdirAll(thumbDir, 0o755); err != nil {
+		slog.Error("failed to create thumbnail cache dir", "dir", thumbDir, "err", err)
 	}
 
-	listener, err := net.Listen("tcp", LocalHTTPServerAddr)
+	a.streamer = NewLocalStreamer(thumbDir)
+	port, err := a.streamer.Start()
 	if err != nil {
-		slog.Error("local stream listener failed", "err", err)
-		return
+		slog.Error("local stream server failed to start", "err", err)
 	}
-	a.localPort = listener.Addr().(*net.TCPAddr).Port
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/local/stream", a.handleLocalStream)
-	mux.HandleFunc("/local/art", a.handleLocalArt)
-	mux.HandleFunc("/local/playlist-art", a.handlePlaylistArt)
-
-	a.localSrv = &http.Server{Handler: mux}
-	go func() {
-		if err := a.localSrv.Serve(listener); err != nil && err != http.ErrServerClosed {
-			slog.Error("local stream server error", "err", err)
-		}
-	}()
-
-	a.initLocalWatcher()
 
 	// create scanner once store and wails ctx are initialized
 	if a.store != nil {
 		a.scanner = NewScanner(a.ctx, a.store)
 	}
 
-	slog.Info("pneuma desktop started", "local_stream_port", a.localPort)
+	if w, err := NewLocalWatcher(a.ctx, a.store, a.scanner); err != nil {
+		slog.Warn("local file watcher unavailable", "err", err)
+	} else {
+		a.watcher = w
+	}
+
+	slog.Info("pneuma desktop started", "local_stream_port", port)
 }
 
 // Shutdown is called when the app is closing.
@@ -81,9 +71,11 @@ func (a *App) Shutdown(_ context.Context) {
 	}
 	a.mu.Unlock()
 
-	a.stopLocalWatcher()
-	if a.localSrv != nil {
-		a.localSrv.Close()
+	if a.watcher != nil {
+		a.watcher.Close()
+	}
+	if a.streamer != nil {
+		a.streamer.Stop(context.Background())
 	}
 	a.closeAppDB()
 }
