@@ -13,27 +13,31 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// Scanner traverses the local file system, parses audio metadata, and
-// hands each track to an AppStore via a TrackConsumer callback.
-// It also emits Wails events so the frontend can display scan progress.
-type Scanner struct {
+// LibraryManager is the single authority for translating filesystem state into
+// LocalStore state. It handles full lifecycle synchronization: scanning folders,
+// adding new files, and removing deleted files. All Wails-related library events are
+// emitted here, giving callers (e.g. LocalWatcher) high leverage behind a small
+// interface.
+type LibraryManager struct {
 	ctx   context.Context
 	store *AppStore
 }
 
-// NewScanner creates a Scanner with the given Wails context and AppStore.
-func NewScanner(ctx context.Context, store *AppStore) *Scanner {
-	return &Scanner{ctx: ctx, store: store}
+// NewLibraryManager creates a LibraryManager with the given Wails context and AppStore.
+func NewLibraryManager(ctx context.Context, store *AppStore) *LibraryManager {
+	return &LibraryManager{ctx: ctx, store: store}
 }
 
-// ScanFolderStream recursively scans a directory for audio files,
-// reads embedded tags, persists each track to the LocalStore, and
-// emits the following Wails events for frontend progress display:
+// SyncFolder recursively scans a directory for audio files,
+// reads embedded tags, persists each track to the LocalStore, prunes
+// any DB entries for files that no longer exist, and emits the following
+// Wails events for frontend progress display:
 //
 //	"local:scan:start"    -> { folder string, total int }
 //	"local:track:scanned" -> { folder string, done int, total int, track LocalTrack }
+//	"local:track:removed" -> { paths []string }
 //	"local:scan:done"     -> { folder string, count int }
-func (sc *Scanner) ScanFolderStream(dir string) error {
+func (lm *LibraryManager) SyncFolder(dir string) error {
 	// count audio files first so we know the total
 	var total int
 	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
@@ -46,7 +50,7 @@ func (sc *Scanner) ScanFolderStream(dir string) error {
 		return nil
 	})
 
-	wailsruntime.EventsEmit(sc.ctx, "local:scan:start", map[string]any{
+	wailsruntime.EventsEmit(lm.ctx, "local:scan:start", map[string]any{
 		"folder": dir,
 		"total":  total,
 	})
@@ -69,8 +73,8 @@ func (sc *Scanner) ScanFolderStream(dir string) error {
 		f, err := os.Open(path)
 		if err != nil {
 			done++
-			_ = sc.store.upsertLocalTrack(lt, dir)
-			wailsruntime.EventsEmit(sc.ctx, "local:track:scanned", map[string]any{
+			_ = lm.store.upsertLocalTrack(lt, dir)
+			wailsruntime.EventsEmit(lm.ctx, "local:track:scanned", map[string]any{
 				"folder": dir, "done": done, "total": total, "track": lt,
 			})
 			return nil
@@ -102,40 +106,43 @@ func (sc *Scanner) ScanFolderStream(dir string) error {
 			}
 		}
 
-		_ = sc.store.upsertLocalTrack(lt, dir)
+		_ = lm.store.upsertLocalTrack(lt, dir)
 		done++
-		wailsruntime.EventsEmit(sc.ctx, "local:track:scanned", map[string]any{
+		wailsruntime.EventsEmit(lm.ctx, "local:track:scanned", map[string]any{
 			"folder": dir, "done": done, "total": total, "track": lt,
 		})
 		return nil
 	})
 
 	// prune DB entries for files that no longer exist on disk
-	if stalePaths, pruneErr := sc.store.pruneStaleLocalTracks(dir, livePaths); pruneErr != nil {
-		slog.Warn("scan: failed to prune stale tracks", "folder", dir, "err", pruneErr)
+	if stalePaths, pruneErr := lm.store.pruneStaleLocalTracks(dir, livePaths); pruneErr != nil {
+		slog.Warn("sync: failed to prune stale tracks", "folder", dir, "err", pruneErr)
 	} else if len(stalePaths) > 0 {
-		wailsruntime.EventsEmit(sc.ctx, "local:track:removed", map[string]any{
+		wailsruntime.EventsEmit(lm.ctx, "local:track:removed", map[string]any{
 			"paths": stalePaths,
 		})
 	}
 
-	wailsruntime.EventsEmit(sc.ctx, "local:scan:done", map[string]any{
+	wailsruntime.EventsEmit(lm.ctx, "local:scan:done", map[string]any{
 		"folder": dir,
 		"count":  done,
 	})
 	return err
 }
 
-// ScanAndUpsertSingleFile reads metadata for one audio file, persists it
-// to the LocalStore, and returns the populated LocalTrack.
-// Used by the fsnotify watcher on Create events.
-func (sc *Scanner) ScanAndUpsertSingleFile(path, folder string) (LocalTrack, error) {
+// HandleFileAdded reads metadata for one audio file, persists it to the
+// LocalStore, emits "local:track:added", and returns the populated LocalTrack.
+// Used by the LocalWatcher on Create events.
+func (lm *LibraryManager) HandleFileAdded(path, folder string) (LocalTrack, error) {
 	lt := LocalTrack{Path: path, Title: filepath.Base(path)}
 
 	f, err := os.Open(path)
 	if err != nil {
-		return lt, sc.store.upsertLocalTrack(lt, folder)
+		upsertErr := lm.store.upsertLocalTrack(lt, folder)
+		lm.emitTrackAdded(path, lt)
+		return lt, upsertErr
 	}
+
 	m, tagErr := tag.ReadFrom(f)
 	f.Close()
 
@@ -162,5 +169,40 @@ func (sc *Scanner) ScanAndUpsertSingleFile(path, folder string) (LocalTrack, err
 		}
 	}
 
-	return lt, sc.store.upsertLocalTrack(lt, folder)
+	upsertErr := lm.store.upsertLocalTrack(lt, folder)
+	lm.emitTrackAdded(path, lt)
+	return lt, upsertErr
+}
+
+// HandleFileRemoved deletes a single track from the LocalStore and emits
+// "local:track:removed". Used by the LocalWatcher on Remove/Rename events.
+func (lm *LibraryManager) HandleFileRemoved(path string) {
+	if err := lm.store.deleteLocalTrackByPath(path); err != nil {
+		slog.Warn("library: failed to delete track from DB", "path", path, "err", err)
+	}
+	wailsruntime.EventsEmit(lm.ctx, "local:track:removed", map[string]any{"path": path})
+}
+
+// HandleFolderRemoved deletes all tracks under a directory prefix from the
+// LocalStore and emits "local:track:removed". Used by the LocalWatcher when a
+// watched directory is moved or deleted.
+func (lm *LibraryManager) HandleFolderRemoved(path string) {
+	n, err := lm.store.deleteLocalTracksByPathPrefix(path)
+	if err != nil {
+		slog.Warn("library: failed to delete tracks by prefix", "path", path, "err", err)
+	}
+	if n > 0 {
+		wailsruntime.EventsEmit(lm.ctx, "local:track:removed", map[string]any{"path": path})
+	}
+}
+
+// emitTrackAdded emits the "local:track:added" Wails event.
+func (lm *LibraryManager) emitTrackAdded(path string, lt LocalTrack) {
+	if lm.ctx == nil {
+		return
+	}
+	wailsruntime.EventsEmit(lm.ctx, "local:track:added", map[string]any{
+		"path":  path,
+		"track": lt,
+	})
 }

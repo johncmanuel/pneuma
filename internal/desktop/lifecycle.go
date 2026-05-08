@@ -47,12 +47,12 @@ func (a *App) Startup(ctx context.Context) {
 		slog.Error("local stream server failed to start", "err", err)
 	}
 
-	// create scanner once store and wails ctx are initialized
+	// create the library manager once store and wails ctx are initialized
 	if a.store != nil {
-		a.scanner = NewScanner(a.ctx, a.store)
+		a.library = NewLibraryManager(a.ctx, a.store)
 	}
 
-	if w, err := NewLocalWatcher(a.ctx, a.store, a.scanner); err != nil {
+	if w, err := NewLocalWatcher(a.ctx, a.library); err != nil {
 		slog.Warn("local file watcher unavailable", "err", err)
 	} else {
 		a.watcher = w

@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"pneuma/internal/media"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 // LocalWatcher monitors the local filesystem for changes, debouncing rapid
-// OS events and triggering the Scanner or LocalStore accordingly.
+// OS events and delegating all library mutations to LibraryManager.
 type LocalWatcher struct {
 	watcher        *fsnotify.Watcher
 	watchedRoots   []string
@@ -23,12 +23,11 @@ type LocalWatcher struct {
 	mu             sync.RWMutex
 
 	ctx     context.Context
-	store   *AppStore
-	scanner *Scanner
+	library *LibraryManager
 }
 
 // NewLocalWatcher creates the fsnotify watcher and starts the event loop.
-func NewLocalWatcher(ctx context.Context, store *AppStore, scanner *Scanner) (*LocalWatcher, error) {
+func NewLocalWatcher(ctx context.Context, library *LibraryManager) (*LocalWatcher, error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
@@ -39,8 +38,7 @@ func NewLocalWatcher(ctx context.Context, store *AppStore, scanner *Scanner) (*L
 		watchedRoots:   make([]string, 0),
 		pendingCreates: make(map[string]*time.Timer),
 		ctx:            ctx,
-		store:          store,
-		scanner:        scanner,
+		library:        library,
 	}
 
 	go lw.runLocalWatcher()
@@ -192,16 +190,8 @@ func (lw *LocalWatcher) handleWatcherEvent(event fsnotify.Event) {
 					if folder == "" {
 						return
 					}
-					lt, err := lw.scanner.ScanAndUpsertSingleFile(path, folder)
-					if err != nil {
+					if _, err := lw.library.HandleFileAdded(path, folder); err != nil {
 						slog.Warn("watcher: failed to upsert new file", "path", path, "err", err)
-						return
-					}
-					if lw.ctx != nil {
-						runtime.EventsEmit(lw.ctx, "local:track:added", map[string]any{
-							"path":  path,
-							"track": lt,
-						})
 					}
 				})
 			}
@@ -212,21 +202,10 @@ func (lw *LocalWatcher) handleWatcherEvent(event fsnotify.Event) {
 	case event.Has(fsnotify.Remove), event.Has(fsnotify.Rename):
 		ext := strings.ToLower(filepath.Ext(path))
 		if media.IsSupportedAudio(ext) {
-			if err := lw.store.deleteLocalTrackByPath(path); err != nil {
-				slog.Warn("watcher: failed to delete track from DB", "path", path, "err", err)
-			}
-			if lw.ctx != nil {
-				runtime.EventsEmit(lw.ctx, "local:track:removed", map[string]any{"path": path})
-			}
+			lw.library.HandleFileRemoved(path)
 		} else if ext == "" || !strings.Contains(filepath.Base(path), ".") {
 			// directory was moved/deleted, delete all tracks under it.
-			n, err := lw.store.deleteLocalTracksByPathPrefix(path)
-			if err != nil {
-				slog.Warn("watcher: failed to delete tracks by prefix", "path", path, "err", err)
-			}
-			if n > 0 && lw.ctx != nil {
-				runtime.EventsEmit(lw.ctx, "local:track:removed", map[string]any{"path": path})
-			}
+			lw.library.HandleFolderRemoved(path)
 		}
 	}
 }

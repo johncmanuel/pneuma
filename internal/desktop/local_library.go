@@ -11,10 +11,13 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// ScanLocalFolderStream delegates to the Scanner, which handles file traversal,
-// tag parsing, DB upserts, and Wails event emission.
+// ScanLocalFolderStream delegates to the LibraryManager, which handles file
+// traversal, tag parsing, DB upserts, and Wails event emission.
 func (a *App) ScanLocalFolderStream(dir string) error {
-	return a.scanner.ScanFolderStream(dir)
+	if a.library == nil {
+		return nil
+	}
+	return a.library.SyncFolder(dir)
 }
 
 // GetLocalTracks returns all cached tracks for the given folders from the local SQLite DB.

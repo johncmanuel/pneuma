@@ -12,8 +12,8 @@ type App struct {
 	// store is the LocalStore backed by the app-local SQLite database.
 	store *AppStore
 
-	// scanner handles filesystem traversal, tag parsing, and DB upserts for local files.
-	scanner *Scanner
+	// library manages filesystem synchronization, tag parsing, and DB upserts for local files.
+	library *LibraryManager
 
 	// streamer handles local audio streaming and artwork cache serving.
 	streamer *LocalStreamer
