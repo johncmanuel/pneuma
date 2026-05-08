@@ -1,17 +1,12 @@
 package desktop
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"math"
-	"mime/multipart"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -275,11 +270,10 @@ func (a *App) AddLocalPlaylistItem(playlistID string, item LocalPlaylistItem) er
 // Only metadata references for local_ref items. Local file paths are not sent.
 // Returns the remote playlist ID.
 func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
-	a.mu.RLock()
-	serverURL := a.serverURL
-	token := a.token
-	a.mu.RUnlock()
-
+	if a.client == nil {
+		return "", fmt.Errorf("server client not initialized")
+	}
+	serverURL, token := a.client.Credentials()
 	if serverURL == "" || token == "" {
 		return "", fmt.Errorf("not connected to server")
 	}
@@ -319,7 +313,7 @@ func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
 	// Create a new remote playlist if remoteID is empty, otherwise
 	// update the existing remote playlist.
 	if remoteID == "" {
-		remoteID, err = a.createServerPlaylist(serverURL, token, lp.Name, lp.Description, serverItems)
+		remoteID, err = a.client.CreatePlaylist(serverURL, token, lp.Name, lp.Description, serverItems)
 		if err != nil {
 			return "", err
 		}
@@ -335,7 +329,7 @@ func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
 			ID:               playlistID,
 		})
 	} else {
-		err = a.updateServerPlaylistItems(serverURL, token, remoteID, serverItems)
+		err = a.client.UpdatePlaylistItems(serverURL, token, remoteID, serverItems)
 		if err != nil {
 			return "", err
 		}
@@ -449,11 +443,10 @@ func (a *App) PickPlaylistArtwork(playlistID string) (string, error) {
 // uploadPlaylistArtToServer uploads playlist artwork to the server.
 // Called in a goroutine after local artwork is picked.
 func (a *App) uploadPlaylistArtToServer(playlistID string, jpgData []byte) {
-	a.mu.RLock()
-	serverURL := a.serverURL
-	token := a.token
-	a.mu.RUnlock()
-
+	if a.client == nil {
+		return
+	}
+	serverURL, token := a.client.Credentials()
 	if serverURL == "" || token == "" {
 		return
 	}
@@ -465,39 +458,8 @@ func (a *App) uploadPlaylistArtToServer(playlistID string, jpgData []byte) {
 		return
 	}
 
-	var body bytes.Buffer
-	w := multipart.NewWriter(&body)
-
-	fw, err := w.CreateFormFile("file", "artwork.jpg")
-	if err != nil {
-		slog.Warn("playlist art upload: create form file", "err", err)
-		return
-	}
-	if _, err := fw.Write(jpgData); err != nil {
-		slog.Warn("playlist art upload: write data", "err", err)
-		return
-	}
-	w.Close()
-
-	url := fmt.Sprintf("%s/api/playlists/%s/artwork", serverURL, lp.RemotePlaylistID)
-	req, err := http.NewRequest("POST", url, &body)
-	if err != nil {
-		slog.Warn("playlist art upload: new request", "err", err)
-		return
-	}
-	req.Header.Set("Content-Type", w.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		slog.Warn("playlist art upload: request failed", "err", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		slog.Warn("playlist art upload: server error", "status", resp.StatusCode, "body", string(body))
+	if err := a.client.UploadPlaylistArt(serverURL, token, lp.RemotePlaylistID, jpgData); err != nil {
+		slog.Warn("playlist art upload failed", "err", err)
 	}
 }
 
@@ -505,11 +467,10 @@ func (a *App) uploadPlaylistArtToServer(playlistID string, jpgData []byte) {
 // that has a remote_playlist_id, stores it locally, and updates the DB.
 // Called when a playlist.updated WS event arrives from the server.
 func (a *App) RefreshPlaylistArtFromServer(playlistID string) error {
-	a.mu.RLock()
-	serverURL := a.serverURL
-	token := a.token
-	a.mu.RUnlock()
-
+	if a.client == nil {
+		return fmt.Errorf("server client not initialized")
+	}
+	serverURL, token := a.client.Credentials()
 	if serverURL == "" || token == "" {
 		return fmt.Errorf("not connected to server")
 	}
@@ -525,26 +486,9 @@ func (a *App) RefreshPlaylistArtFromServer(playlistID string) error {
 		return nil
 	}
 
-	url := fmt.Sprintf("%s/api/playlists/%s/art", serverURL, lp.RemotePlaylistID)
-	req, err := http.NewRequest("GET", url, nil)
+	raw, err := a.client.FetchPlaylistArt(serverURL, token, lp.RemotePlaylistID)
 	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("download artwork: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("server returned %d", resp.StatusCode)
-	}
-
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read artwork: %w", err)
+		return fmt.Errorf("fetch artwork: %w", err)
 	}
 
 	thumbData, err := artwork.ResizeToThumbnail(raw, thumbMaxDim)
@@ -553,8 +497,6 @@ func (a *App) RefreshPlaylistArtFromServer(playlistID string) error {
 	}
 
 	sum := sha256.Sum256(thumbData)
-
-	// 24 characters is good enough
 	hashPrefix := hex.EncodeToString(sum[:])[:24]
 
 	fileName := "pl-" + hashPrefix + ".jpg"
@@ -595,47 +537,10 @@ func (a *App) RefreshPlaylistArtByRemoteID(remotePlaylistID string) error {
 	return a.RefreshPlaylistArtFromServer(lp.ID)
 }
 
-// fetchAllRemoteTracks retrieves all tracks from the connected server via
-// paginated requests.
+// fetchAllRemoteTracks retrieves all tracks from the connected server.
 func (a *App) fetchAllRemoteTracks(serverURL, token string, pageSize int) ([]models.Track, error) {
-	offset := 0
-	var all []models.Track
-
-	for {
-		url := fmt.Sprintf("%s/api/library/tracks?offset=%d&limit=%d", serverURL, offset, pageSize)
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("server unreachable: %w", err)
-		}
-
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("fetch tracks failed (%d): %s", resp.StatusCode, string(body))
-		}
-
-		var page struct {
-			Tracks []models.Track `json:"tracks"`
-			Total  int            `json:"total"`
-		}
-		if err := json.Unmarshal(body, &page); err != nil {
-			return nil, fmt.Errorf("decode response: %w", err)
-		}
-
-		all = append(all, page.Tracks...)
-
-		if offset+len(page.Tracks) >= page.Total {
-			break
-		}
-		offset += pageSize
+	if a.client == nil {
+		return nil, fmt.Errorf("server client not initialized")
 	}
-
-	return all, nil
+	return a.client.FetchAllRemoteTracks(serverURL, token, pageSize)
 }

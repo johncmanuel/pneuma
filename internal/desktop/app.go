@@ -2,7 +2,6 @@ package desktop
 
 import (
 	"context"
-	"sync"
 )
 
 // App holds all desktop application state. It acts as a thin composition root:
@@ -22,12 +21,8 @@ type App struct {
 	// watcher manages fsnotify events and library updates for watched folders.
 	watcher *LocalWatcher
 
-	// Optional server connection state.
-	// Mutex used to prevent race conditions when concurrently reading/writing data like watchedRoots or pendingCreates
-	mu          sync.RWMutex
-	serverURL   string
-	token       string
-	stopRefresh context.CancelFunc
+	// client manages the optional remote server connection and all outbound API calls.
+	client *ServerClient
 }
 
 // NewApp creates a new App.

@@ -103,10 +103,10 @@ func (a *App) randomPlaylistCandidates(useRemote bool) ([]randomTrack, error) {
 		return localTracks, nil
 	}
 
-	a.mu.RLock()
-	serverURL := a.serverURL
-	token := a.token
-	a.mu.RUnlock()
+	if a.client == nil {
+		return localTracks, nil
+	}
+	serverURL, token := a.client.Credentials()
 
 	if serverURL == "" || token == "" {
 		return localTracks, nil

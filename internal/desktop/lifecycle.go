@@ -14,8 +14,6 @@ const (
 	ThumbnailsCacheDir    = "thumbs"
 	ThumbnailsTempDirProd = "pneuma-thumbs"
 	ThumbnailsTempDirDev  = "pneuma-dev-thumbs"
-	// Use a local-only HTTP server on a random port for streaming local files.
-	LocalHTTPServerAddr = "127.0.0.1:0"
 )
 
 // Startup is called when the app is starting up.
@@ -60,16 +58,16 @@ func (a *App) Startup(ctx context.Context) {
 		a.watcher = w
 	}
 
+	a.client = NewServerClient(a.ctx)
+
 	slog.Info("pneuma desktop started", "local_stream_port", port)
 }
 
 // Shutdown is called when the app is closing.
 func (a *App) Shutdown(_ context.Context) {
-	a.mu.Lock()
-	if a.stopRefresh != nil {
-		a.stopRefresh()
+	if a.client != nil {
+		a.client.Close()
 	}
-	a.mu.Unlock()
 
 	if a.watcher != nil {
 		a.watcher.Close()
