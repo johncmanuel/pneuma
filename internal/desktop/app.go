@@ -2,24 +2,23 @@ package desktop
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-
-	"pneuma/internal/store/sqlite/desktopdb"
 )
 
-// App holds all desktop application state. It acts as a thin client
+// App holds all desktop application state. It acts as a thin composition root:
 // local file playback is always available; server connectivity is optional.
 type App struct {
 	ctx context.Context
 
-	// App-local SQLite database for persisting desktop client state.
-	appDB *sql.DB
-	dq    *desktopdb.Queries
+	// store is the LocalStore backed by the app-local SQLite database.
+	store *AppStore
+
+	// scanner handles filesystem traversal, tag parsing, and DB upserts for local files.
+	scanner *Scanner
 
 	// Local stream server that serves local audio files to the player.
 	localPort int

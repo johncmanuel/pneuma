@@ -24,7 +24,7 @@ type randomTrack struct {
 // included. If useRemote is true and the app is connected to a server, remote
 // tracks are added to the pool as well, producing a mix of both sources.
 func (a *App) GenerateRandomPlaylist(name, description string, durationMinutes int, useRemote bool) (*LocalPlaylistSummary, error) {
-	if a.dq == nil {
+	if a.store == nil {
 		return nil, fmt.Errorf("db not initialised")
 	}
 	if strings.TrimSpace(name) == "" {
@@ -91,7 +91,10 @@ func (a *App) GenerateRandomPlaylist(name, description string, durationMinutes i
 // playlist picker. Remote tracks are optional and any remote fetch failure is
 // treated as a best-effort miss so local playlists still work.
 func (a *App) randomPlaylistCandidates(useRemote bool) ([]randomTrack, error) {
-	localTracks, err := a.localRandomPlaylistCandidates(context.Background())
+	if a.store == nil {
+		return nil, fmt.Errorf("db not initialised")
+	}
+	localTracks, err := a.store.localRandomPlaylistCandidates(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -118,8 +121,8 @@ func (a *App) randomPlaylistCandidates(useRemote bool) ([]randomTrack, error) {
 }
 
 // localRandomPlaylistCandidates normalizes local DB rows into the randomTrack shape.
-func (a *App) localRandomPlaylistCandidates(ctx context.Context) ([]randomTrack, error) {
-	rows, err := a.dq.ListAllLocalTracks(ctx)
+func (s *AppStore) localRandomPlaylistCandidates(ctx context.Context) ([]randomTrack, error) {
+	rows, err := s.dq.ListAllLocalTracks(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list local tracks: %w", err)
 	}

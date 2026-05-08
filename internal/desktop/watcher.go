@@ -167,7 +167,7 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 					if folder == "" {
 						return
 					}
-					lt, err := a.scanAndUpsertSingleFile(path, folder)
+					lt, err := a.scanner.ScanAndUpsertSingleFile(path, folder)
 					if err != nil {
 						slog.Warn("watcher: failed to upsert new file", "path", path, "err", err)
 						return
@@ -187,7 +187,7 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 	case event.Has(fsnotify.Remove), event.Has(fsnotify.Rename):
 		ext := strings.ToLower(filepath.Ext(path))
 		if media.IsSupportedAudio(ext) {
-			if err := a.deleteLocalTrackByPath(path); err != nil {
+			if err := a.store.deleteLocalTrackByPath(path); err != nil {
 				slog.Warn("watcher: failed to delete track from DB", "path", path, "err", err)
 			}
 			if a.ctx != nil {
@@ -195,7 +195,7 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 			}
 		} else if ext == "" || !strings.Contains(filepath.Base(path), ".") {
 			// directory was moved/deleted, delete all tracks under it.
-			n, err := a.deleteLocalTracksByPathPrefix(path)
+			n, err := a.store.deleteLocalTracksByPathPrefix(path)
 			if err != nil {
 				slog.Warn("watcher: failed to delete tracks by prefix", "path", path, "err", err)
 			}

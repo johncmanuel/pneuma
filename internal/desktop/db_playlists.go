@@ -58,14 +58,14 @@ type LocalPlaylistItem struct {
 
 // CreateLocalPlaylist creates a new local playlist and returns its summary.
 func (a *App) CreateLocalPlaylist(name, description string) (*LocalPlaylistSummary, error) {
-	if a.dq == nil {
+	if a.store == nil {
 		return nil, fmt.Errorf("db not initialised")
 	}
 
 	now := dbconv.FormatTime(time.Now())
 	id := uuid.NewString()
 
-	if err := a.dq.CreateLocalPlaylist(context.Background(), desktopdb.CreateLocalPlaylistParams{
+	if err := a.store.queries().CreateLocalPlaylist(context.Background(), desktopdb.CreateLocalPlaylistParams{
 		ID:               id,
 		Name:             name,
 		Description:      description,
@@ -88,11 +88,11 @@ func (a *App) CreateLocalPlaylist(name, description string) (*LocalPlaylistSumma
 
 // GetLocalPlaylists returns all local playlists with aggregate counts.
 func (a *App) GetLocalPlaylists() ([]LocalPlaylistSummary, error) {
-	if a.dq == nil {
+	if a.store == nil {
 		return nil, fmt.Errorf("db not initialised")
 	}
 
-	rows, err := a.dq.ListLocalPlaylists(context.Background())
+	rows, err := a.store.queries().ListLocalPlaylists(context.Background())
 	if err != nil {
 		return nil, fmt.Errorf("list playlists: %w", err)
 	}
@@ -117,11 +117,11 @@ func (a *App) GetLocalPlaylists() ([]LocalPlaylistSummary, error) {
 
 // GetLocalPlaylistItems returns all items in a local playlist, ordered by position.
 func (a *App) GetLocalPlaylistItems(playlistID string) ([]LocalPlaylistItem, error) {
-	if a.dq == nil {
+	if a.store == nil {
 		return nil, fmt.Errorf("db not initialised")
 	}
 
-	rows, err := a.dq.ListLocalPlaylistItems(context.Background(), playlistID)
+	rows, err := a.store.queries().ListLocalPlaylistItems(context.Background(), playlistID)
 	if err != nil {
 		return nil, fmt.Errorf("list items: %w", err)
 	}
@@ -145,18 +145,18 @@ func (a *App) GetLocalPlaylistItems(playlistID string) ([]LocalPlaylistItem, err
 
 // UpdateLocalPlaylist updates a local playlist's metadata.
 func (a *App) UpdateLocalPlaylist(id, name, description, artworkPath string) error {
-	if a.dq == nil {
+	if a.store == nil {
 		return fmt.Errorf("db not initialised")
 	}
 
-	pl, err := a.dq.GetLocalPlaylistByID(context.Background(), id)
+	pl, err := a.store.queries().GetLocalPlaylistByID(context.Background(), id)
 	if err != nil {
 		return fmt.Errorf("get local playlist: %w", err)
 	}
 
 	now := dbconv.FormatTime(time.Now())
 
-	return a.dq.UpdateLocalPlaylist(context.Background(), desktopdb.UpdateLocalPlaylistParams{
+	return a.store.queries().UpdateLocalPlaylist(context.Background(), desktopdb.UpdateLocalPlaylistParams{
 		Name:             name,
 		Description:      description,
 		ArtworkPath:      artworkPath,
@@ -168,18 +168,18 @@ func (a *App) UpdateLocalPlaylist(id, name, description, artworkPath string) err
 
 // LinkLocalPlaylistToRemote updates the local playlist to store its linked remote_playlist_id.
 func (a *App) LinkLocalPlaylistToRemote(id, remoteID string) error {
-	if a.dq == nil {
+	if a.store == nil {
 		return fmt.Errorf("db not initialised")
 	}
 
-	pl, err := a.dq.GetLocalPlaylistByID(context.Background(), id)
+	pl, err := a.store.queries().GetLocalPlaylistByID(context.Background(), id)
 	if err != nil {
 		return fmt.Errorf("get local playlist: %w", err)
 	}
 
 	now := dbconv.FormatTime(time.Now())
 
-	return a.dq.UpdateLocalPlaylist(context.Background(), desktopdb.UpdateLocalPlaylistParams{
+	return a.store.queries().UpdateLocalPlaylist(context.Background(), desktopdb.UpdateLocalPlaylistParams{
 		Name:             pl.Name,
 		Description:      pl.Description,
 		ArtworkPath:      pl.ArtworkPath,
@@ -191,20 +191,20 @@ func (a *App) LinkLocalPlaylistToRemote(id, remoteID string) error {
 
 // DeleteLocalPlaylist removes a local playlist and all its items.
 func (a *App) DeleteLocalPlaylist(id string) error {
-	if a.dq == nil {
+	if a.store == nil {
 		return fmt.Errorf("db not initialised")
 	}
-	return a.dq.DeleteLocalPlaylist(context.Background(), id)
+	return a.store.queries().DeleteLocalPlaylist(context.Background(), id)
 }
 
 // SetLocalPlaylistItems replaces all items in a local playlist.
 func (a *App) SetLocalPlaylistItems(playlistID string, items []LocalPlaylistItem) error {
-	if a.dq == nil {
+	if a.store == nil {
 		return fmt.Errorf("db not initialised")
 	}
 
 	ctx := context.Background()
-	if err := a.dq.DeleteLocalPlaylistItems(ctx, playlistID); err != nil {
+	if err := a.store.queries().DeleteLocalPlaylistItems(ctx, playlistID); err != nil {
 		return fmt.Errorf("delete old items: %w", err)
 	}
 
@@ -213,7 +213,7 @@ func (a *App) SetLocalPlaylistItems(playlistID string, items []LocalPlaylistItem
 		if addedAt == "" {
 			addedAt = dbconv.FormatTime(time.Now())
 		}
-		if err := a.dq.InsertLocalPlaylistItem(ctx, desktopdb.InsertLocalPlaylistItemParams{
+		if err := a.store.queries().InsertLocalPlaylistItem(ctx, desktopdb.InsertLocalPlaylistItemParams{
 			PlaylistID:     playlistID,
 			Position:       int64(i),
 			Source:         item.Source,
@@ -230,7 +230,7 @@ func (a *App) SetLocalPlaylistItems(playlistID string, items []LocalPlaylistItem
 	}
 
 	now := dbconv.FormatTime(time.Now())
-	return a.dq.TouchLocalPlaylist(ctx, desktopdb.TouchLocalPlaylistParams{
+	return a.store.queries().TouchLocalPlaylist(ctx, desktopdb.TouchLocalPlaylistParams{
 		UpdatedAt: now,
 		ID:        playlistID,
 	})
@@ -238,18 +238,18 @@ func (a *App) SetLocalPlaylistItems(playlistID string, items []LocalPlaylistItem
 
 // AddLocalPlaylistItem appends a single item to a local playlist.
 func (a *App) AddLocalPlaylistItem(playlistID string, item LocalPlaylistItem) error {
-	if a.dq == nil {
+	if a.store == nil {
 		return fmt.Errorf("db not initialised")
 	}
 
 	ctx := context.Background()
-	count, err := a.dq.CountLocalPlaylistItems(ctx, playlistID)
+	count, err := a.store.queries().CountLocalPlaylistItems(ctx, playlistID)
 	if err != nil {
 		return fmt.Errorf("count items: %w", err)
 	}
 
 	addedAt := dbconv.FormatTime(time.Now())
-	if err := a.dq.InsertLocalPlaylistItem(ctx, desktopdb.InsertLocalPlaylistItemParams{
+	if err := a.store.queries().InsertLocalPlaylistItem(ctx, desktopdb.InsertLocalPlaylistItemParams{
 		PlaylistID:     playlistID,
 		Position:       count,
 		Source:         item.Source,
@@ -265,7 +265,7 @@ func (a *App) AddLocalPlaylistItem(playlistID string, item LocalPlaylistItem) er
 	}
 
 	now := dbconv.FormatTime(time.Now())
-	return a.dq.TouchLocalPlaylist(ctx, desktopdb.TouchLocalPlaylistParams{
+	return a.store.queries().TouchLocalPlaylist(ctx, desktopdb.TouchLocalPlaylistParams{
 		UpdatedAt: now,
 		ID:        playlistID,
 	})
@@ -284,17 +284,17 @@ func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
 		return "", fmt.Errorf("not connected to server")
 	}
 
-	if a.dq == nil {
+	if a.store == nil {
 		return "", fmt.Errorf("db not initialised")
 	}
 	ctx := context.Background()
 
-	lp, err := a.dq.GetLocalPlaylistByID(ctx, playlistID)
+	lp, err := a.store.queries().GetLocalPlaylistByID(ctx, playlistID)
 	if err != nil {
 		return "", fmt.Errorf("get local playlist: %w", err)
 	}
 
-	items, err := a.dq.ListLocalPlaylistItems(ctx, playlistID)
+	items, err := a.store.queries().ListLocalPlaylistItems(ctx, playlistID)
 	if err != nil {
 		return "", fmt.Errorf("list local items: %w", err)
 	}
@@ -326,7 +326,7 @@ func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
 
 		// Link the remote playlist ID locally so it can be retrieved later.
 		now := dbconv.FormatTime(time.Now())
-		_ = a.dq.UpdateLocalPlaylist(ctx, desktopdb.UpdateLocalPlaylistParams{
+		_ = a.store.queries().UpdateLocalPlaylist(ctx, desktopdb.UpdateLocalPlaylistParams{
 			Name:             lp.Name,
 			Description:      lp.Description,
 			ArtworkPath:      lp.ArtworkPath,
@@ -344,26 +344,9 @@ func (a *App) UploadPlaylistToServer(playlistID string) (string, error) {
 	return remoteID, nil
 }
 
-// ResolvePlaylistItems attempts to match local_ref items to actual local files
-// by metadata (title + album + album_artist + duration tolerance). That way,
-// the desktop app can display the correct file paths for local_ref items.
-func (a *App) ResolvePlaylistItems(playlistID string) ([]LocalPlaylistItem, error) {
-	items, err := a.GetLocalPlaylistItems(playlistID)
-	if err != nil {
-		return nil, err
-	}
-
-	if a.dq == nil {
-		return items, nil
-	}
-
-	allTracks, err := a.dq.ListAllLocalTracks(context.Background())
-	if err != nil {
-		return items, nil // should be non-fatal, so just return unresolved items
-	}
-
-	// Build lookup map keyed by normalized "title|album|album_artist".
-	// Values represent the local file path and duration of the track.
+// resolvePlaylistItems matches local_ref items to actual local files
+// by metadata (title + album + album_artist + duration tolerance).
+func resolvePlaylistItems(items []LocalPlaylistItem, allTracks []desktopdb.LocalTrack) []LocalPlaylistItem {
 	type trackRef struct {
 		path       string
 		durationMS int64
@@ -375,21 +358,13 @@ func (a *App) ResolvePlaylistItems(playlistID string) ([]LocalPlaylistItem, erro
 		lookup[key] = append(lookup[key], trackRef{path: t.Path, durationMS: t.DurationMs})
 	}
 
-	// duration tolerance is needed since some tracks may have slightly different durations
-	// and it's not always possible to match them exactly, so don't want to mark them as missing
 	const durationToleranceMS = 3000
 
-	// Attempt to match local_ref items to actual local files.
-	// Any local_ref items that already have a path or remote items
-	// (tracks streamed from the server) are automatically considered resolved
 	for i := range items {
-		// attempt to match local_ref items to actual local files
 		if items[i].Source == string(models.SourceLocalRef) && items[i].LocalPath == "" {
 			key := strings.ToLower(items[i].RefTitle) + "|" + strings.ToLower(items[i].RefAlbum) + "|" + strings.ToLower(items[i].RefAlbumArtist)
-			candidates := lookup[key]
 			matched := false
-
-			for _, c := range candidates {
+			for _, c := range lookup[key] {
 				durationDiff := int64(math.Abs(float64(c.durationMS - items[i].RefDurationMS)))
 				if items[i].RefDurationMS == 0 || durationDiff <= durationToleranceMS {
 					items[i].LocalPath = c.path
@@ -399,24 +374,23 @@ func (a *App) ResolvePlaylistItems(playlistID string) ([]LocalPlaylistItem, erro
 					break
 				}
 			}
-
 			if !matched {
 				items[i].Missing = true
 			}
 		} else if items[i].Source == string(models.SourceLocalRef) && items[i].LocalPath != "" {
 			items[i].Resolved = true
 		} else if items[i].Source == string(models.SourceRemote) {
-			items[i].Resolved = true // remote tracks are always "resolved" from desktop perspective
+			items[i].Resolved = true
 		}
 	}
-	return items, nil
+	return items
 }
 
 // PickPlaylistArtwork opens a native file dialog for selecting an image,
 // resizes it to a thumbnail, stores it in the thumb cache, updates the
 // playlist's artwork_path in the DB, and returns the stored filename.
 func (a *App) PickPlaylistArtwork(playlistID string) (string, error) {
-	if a.dq == nil {
+	if a.store == nil {
 		return "", fmt.Errorf("db not initialised")
 	}
 
@@ -455,7 +429,7 @@ func (a *App) PickPlaylistArtwork(playlistID string) (string, error) {
 	}
 
 	now := dbconv.FormatTime(time.Now())
-	if err := a.dq.UpdateLocalPlaylistArtwork(context.Background(), desktopdb.UpdateLocalPlaylistArtworkParams{
+	if err := a.store.queries().UpdateLocalPlaylistArtwork(context.Background(), desktopdb.UpdateLocalPlaylistArtworkParams{
 		ArtworkPath: fileName,
 		UpdatedAt:   now,
 		ID:          playlistID,
@@ -482,7 +456,7 @@ func (a *App) uploadPlaylistArtToServer(playlistID string, jpgData []byte) {
 
 	// skip any playlists that aren't synced to the server
 	ctx := context.Background()
-	lp, err := a.dq.GetLocalPlaylistByID(ctx, playlistID)
+	lp, err := a.store.queries().GetLocalPlaylistByID(ctx, playlistID)
 	if err != nil || lp.RemotePlaylistID == "" {
 		return
 	}
@@ -537,7 +511,7 @@ func (a *App) RefreshPlaylistArtFromServer(playlistID string) error {
 	}
 
 	ctx := context.Background()
-	lp, err := a.dq.GetLocalPlaylistByID(ctx, playlistID)
+	lp, err := a.store.queries().GetLocalPlaylistByID(ctx, playlistID)
 	if err != nil {
 		return fmt.Errorf("get local playlist: %w", err)
 	}
@@ -585,7 +559,7 @@ func (a *App) RefreshPlaylistArtFromServer(playlistID string) error {
 	}
 
 	now := dbconv.FormatTime(time.Now())
-	if err := a.dq.UpdateLocalPlaylistArtwork(ctx, desktopdb.UpdateLocalPlaylistArtworkParams{
+	if err := a.store.queries().UpdateLocalPlaylistArtwork(ctx, desktopdb.UpdateLocalPlaylistArtworkParams{
 		ArtworkPath: fileName,
 		UpdatedAt:   now,
 		ID:          playlistID,
@@ -605,7 +579,7 @@ func (a *App) RefreshPlaylistArtByRemoteID(remotePlaylistID string) error {
 	}
 
 	ctx := context.Background()
-	lp, err := a.dq.GetLocalPlaylistByRemoteID(ctx, remotePlaylistID)
+	lp, err := a.store.queries().GetLocalPlaylistByRemoteID(ctx, remotePlaylistID)
 	if err != nil {
 		return nil
 	}

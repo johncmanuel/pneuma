@@ -10,8 +10,6 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
-
-	"pneuma/internal/store/sqlite/desktopdb"
 )
 
 const (
@@ -33,8 +31,7 @@ func (a *App) Startup(ctx context.Context) {
 	if db, err := openAppDB(profile); err != nil {
 		slog.Warn("failed to open database, state will not be persisted", "err", err)
 	} else {
-		a.appDB = db
-		a.dq = desktopdb.New(db)
+		a.store = NewAppStore(db)
 	}
 
 	if cacheDir, err := os.UserCacheDir(); err == nil {
@@ -67,6 +64,11 @@ func (a *App) Startup(ctx context.Context) {
 	}()
 
 	a.initLocalWatcher()
+
+	// create scanner once store and wails ctx are initialized
+	if a.store != nil {
+		a.scanner = NewScanner(a.ctx, a.store)
+	}
 
 	slog.Info("pneuma desktop started", "local_stream_port", a.localPort)
 }
