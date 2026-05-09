@@ -13,9 +13,6 @@ var ffprobePath string
 // Key: "path|size|mtime_unix"  Value: duration in milliseconds.
 var durationCache sync.Map
 
-// artworkHashCache maps "path|size|mtime_unix" -> sha256 hex of the raw artwork bytes.
-var artworkHashCache sync.Map
-
 func init() {
 	if p, err := exec.LookPath("ffprobe"); err == nil {
 		ffprobePath = p

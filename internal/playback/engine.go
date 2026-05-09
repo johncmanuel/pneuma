@@ -22,8 +22,11 @@ import (
 type RepeatMode int
 
 const (
+	// RepeatOff means no repeat.
 	RepeatOff RepeatMode = iota
+	// RepeatQueue means repeat the queue.
 	RepeatQueue
+	// RepeatOne means repeat the current track.
 	RepeatOne
 )
 

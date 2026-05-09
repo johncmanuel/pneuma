@@ -24,13 +24,21 @@ type LocalPlaybackSession struct {
 
 // SavePlaybackSession persists the current playback state to local SQLite.
 func (a *App) SavePlaybackSession(session LocalPlaybackSession) {
-	if a.dq == nil {
+	if a.store == nil {
+		return
+	}
+	a.store.SavePlaybackSession(session)
+}
+
+// SavePlaybackSession persists the current playback state to local SQLite.
+func (s *AppStore) SavePlaybackSession(session LocalPlaybackSession) {
+	if s.dq == nil {
 		return
 	}
 
 	queueJSON, _ := json.Marshal(session.Queue)
 
-	_ = a.dq.UpsertPlaybackSession(context.Background(), desktopdb.UpsertPlaybackSessionParams{
+	_ = s.dq.UpsertPlaybackSession(context.Background(), desktopdb.UpsertPlaybackSessionParams{
 		TrackID:    dbconv.NullStr(session.TrackID),
 		PositionMs: sql.NullInt64{Int64: session.PositionMS, Valid: true},
 		QueueJson:  sql.NullString{String: string(queueJSON), Valid: true},
@@ -45,11 +53,20 @@ func (a *App) SavePlaybackSession(session LocalPlaybackSession) {
 // LoadPlaybackSession restores playback state from local SQLite.
 // Returns the session and true if found, or zero value and false if not.
 func (a *App) LoadPlaybackSession() (LocalPlaybackSession, bool) {
-	if a.dq == nil {
+	if a.store == nil {
+		return LocalPlaybackSession{}, false
+	}
+	return a.store.LoadPlaybackSession()
+}
+
+// LoadPlaybackSession restores playback state from local SQLite.
+// Returns the session and true if found, or zero value and false if not.
+func (s *AppStore) LoadPlaybackSession() (LocalPlaybackSession, bool) {
+	if s.dq == nil {
 		return LocalPlaybackSession{}, false
 	}
 
-	row, err := a.dq.GetPlaybackSession(context.Background())
+	row, err := s.dq.GetPlaybackSession(context.Background())
 	if err != nil {
 		return LocalPlaybackSession{}, false
 	}

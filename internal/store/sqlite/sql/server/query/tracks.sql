@@ -16,6 +16,7 @@ ON CONFLICT(path) DO UPDATE SET
     codec=excluded.codec, file_size_bytes=excluded.file_size_bytes,
     last_modified=excluded.last_modified, fingerprint=excluded.fingerprint,
     uploaded_by_user_id=excluded.uploaded_by_user_id,
+    deleted_at=NULL,
     updated_at=excluded.updated_at;
 
 -- name: TrackByPath :one
@@ -202,3 +203,21 @@ ORDER BY disc_number, track_number, title COLLATE NOCASE;
 
 -- name: SumTrackBytes :one
 SELECT CAST(COALESCE(SUM(file_size_bytes), 0) AS INTEGER) FROM tracks WHERE deleted_at IS NULL;
+
+-- name: GetRandomTracks :many
+SELECT id, path, title,
+    COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
+    COALESCE(genre,'') AS genre, COALESCE(year,0) AS year,
+    COALESCE(track_number,0) AS track_number, COALESCE(disc_number,0) AS disc_number,
+    COALESCE(duration_ms,0) AS duration_ms, COALESCE(bitrate_kbps,0) AS bitrate_kbps,
+    COALESCE(sample_rate_hz,0) AS sample_rate_hz, COALESCE(codec,'') AS codec,
+    COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
+    COALESCE(fingerprint,'') AS fingerprint,
+    COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    deleted_at, created_at, updated_at
+FROM tracks
+WHERE deleted_at IS NULL AND COALESCE(duration_ms,0) > 0
+ORDER BY RANDOM() LIMIT ?;
+
+-- name: ListPathsByPrefix :many
+SELECT path FROM tracks WHERE path LIKE ? AND deleted_at IS NULL;

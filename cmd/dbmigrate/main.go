@@ -1,18 +1,3 @@
-// dbmigrate is a small CLI for managing the server's SQLite migrations.
-//
-// Usage:
-//
-// go run ./cmd/dbmigrate [-config path] [-db path] <command> [args]
-//
-// Commands:
-//
-// up              Apply all pending migrations
-// down [N]        Roll back N steps (default 1)
-// force <version> Force schema version and clear the dirty flag
-// version         Print current version and dirty status
-//
-// Either -config or -db must resolve to the database file. -db takes
-// precedence and lets you skip having a valid config.toml on the machine.
 package main
 
 import (

@@ -3,23 +3,17 @@ package desktop
 import (
 	"context"
 	"log/slog"
-	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
-
-	"pneuma/internal/store/sqlite/desktopdb"
 )
 
 const (
 	ThumbnailsCacheDir    = "thumbs"
 	ThumbnailsTempDirProd = "pneuma-thumbs"
 	ThumbnailsTempDirDev  = "pneuma-dev-thumbs"
-	// Use a local-only HTTP server on a random port for streaming local files.
-	LocalHTTPServerAddr = "127.0.0.1:0"
 )
 
 // Startup is called when the app is starting up.
@@ -33,55 +27,54 @@ func (a *App) Startup(ctx context.Context) {
 	if db, err := openAppDB(profile); err != nil {
 		slog.Warn("failed to open database, state will not be persisted", "err", err)
 	} else {
-		a.appDB = db
-		a.dq = desktopdb.New(db)
+		a.store = NewAppStore(db)
 	}
 
+	var thumbDir string
 	if cacheDir, err := os.UserCacheDir(); err == nil {
-		a.thumbDir = filepath.Join(cacheDir, desktopAppDir(profile), ThumbnailsCacheDir)
+		thumbDir = filepath.Join(cacheDir, desktopAppDir(profile), ThumbnailsCacheDir)
 	} else {
-		a.thumbDir = filepath.Join(os.TempDir(), thumbnailsTempDir(profile))
-		slog.Warn("UserCacheDir unavailable, using temp dir for thumbnails", "dir", a.thumbDir)
+		thumbDir = filepath.Join(os.TempDir(), thumbnailsTempDir(profile))
+		slog.Warn("UserCacheDir unavailable, using temp dir for thumbnails", "dir", thumbDir)
 	}
-	if err := os.MkdirAll(a.thumbDir, 0o755); err != nil {
-		slog.Error("failed to create thumbnail cache dir", "dir", a.thumbDir, "err", err)
+	if err := os.MkdirAll(thumbDir, 0o755); err != nil {
+		slog.Error("failed to create thumbnail cache dir", "dir", thumbDir, "err", err)
 	}
 
-	listener, err := net.Listen("tcp", LocalHTTPServerAddr)
+	a.streamer = NewLocalStreamer(thumbDir)
+	port, err := a.streamer.Start()
 	if err != nil {
-		slog.Error("local stream listener failed", "err", err)
-		return
+		slog.Error("local stream server failed to start", "err", err)
 	}
-	a.localPort = listener.Addr().(*net.TCPAddr).Port
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/local/stream", a.handleLocalStream)
-	mux.HandleFunc("/local/art", a.handleLocalArt)
-	mux.HandleFunc("/local/playlist-art", a.handlePlaylistArt)
+	// create the library manager once store and wails ctx are initialized
+	if a.store != nil {
+		a.library = NewLibraryManager(a.ctx, a.store)
+	}
 
-	a.localSrv = &http.Server{Handler: mux}
-	go func() {
-		if err := a.localSrv.Serve(listener); err != nil && err != http.ErrServerClosed {
-			slog.Error("local stream server error", "err", err)
-		}
-	}()
+	if w, err := NewLocalWatcher(a.ctx, a.library); err != nil {
+		slog.Warn("local file watcher unavailable", "err", err)
+	} else {
+		a.watcher = w
+	}
 
-	a.initLocalWatcher()
+	a.client = NewServerClient(a.ctx)
+	a.playlistManager = NewPlaylistManager(a.ctx, a.store, a.streamer, a.client)
 
-	slog.Info("pneuma desktop started", "local_stream_port", a.localPort)
+	slog.Info("pneuma desktop started", "local_stream_port", port)
 }
 
 // Shutdown is called when the app is closing.
 func (a *App) Shutdown(_ context.Context) {
-	a.mu.Lock()
-	if a.stopRefresh != nil {
-		a.stopRefresh()
+	if a.client != nil {
+		a.client.Close()
 	}
-	a.mu.Unlock()
 
-	a.stopLocalWatcher()
-	if a.localSrv != nil {
-		a.localSrv.Close()
+	if a.watcher != nil {
+		a.watcher.Close()
+	}
+	if a.streamer != nil {
+		a.streamer.Stop(context.Background())
 	}
 	a.closeAppDB()
 }

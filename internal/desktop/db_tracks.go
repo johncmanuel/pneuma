@@ -3,7 +3,6 @@ package desktop
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -91,11 +90,12 @@ func localTracksFromDB(rows []desktopdb.LocalTrack) []LocalTrack {
 }
 
 // upsertLocalTrack inserts or replaces a single track row.
-func (a *App) upsertLocalTrack(lt LocalTrack, folder string) error {
-	if a.dq == nil {
-		return fmt.Errorf("appDB not initialised")
+func (s *AppStore) upsertLocalTrack(lt LocalTrack, folder string) error {
+	ctx, err := s.checkDBCtx()
+	if err != nil {
+		return err
 	}
-	return a.dq.UpsertLocalTrack(context.Background(), desktopdb.UpsertLocalTrackParams{
+	return s.dq.UpsertLocalTrack(ctx, desktopdb.UpsertLocalTrackParams{
 		Path:        lt.Path,
 		Folder:      folder,
 		Title:       lt.Title,
@@ -112,19 +112,19 @@ func (a *App) upsertLocalTrack(lt LocalTrack, folder string) error {
 }
 
 // deleteLocalTracksByFolder removes every track whose folder column matches.
-func (a *App) deleteLocalTracksByFolder(folder string) error {
-	if a.dq == nil {
+func (s *AppStore) deleteLocalTracksByFolder(folder string) error {
+	if s.dq == nil {
 		return nil
 	}
-	return a.dq.DeleteLocalTracksByFolder(context.Background(), folder)
+	return s.dq.DeleteLocalTracksByFolder(context.Background(), folder)
 }
 
 // deleteLocalTrackByPath removes a single track by its absolute file path.
-func (a *App) deleteLocalTrackByPath(path string) error {
-	if a.dq == nil {
+func (s *AppStore) deleteLocalTrackByPath(path string) error {
+	if s.dq == nil {
 		return nil
 	}
-	return a.dq.DeleteLocalTrackByPath(context.Background(), path)
+	return s.dq.DeleteLocalTrackByPath(context.Background(), path)
 }
 
 // pruneStaleLocalTracks removes rows for the given folder whose paths aren't in
@@ -132,12 +132,12 @@ func (a *App) deleteLocalTrackByPath(path string) error {
 //
 // This method combines sqlc ListPathsByFolder with DeleteLocalTracksByPaths
 // to remove stale rows in one pass.
-func (a *App) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}) ([]string, error) {
-	if a.dq == nil || len(livePaths) == 0 {
+func (s *AppStore) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}) ([]string, error) {
+	if s.dq == nil || len(livePaths) == 0 {
 		return nil, nil
 	}
 
-	stored, err := a.dq.ListPathsByFolder(context.Background(), folder)
+	stored, err := s.dq.ListPathsByFolder(context.Background(), folder)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (a *App) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}
 		return nil, nil
 	}
 
-	if _, err := a.dq.DeleteLocalTracksByPaths(context.Background(), stalePaths); err != nil {
+	if _, err := s.dq.DeleteLocalTracksByPaths(context.Background(), stalePaths); err != nil {
 		return nil, err
 	}
 
@@ -165,12 +165,12 @@ func (a *App) pruneStaleLocalTracks(folder string, livePaths map[string]struct{}
 // deleteLocalTracksByPathPrefix removes all tracks whose path starts with
 // prefix+"/". Used when an entire directory is moved or deleted.
 // Returns the number of rows deleted.
-func (a *App) deleteLocalTracksByPathPrefix(prefix string) (int64, error) {
-	if a.dq == nil {
+func (s *AppStore) deleteLocalTracksByPathPrefix(prefix string) (int64, error) {
+	if s.dq == nil {
 		return 0, nil
 	}
 
-	return a.dq.DeleteLocalTracksByPathPrefix(context.Background(), desktopdb.DeleteLocalTracksByPathPrefixParams{
+	return s.dq.DeleteLocalTracksByPathPrefix(context.Background(), desktopdb.DeleteLocalTracksByPathPrefixParams{
 		Path:   prefix,
 		Path_2: prefix + string(filepath.Separator) + "%",
 	})
@@ -181,13 +181,13 @@ func (a *App) deleteLocalTracksByPathPrefix(prefix string) (int64, error) {
 //
 // NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
 // cannot be used to update this method.
-func (a *App) getLocalTracks(folders []string) ([]LocalTrack, error) {
-	if a.dq == nil {
+func (s *AppStore) getLocalTracks(folders []string) ([]LocalTrack, error) {
+	if s.dq == nil {
 		return nil, nil
 	}
 
 	if len(folders) == 0 {
-		rows, err := a.dq.ListAllLocalTracks(context.Background())
+		rows, err := s.dq.ListAllLocalTracks(context.Background())
 		if err != nil {
 			return nil, err
 		}
@@ -204,7 +204,7 @@ func (a *App) getLocalTracks(folders []string) ([]LocalTrack, error) {
 	q := `SELECT ` + localTrackCols + ` FROM local_tracks WHERE folder IN (` +
 		strings.Join(ph, ",") + `) ORDER BY folder, path`
 
-	rows, err := a.appDB.Query(q, args...)
+	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -240,20 +240,20 @@ func scanLocalTrackRows(rows *sql.Rows) ([]LocalTrack, error) {
 //
 // NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
 // cannot be used to update this method.
-func (a *App) getLocalTracksPage(folders []string, offset, limit int) ([]LocalTrack, int, error) {
-	if a.dq == nil {
+func (s *AppStore) getLocalTracksPage(folders []string, offset, limit int) ([]LocalTrack, int, error) {
+	if s.dq == nil {
 		return nil, 0, nil
 	}
 
 	offset, limit = clampPagination(offset, limit)
 
 	if len(folders) == 0 {
-		total, err := a.dq.CountAllLocalTracks(context.Background())
+		total, err := s.dq.CountAllLocalTracks(context.Background())
 		if err != nil {
 			return nil, 0, err
 		}
 
-		rows, err := a.dq.AllLocalTracksPage(context.Background(), desktopdb.AllLocalTracksPageParams{
+		rows, err := s.dq.AllLocalTracksPage(context.Background(), desktopdb.AllLocalTracksPageParams{
 			Limit:  int64(limit),
 			Offset: int64(offset),
 		})
@@ -274,10 +274,10 @@ func (a *App) getLocalTracksPage(folders []string, offset, limit int) ([]LocalTr
 	dataQ := `SELECT ` + localTrackCols + ` FROM local_tracks WHERE folder IN (` + in + `) ORDER BY album COLLATE NOCASE, disc_number, track_number LIMIT ? OFFSET ?`
 
 	var total int
-	_ = a.appDB.QueryRow(countQ, folderArgs...).Scan(&total)
+	_ = s.db.QueryRow(countQ, folderArgs...).Scan(&total)
 
 	args := append(folderArgs, limit, offset)
-	rows, err := a.appDB.Query(dataQ, args...)
+	rows, err := s.db.Query(dataQ, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -288,8 +288,8 @@ func (a *App) getLocalTracksPage(folders []string, offset, limit int) ([]LocalTr
 }
 
 // searchLocalTracks performs a LIKE search on local tracks.
-func (a *App) searchLocalTracks(folders []string, query string) ([]LocalTrack, error) {
-	if a.dq == nil {
+func (s *AppStore) searchLocalTracks(folders []string, query string) ([]LocalTrack, error) {
+	if s.dq == nil {
 		return nil, nil
 	}
 
@@ -300,7 +300,7 @@ func (a *App) searchLocalTracks(folders []string, query string) ([]LocalTrack, e
 	like := "%" + query + "%"
 
 	if len(folders) == 0 {
-		rows, err := a.dq.SearchAllLocalTracks(context.Background(), desktopdb.SearchAllLocalTracksParams{
+		rows, err := s.dq.SearchAllLocalTracks(context.Background(), desktopdb.SearchAllLocalTracksParams{
 			Title:  like,
 			Artist: like,
 			Album:  like,
@@ -326,7 +326,7 @@ func (a *App) searchLocalTracks(folders []string, query string) ([]LocalTrack, e
 
 	args := append(folderArgs, like, like, like, like)
 
-	rows, err := a.appDB.Query(q, args...)
+	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -336,12 +336,12 @@ func (a *App) searchLocalTracks(folders []string, query string) ([]LocalTrack, e
 }
 
 // getLocalTracksByPaths returns tracks for the given exact paths.
-func (a *App) getLocalTracksByPaths(paths []string) ([]LocalTrack, error) {
-	if a.dq == nil || len(paths) == 0 {
+func (s *AppStore) getLocalTracksByPaths(paths []string) ([]LocalTrack, error) {
+	if s.dq == nil || len(paths) == 0 {
 		return nil, nil
 	}
 
-	rows, err := a.dq.ListLocalTracksByPaths(context.Background(), paths)
+	rows, err := s.dq.ListLocalTracksByPaths(context.Background(), paths)
 	if err != nil {
 		return nil, err
 	}
@@ -352,8 +352,8 @@ func (a *App) getLocalTracksByPaths(paths []string) ([]LocalTrack, error) {
 // getLocalAlbumGroups returns paginated album groups computed via SQL GROUP BY.
 // NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
 // cannot be used to update this method.
-func (a *App) getLocalAlbumGroups(folders []string, filter string, offset, limit int) (*LocalAlbumGroupsResult, error) {
-	if a.dq == nil {
+func (s *AppStore) getLocalAlbumGroups(folders []string, filter string, offset, limit int) (*LocalAlbumGroupsResult, error) {
+	if s.dq == nil {
 		return &LocalAlbumGroupsResult{}, nil
 	}
 
@@ -388,7 +388,7 @@ func (a *App) getLocalAlbumGroups(folders []string, filter string, offset, limit
 	)`
 
 	var total int
-	_ = a.appDB.QueryRow(countQ, args...).Scan(&total)
+	_ = s.db.QueryRow(countQ, args...).Scan(&total)
 
 	// Fetch paginated album groups with track counts and first track paths.
 	// It handles missing album information by aggregating loose tracks into a single 'unorganized' bucket.
@@ -405,7 +405,7 @@ func (a *App) getLocalAlbumGroups(folders []string, filter string, offset, limit
 	LIMIT ? OFFSET ?`
 
 	dataArgs := append(args, limit, offset)
-	rows, err := a.appDB.Query(dataQ, dataArgs...)
+	rows, err := s.db.Query(dataQ, dataArgs...)
 	if err != nil {
 		return nil, err
 	}
@@ -426,8 +426,8 @@ func (a *App) getLocalAlbumGroups(folders []string, filter string, offset, limit
 // getLocalAlbumTracks returns tracks for a specific album group.
 // NOTE: This is a dynamic SQL query (it uses IN with variable number of placeholders), so sqlc
 // cannot be used to update this method.
-func (a *App) getLocalAlbumTracks(folders []string, albumName, albumArtist string) ([]LocalTrack, error) {
-	if a.dq == nil {
+func (s *AppStore) getLocalAlbumTracks(folders []string, albumName, albumArtist string) ([]LocalTrack, error) {
+	if s.dq == nil {
 		return nil, nil
 	}
 
@@ -454,7 +454,7 @@ func (a *App) getLocalAlbumTracks(folders []string, albumName, albumArtist strin
 	// Fetch tracks for a specific album group
 	q := `SELECT ` + localTrackCols + ` FROM local_tracks ` + where + ` ORDER BY disc_number, track_number, title COLLATE NOCASE`
 
-	rows, err := a.appDB.Query(q, args...)
+	rows, err := s.db.Query(q, args...)
 	if err != nil {
 		return nil, err
 	}

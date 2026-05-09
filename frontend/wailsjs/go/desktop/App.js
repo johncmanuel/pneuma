@@ -30,6 +30,10 @@ export function CreateLocalPlaylist(arg1, arg2) {
   return window['go']['desktop']['App']['CreateLocalPlaylist'](arg1, arg2);
 }
 
+export function CreateServerPlaylist(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['desktop']['App']['CreateServerPlaylist'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function DeleteLocalPlaylist(arg1) {
   return window['go']['desktop']['App']['DeleteLocalPlaylist'](arg1);
 }

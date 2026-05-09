@@ -159,12 +159,11 @@ func openAppDB(profile desktopProfile) (*sql.DB, error) {
 
 // closeAppDB is called from Shutdown.
 func (a *App) closeAppDB() {
-	if a.appDB != nil {
-		if err := a.appDB.Close(); err != nil {
+	if a.store != nil {
+		if err := a.store.closeDB(); err != nil {
 			slog.Warn("appDB close error", "err", err)
 		}
-		a.appDB = nil
-		a.dq = nil
+		a.store = nil
 	}
 }
 
@@ -188,12 +187,12 @@ type RecentPlaylist struct {
 }
 
 // GetRecentAlbums returns all recently played albums, ordered by played_at DESC.
-func (a *App) GetRecentAlbums() []RecentAlbum {
-	if a.dq == nil {
+func (s *AppStore) GetRecentAlbums() []RecentAlbum {
+	if s.dq == nil {
 		return nil
 	}
 
-	albums, err := a.dq.GetRecentAlbums(context.Background())
+	albums, err := s.dq.GetRecentAlbums(context.Background())
 	if err != nil {
 		return nil
 	}
@@ -214,12 +213,13 @@ func (a *App) GetRecentAlbums() []RecentAlbum {
 }
 
 // SetRecentAlbum upserts a recently played album.
-func (a *App) SetRecentAlbum(album RecentAlbum) error {
-	if a.dq == nil {
-		return fmt.Errorf("appDB not initialised")
+func (s *AppStore) SetRecentAlbum(album RecentAlbum) error {
+	ctx, err := s.checkDBCtx()
+	if err != nil {
+		return err
 	}
 
-	return a.dq.SetRecentAlbum(context.Background(), desktopdb.SetRecentAlbumParams{
+	return s.dq.SetRecentAlbum(ctx, desktopdb.SetRecentAlbumParams{
 		Key:            album.Key,
 		Name:           album.Name,
 		Artist:         album.Artist,
@@ -231,12 +231,12 @@ func (a *App) SetRecentAlbum(album RecentAlbum) error {
 }
 
 // GetRecentPlaylists returns all recently played playlists, ordered by played_at DESC.
-func (a *App) GetRecentPlaylists() []RecentPlaylist {
-	if a.dq == nil {
+func (s *AppStore) GetRecentPlaylists() []RecentPlaylist {
+	if s.dq == nil {
 		return nil
 	}
 
-	playlists, err := a.dq.GetRecentPlaylists(context.Background())
+	playlists, err := s.dq.GetRecentPlaylists(context.Background())
 	if err != nil {
 		return nil
 	}
@@ -254,12 +254,13 @@ func (a *App) GetRecentPlaylists() []RecentPlaylist {
 }
 
 // SetRecentPlaylist upserts a recently played playlist.
-func (a *App) SetRecentPlaylist(playlist RecentPlaylist) error {
-	if a.dq == nil {
-		return fmt.Errorf("appDB not initialised")
+func (s *AppStore) SetRecentPlaylist(playlist RecentPlaylist) error {
+	ctx, err := s.checkDBCtx()
+	if err != nil {
+		return err
 	}
 
-	return a.dq.SetRecentPlaylist(context.Background(), desktopdb.SetRecentPlaylistParams{
+	return s.dq.SetRecentPlaylist(ctx, desktopdb.SetRecentPlaylistParams{
 		ID:          playlist.ID,
 		Name:        playlist.Name,
 		ArtworkPath: dbconv.NullStr(playlist.ArtworkPath),
@@ -268,16 +269,17 @@ func (a *App) SetRecentPlaylist(playlist RecentPlaylist) error {
 }
 
 // ClearAllRecent deletes all recently played albums and playlists.
-func (a *App) ClearAllRecent() error {
-	if a.dq == nil {
-		return fmt.Errorf("appDB not initialised")
-	}
-
-	if err := a.dq.DeleteAllRecentAlbums(context.Background()); err != nil {
+func (s *AppStore) ClearAllRecent() error {
+	ctx, err := s.checkDBCtx()
+	if err != nil {
 		return err
 	}
 
-	if err := a.dq.DeleteAllRecentPlaylists(context.Background()); err != nil {
+	if err := s.dq.DeleteAllRecentAlbums(ctx); err != nil {
+		return err
+	}
+
+	if err := s.dq.DeleteAllRecentPlaylists(ctx); err != nil {
 		return err
 	}
 

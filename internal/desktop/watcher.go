@@ -1,48 +1,71 @@
 package desktop
 
 import (
+	"context"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"pneuma/internal/media"
 	"strings"
+	"sync"
 	"time"
 
+	"pneuma/internal/media"
+
 	"github.com/fsnotify/fsnotify"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-// initLocalWatcher creates the fsnotify watcher and starts the event loop.
-func (a *App) initLocalWatcher() {
+// LocalWatcher monitors the local filesystem for changes, debouncing rapid
+// OS events and delegating all library mutations to LibraryManager.
+type LocalWatcher struct {
+	watcher        *fsnotify.Watcher
+	watchedRoots   []string
+	pendingCreates map[string]*time.Timer
+	mu             sync.RWMutex
+
+	ctx     context.Context
+	library *LibraryManager
+}
+
+// NewLocalWatcher creates the fsnotify watcher and starts the event loop.
+func NewLocalWatcher(ctx context.Context, library *LibraryManager) (*LocalWatcher, error) {
 	w, err := fsnotify.NewWatcher()
 	if err != nil {
-		slog.Warn("local file watcher unavailable", "err", err)
-		return
+		return nil, err
 	}
-	a.localWatcher = w
-	a.pendingCreates = make(map[string]*time.Timer)
-	go a.runLocalWatcher()
+
+	lw := &LocalWatcher{
+		watcher:        w,
+		watchedRoots:   make([]string, 0),
+		pendingCreates: make(map[string]*time.Timer),
+		ctx:            ctx,
+		library:        library,
+	}
+
+	go lw.runLocalWatcher()
+
+	return lw, nil
 }
 
-// stopLocalWatcher closes the fsnotify watcher.
-func (a *App) stopLocalWatcher() {
-	if a.localWatcher != nil {
-		a.localWatcher.Close()
+// Close stops the background event loop and closes the fsnotify watcher.
+func (lw *LocalWatcher) Close() error {
+	if lw.watcher != nil {
+		return lw.watcher.Close()
 	}
+	return nil
 }
 
-// WatchLocalFolder recursively adds dir (and all its subdirectories) to the
+// WatchFolder recursively adds dir (and all its subdirectories) to the
 // fsnotify watcher so that file removals are detected.
-func (a *App) WatchLocalFolder(dir string) error {
-	if a.localWatcher == nil {
+func (lw *LocalWatcher) WatchFolder(dir string) error {
+	if lw.watcher == nil {
 		return nil
 	}
 
 	// Track the root folder so Create events can upsert to the right folder.
-	a.mu.Lock()
+	lw.mu.Lock()
 	alreadyRoot := false
 
-	for _, r := range a.watchedRoots {
+	for _, r := range lw.watchedRoots {
 		if r == dir {
 			alreadyRoot = true
 			break
@@ -50,10 +73,10 @@ func (a *App) WatchLocalFolder(dir string) error {
 	}
 
 	if !alreadyRoot {
-		a.watchedRoots = append(a.watchedRoots, dir)
+		lw.watchedRoots = append(lw.watchedRoots, dir)
 	}
 
-	a.mu.Unlock()
+	lw.mu.Unlock()
 
 	return filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		// skip unreadable paths
@@ -62,7 +85,7 @@ func (a *App) WatchLocalFolder(dir string) error {
 		}
 
 		if d.IsDir() {
-			if addErr := a.localWatcher.Add(path); addErr != nil {
+			if addErr := lw.watcher.Add(path); addErr != nil {
 				slog.Warn("watcher: failed to watch dir", "path", path, "err", addErr)
 			}
 		}
@@ -70,26 +93,26 @@ func (a *App) WatchLocalFolder(dir string) error {
 	})
 }
 
-// UnwatchLocalFolder removes dir (and all subdirectories currently in the
+// UnwatchFolder removes dir (and all subdirectories currently in the
 // watch list) from the fsnotify watcher.
-func (a *App) UnwatchLocalFolder(dir string) error {
-	if a.localWatcher == nil {
+func (lw *LocalWatcher) UnwatchFolder(dir string) error {
+	if lw.watcher == nil {
 		return nil
 	}
 	// Remove from root list.
-	a.mu.Lock()
-	roots := a.watchedRoots[:0]
-	for _, r := range a.watchedRoots {
+	lw.mu.Lock()
+	roots := lw.watchedRoots[:0]
+	for _, r := range lw.watchedRoots {
 		if r != dir {
 			roots = append(roots, r)
 		}
 	}
-	a.watchedRoots = roots
-	a.mu.Unlock()
+	lw.watchedRoots = roots
+	lw.mu.Unlock()
 
-	for _, watched := range a.localWatcher.WatchList() {
+	for _, watched := range lw.watcher.WatchList() {
 		if watched == dir || strings.HasPrefix(watched, dir+string(filepath.Separator)) {
-			if err := a.localWatcher.Remove(watched); err != nil {
+			if err := lw.watcher.Remove(watched); err != nil {
 				slog.Warn("watcher: failed to unwatch dir", "path", watched, "err", err)
 			}
 		}
@@ -99,11 +122,11 @@ func (a *App) UnwatchLocalFolder(dir string) error {
 
 // rootFolderFor returns the registered root folder that contains path,
 // or "" if none is found.
-func (a *App) rootFolderFor(path string) string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
+func (lw *LocalWatcher) rootFolderFor(path string) string {
+	lw.mu.RLock()
+	defer lw.mu.RUnlock()
 	best := ""
-	for _, r := range a.watchedRoots {
+	for _, r := range lw.watchedRoots {
 		if (path == r || strings.HasPrefix(path, r+string(filepath.Separator))) && len(r) > len(best) {
 			best = r
 		}
@@ -112,16 +135,16 @@ func (a *App) rootFolderFor(path string) string {
 }
 
 // runLocalWatcher is the background goroutine that processes fsnotify events.
-func (a *App) runLocalWatcher() {
+func (lw *LocalWatcher) runLocalWatcher() {
 	for {
 		select {
-		case event, ok := <-a.localWatcher.Events:
+		case event, ok := <-lw.watcher.Events:
 			if !ok {
 				return
 			}
-			a.handleWatcherEvent(event)
+			lw.handleWatcherEvent(event)
 
-		case err, ok := <-a.localWatcher.Errors:
+		case err, ok := <-lw.watcher.Errors:
 			if !ok {
 				return
 			}
@@ -131,7 +154,7 @@ func (a *App) runLocalWatcher() {
 }
 
 // handleWatcherEvent processes a single fsnotify event.
-func (a *App) handleWatcherEvent(event fsnotify.Event) {
+func (lw *LocalWatcher) handleWatcherEvent(event fsnotify.Event) {
 	path := event.Name
 
 	switch {
@@ -142,7 +165,7 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 			return
 		}
 		if info.IsDir() {
-			if addErr := a.localWatcher.Add(path); addErr != nil {
+			if addErr := lw.watcher.Add(path); addErr != nil {
 				slog.Warn("watcher: failed to add new dir", "path", path, "err", addErr)
 			}
 		} else {
@@ -150,58 +173,39 @@ func (a *App) handleWatcherEvent(event fsnotify.Event) {
 			if !media.IsSupportedAudio(ext) {
 				return
 			}
-			a.mu.Lock()
+			lw.mu.Lock()
 
 			// about 600ms delay to allow for file to be fully written
 			delayMs := 600 * time.Millisecond
 
-			if t, exists := a.pendingCreates[path]; exists {
+			if t, exists := lw.pendingCreates[path]; exists {
 				t.Reset(delayMs)
 			} else {
-				a.pendingCreates[path] = time.AfterFunc(delayMs, func() {
-					a.mu.Lock()
-					delete(a.pendingCreates, path)
-					a.mu.Unlock()
+				lw.pendingCreates[path] = time.AfterFunc(delayMs, func() {
+					lw.mu.Lock()
+					delete(lw.pendingCreates, path)
+					lw.mu.Unlock()
 
-					folder := a.rootFolderFor(path)
+					folder := lw.rootFolderFor(path)
 					if folder == "" {
 						return
 					}
-					lt, err := a.scanAndUpsertSingleFile(path, folder)
-					if err != nil {
+					if _, err := lw.library.HandleFileAdded(path, folder); err != nil {
 						slog.Warn("watcher: failed to upsert new file", "path", path, "err", err)
-						return
-					}
-					if a.ctx != nil {
-						runtime.EventsEmit(a.ctx, "local:track:added", map[string]any{
-							"path":  path,
-							"track": lt,
-						})
 					}
 				})
 			}
-			a.mu.Unlock()
+			lw.mu.Unlock()
 		}
 
 	// handle events where a file or directory is removed or renamed
 	case event.Has(fsnotify.Remove), event.Has(fsnotify.Rename):
 		ext := strings.ToLower(filepath.Ext(path))
 		if media.IsSupportedAudio(ext) {
-			if err := a.deleteLocalTrackByPath(path); err != nil {
-				slog.Warn("watcher: failed to delete track from DB", "path", path, "err", err)
-			}
-			if a.ctx != nil {
-				runtime.EventsEmit(a.ctx, "local:track:removed", map[string]any{"path": path})
-			}
+			lw.library.HandleFileRemoved(path)
 		} else if ext == "" || !strings.Contains(filepath.Base(path), ".") {
 			// directory was moved/deleted, delete all tracks under it.
-			n, err := a.deleteLocalTracksByPathPrefix(path)
-			if err != nil {
-				slog.Warn("watcher: failed to delete tracks by prefix", "path", path, "err", err)
-			}
-			if n > 0 && a.ctx != nil {
-				runtime.EventsEmit(a.ctx, "local:track:removed", map[string]any{"path": path})
-			}
+			lw.library.HandleFolderRemoved(path)
 		}
 	}
 }

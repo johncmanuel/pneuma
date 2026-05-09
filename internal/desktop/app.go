@@ -2,47 +2,30 @@ package desktop
 
 import (
 	"context"
-	"database/sql"
-	"net/http"
-	"sync"
-	"time"
-
-	"github.com/fsnotify/fsnotify"
-
-	"pneuma/internal/store/sqlite/desktopdb"
 )
 
-// App holds all desktop application state. It acts as a thin client
+// App holds all desktop application state. It acts as a thin composition root:
 // local file playback is always available; server connectivity is optional.
 type App struct {
 	ctx context.Context
 
-	// App-local SQLite database for persisting desktop client state.
-	appDB *sql.DB
-	dq    *desktopdb.Queries
+	// store is the LocalStore backed by the app-local SQLite database.
+	store *AppStore
 
-	// Local stream server that serves local audio files to the player.
-	localPort int
-	localSrv  *http.Server
+	// library manages filesystem synchronization, tag parsing, and DB upserts for local files.
+	library *LibraryManager
 
-	// Directory for cached artwork thumbnails.
-	thumbDir string
+	// streamer handles local audio streaming and artwork cache serving.
+	streamer *LocalStreamer
 
-	// Optional server connection state.
-	// Mutex used to prevent race conditions when concurrently reading/writing data like watchedRoots or pendingCreates
-	mu          sync.RWMutex
-	serverURL   string
-	token       string
-	stopRefresh context.CancelFunc
+	// watcher manages fsnotify events and library updates for watched folders.
+	watcher *LocalWatcher
 
-	// fsnotify watcher for local music folders.
-	localWatcher *fsnotify.Watcher
-	watchedRoots []string // root folders registered with the watcher
+	// client manages the optional remote server connection and all outbound API calls.
+	client *ServerClient
 
-	// pendingCreates debounces rapid Create events for the same path (Linux
-	// inotify routinely fires Create+Write+Chmod in quick succession for a
-	// single file move).
-	pendingCreates map[string]*time.Timer
+	// playlistManager owns all playlist business logic: CRUD, random generation, and remote syncing.
+	playlistManager *PlaylistManager
 }
 
 // NewApp creates a new App.

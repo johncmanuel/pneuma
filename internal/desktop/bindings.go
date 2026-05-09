@@ -2,15 +2,18 @@ package desktop
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
+
+	"pneuma/internal/models"
 )
 
 // GetLocalPort returns the local stream server port.
 func (a *App) GetLocalPort() int {
-	return a.localPort
+	if a.streamer != nil {
+		return a.streamer.Port()
+	}
+	return 0
 }
 
 // Notify sends a desktop OS notification (logging fallback).
@@ -22,23 +25,72 @@ func (a *App) Notify(title, message string) {
 // directory and resets the in-memory artwork hash cache. The cache is
 // rebuilt on demand when artwork is next requested.
 func (a *App) ClearArtworkCache() error {
-	entries, err := os.ReadDir(a.thumbDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
+	if a.streamer != nil {
+		return a.streamer.ClearArtworkCache()
 	}
-
-	for _, e := range entries {
-		_ = os.Remove(filepath.Join(a.thumbDir, e.Name()))
-	}
-
-	// Purge the in-memory hash map so subsequent requests regenerate thumbnails.
-	artworkHashCache.Range(func(k, _ any) bool {
-		artworkHashCache.Delete(k)
-		return true
-	})
-
 	return nil
+}
+
+// RestoreSession attempts to restore a previous server session.
+func (a *App) RestoreSession(serverURL, token string) error {
+	if a.client == nil {
+		return fmt.Errorf("server client not initialized")
+	}
+	return a.client.RestoreSession(serverURL, token)
+}
+
+// ConnectToServer authenticates against a remote Pneuma server.
+func (a *App) ConnectToServer(serverURL, username, password string) (*ConnectResult, error) {
+	if a.client == nil {
+		return nil, fmt.Errorf("server client not initialized")
+	}
+	return a.client.ConnectToServer(serverURL, username, password)
+}
+
+// DisconnectFromServer clears the server connection state.
+func (a *App) DisconnectFromServer() {
+	if a.client != nil {
+		a.client.Disconnect()
+	}
+}
+
+// IsConnected returns whether the app is connected to a server.
+func (a *App) IsConnected() bool {
+	if a.client == nil {
+		return false
+	}
+	return a.client.IsConnected()
+}
+
+// GetServerURL returns the current server URL (empty if not connected).
+func (a *App) GetServerURL() string {
+	if a.client == nil {
+		return ""
+	}
+	return a.client.GetServerURL()
+}
+
+// GetToken returns the current JWT (empty if not connected).
+func (a *App) GetToken() string {
+	if a.client == nil {
+		return ""
+	}
+	return a.client.GetToken()
+}
+
+// UploadLocalFile uploads a local file to the server library.
+func (a *App) UploadLocalFile(filePath string) (string, error) {
+	if a.client == nil {
+		return "", fmt.Errorf("server client not initialized")
+	}
+	return a.client.UploadLocalFile(filePath)
+}
+
+// CreateServerPlaylist creates a playlist on the server and returns its remote ID.
+// This is a thin orchestration wrapper; the HTTP logic lives in ServerClient.
+func (a *App) CreateServerPlaylist(serverURL, token, name, description string, items []models.PlaylistItem) (string, error) {
+	if a.client == nil {
+		return "", fmt.Errorf("server client not initialized")
+	}
+	return a.client.CreatePlaylist(serverURL, token, name, description, items)
 }

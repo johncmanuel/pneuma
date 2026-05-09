@@ -238,6 +238,23 @@ func (s *Service) RemoveByPath(ctx context.Context, path string) error {
 	return s.q.DeleteTrackByPath(ctx, path)
 }
 
+// GetRandomTracks returns up to limit randomly ordered tracks that have a
+// known duration. SQLite's ORDER BY RANDOM() is used so no large result set
+// is materialised in Go.
+func (s *Service) GetRandomTracks(ctx context.Context, limit int) ([]*models.Track, error) {
+	rows, err := s.q.GetRandomTracks(ctx, int64(limit))
+	if err != nil {
+		return nil, err
+	}
+	return dbconv.GetRandomTracksToModels(rows), nil
+}
+
+// ListPathsByPrefix returns the file paths of all non-deleted tracks whose
+// path matches the given LIKE pattern (typically "dir/%").
+func (s *Service) ListPathsByPrefix(ctx context.Context, pattern string) ([]string, error) {
+	return s.q.ListPathsByPrefix(ctx, pattern)
+}
+
 // SoftDeleteTrack marks a track as deleted without removing it from the DB.
 func (s *Service) SoftDeleteTrack(ctx context.Context, trackID string) error {
 	now := dbconv.FormatTime(time.Now())
