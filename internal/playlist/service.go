@@ -21,6 +21,7 @@ type Service struct {
 	lib *library.Service
 }
 
+// New creates a new playlist service.
 func New(q *serverdb.Queries, lib *library.Service) *Service {
 	return &Service{q: q, lib: lib}
 }

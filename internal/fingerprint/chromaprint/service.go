@@ -1,8 +1,5 @@
 //go:build ignore
 
-// Will be used in the future, so keeping this here even though it's not used atm.
-// currently a stretch goal
-
 package chromaprint
 
 import (
