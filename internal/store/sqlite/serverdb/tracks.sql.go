@@ -128,6 +128,33 @@ func (q *Queries) GetRandomTracks(ctx context.Context, limit int64) ([]GetRandom
 	return items, nil
 }
 
+const listPathsByPrefix = `-- name: ListPathsByPrefix :many
+SELECT path FROM tracks WHERE path LIKE ? AND deleted_at IS NULL
+`
+
+func (q *Queries) ListPathsByPrefix(ctx context.Context, path string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listPathsByPrefix, path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		items = append(items, path)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTracks = `-- name: ListTracks :many
 SELECT id, path, title,
     COALESCE(album_artist,'') AS album_artist, COALESCE(album_name,'') AS album_name,
@@ -1097,6 +1124,7 @@ ON CONFLICT(path) DO UPDATE SET
     codec=excluded.codec, file_size_bytes=excluded.file_size_bytes,
     last_modified=excluded.last_modified, fingerprint=excluded.fingerprint,
     uploaded_by_user_id=excluded.uploaded_by_user_id,
+    deleted_at=NULL,
     updated_at=excluded.updated_at
 `
 

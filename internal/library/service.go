@@ -249,6 +249,12 @@ func (s *Service) GetRandomTracks(ctx context.Context, limit int) ([]*models.Tra
 	return dbconv.GetRandomTracksToModels(rows), nil
 }
 
+// ListPathsByPrefix returns the file paths of all non-deleted tracks whose
+// path matches the given LIKE pattern (typically "dir/%").
+func (s *Service) ListPathsByPrefix(ctx context.Context, pattern string) ([]string, error) {
+	return s.q.ListPathsByPrefix(ctx, pattern)
+}
+
 // SoftDeleteTrack marks a track as deleted without removing it from the DB.
 func (s *Service) SoftDeleteTrack(ctx context.Context, trackID string) error {
 	now := dbconv.FormatTime(time.Now())

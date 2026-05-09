@@ -78,7 +78,9 @@ func main() {
 		MaxConcurrentJobs: cfg.Transcoding.MaxConcurrentJobs,
 	})
 
-	watcher, err := scanner.NewWatcher(libSvc, metaParser, hub)
+	scanMgr := scanner.NewManager(libSvc, metaParser, hub)
+
+	watcher, err := scanner.NewWatcher(scanMgr, 500*time.Millisecond)
 	if err != nil {
 		slog.Error("watcher init failed", "err", err)
 		os.Exit(1)
@@ -88,13 +90,16 @@ func main() {
 			slog.Warn("watch folder unavailable", "dir", dir, "err", err)
 		}
 	}
+
 	scanIntervalMinutes := cfg.Library.ScanIntervalMinutes
 	if scanIntervalMinutes <= 0 {
+		slog.Warn("scan interval must be greater than 0, setting to 120 minutes by default", "interval", scanIntervalMinutes)
 		scanIntervalMinutes = 120
 	}
+
 	scanInterval := time.Duration(scanIntervalMinutes) * time.Minute
 	slog.Info("library scan interval configured", "minutes", scanIntervalMinutes)
-	sched := scanner.NewScheduler(libSvc, metaParser, hub, cfg.Library.WatchFolders, scanInterval)
+	sched := scanner.NewScheduler(scanMgr, cfg.Library.WatchFolders, scanInterval)
 
 	// Clean up any temp files that couldn't be cleaned up during previous run
 	tmpUploadsDir := filepath.Join(cfg.Upload.Dir, "tmp")

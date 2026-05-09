@@ -2,38 +2,33 @@ package scanner
 
 import (
 	"context"
-	"io/fs"
 	"log/slog"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
-
-	"pneuma/internal/library"
-	"pneuma/internal/media"
-	"pneuma/internal/metadata/parser"
 )
 
 // Scheduler performs periodic full-directory reconciliation scans to catch any
 // files that were missed by inotify (e.g. files added while the server was
 // offline, or network-mounted paths that don't generate events).
+//
+// It delegates all scanning logic to the manager, keeping itself a thin
+// orchestration layer responsible only for timing and directory enumeration.
 type Scheduler struct {
-	lib      *library.Service
-	parser   *parser.Parser
-	bus      EventBus
-	ingestor *Ingestor
-	dirs     []string
+	// mgr is the scanner's manager that performs the actual scanning.
+	mgr *Manager
+	// dirs is the list of directories to scan.
+	dirs []string
+	// interval is the interval between scans.
 	interval time.Duration
-	log      *slog.Logger
+	// log is the logger for the scheduler.
+	log *slog.Logger
 }
 
-// NewScheduler creates a Scheduler that will scan dirs every interval.
-func NewScheduler(lib *library.Service, p *parser.Parser, bus EventBus, dirs []string, interval time.Duration) *Scheduler {
+// NewScheduler creates a Scheduler that will scan dirs every interval,
+// delegating each directory to the Manager's SyncFolder method.
+func NewScheduler(mgr *Manager, dirs []string, interval time.Duration) *Scheduler {
 	return &Scheduler{
-		lib:      lib,
-		parser:   p,
-		bus:      bus,
-		ingestor: NewIngestor(lib, p, bus),
+		mgr:      mgr,
 		dirs:     dirs,
 		interval: interval,
 		log:      slog.Default().With("component", "scheduler"),
@@ -45,6 +40,7 @@ func (sc *Scheduler) Start(ctx context.Context) {
 	sc.scan(ctx)
 	ticker := time.NewTicker(sc.interval)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -65,26 +61,17 @@ func (sc *Scheduler) ScanAll() {
 	sc.scan(context.Background())
 }
 
-// ScanPath parses and upserts a single file, then publishes track.added or
-// track.updated via the event bus. Used for post-upload metadata enrichment.
+// ScanPath delegates single-file scanning to the Manager.
 func (sc *Scheduler) ScanPath(path string) {
-	ctx := context.Background()
-
-	result, err := sc.ingestor.Ingest(ctx, path, nil)
-	if err != nil {
-		sc.log.Error("ScanPath ingest error", "path", path, "err", err)
-		return
-	}
-	if result != nil && result.Skipped {
-		sc.log.Info("ScanPath skipping duplicate (fingerprint match)", "path", path, "existing", result.DuplicatePath)
-	}
+	sc.mgr.ScanPath(path)
 }
 
-// scan performs a full scan of all configured directories, parsing and upserting tracks as needed, and publishing events for added or updated tracks.
+// scan performs a full scan of all configured directories by delegating to
+// the Manager's SyncFolder.
 func (sc *Scheduler) scan(ctx context.Context) {
-	sc.bus.Publish("scan.started", nil)
+	sc.mgr.bus.Publish("scan.started", nil)
 	start := time.Now()
-	added, updated, removed := 0, 0, 0
+	totalAdded, totalUpdated, totalRemoved := 0, 0, 0
 
 	for _, dir := range sc.dirs {
 		if _, err := os.Stat(dir); err != nil {
@@ -92,62 +79,17 @@ func (sc *Scheduler) scan(ctx context.Context) {
 			continue
 		}
 
-		// TODO: Might not be memory efficient if the user has a large music directory since filepath.WalkDir
-		// reads directories into memory before walking them. Find a more memory-efficient way to do this if it becomes an issue.
-		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return err
-			}
-
-			ext := strings.ToLower(filepath.Ext(path))
-			if !media.IsSupportedAudio(ext) {
-				return nil
-			}
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-
-			info, err := d.Info()
-			if err != nil {
-				return nil
-			}
-
-			existing, err := sc.lib.TrackByPath(ctx, path)
-			if err != nil {
-				return nil
-			}
-			if existing != nil && existing.Fingerprint != "" && !info.ModTime().After(existing.LastModified) {
-				return nil
-			}
-
-			result, err := sc.ingestor.Ingest(ctx, path, existing)
-			if err != nil {
-				sc.log.Error("ingest error in scan", "path", path, "err", err)
-				return nil
-			}
-			if result != nil && result.Skipped {
-				sc.log.Info("skipping duplicate (fingerprint match)", "path", path, "existing", result.DuplicatePath)
-				return nil
-			}
-
-			if result != nil && result.IsNew {
-				added++
-			} else {
-				updated++
-			}
-
-			return nil
-		})
-		if err != nil {
-			sc.log.Error("walk error", "dir", dir, "err", err)
-		}
+		added, updated, removed := sc.mgr.SyncFolder(ctx, dir)
+		totalAdded += added
+		totalUpdated += updated
+		totalRemoved += removed
 	}
 
 	sc.log.Info("scan complete",
 		"duration", time.Since(start).Round(time.Millisecond),
-		"added", added, "updated", updated, "removed", removed,
+		"added", totalAdded, "updated", totalUpdated, "removed", totalRemoved,
 	)
-	sc.bus.Publish("scan.completed", map[string]int{
-		"added": added, "updated": updated, "removed": removed,
+	sc.mgr.bus.Publish("scan.completed", map[string]int{
+		"added": totalAdded, "updated": totalUpdated, "removed": totalRemoved,
 	})
 }

@@ -16,6 +16,7 @@ ON CONFLICT(path) DO UPDATE SET
     codec=excluded.codec, file_size_bytes=excluded.file_size_bytes,
     last_modified=excluded.last_modified, fingerprint=excluded.fingerprint,
     uploaded_by_user_id=excluded.uploaded_by_user_id,
+    deleted_at=NULL,
     updated_at=excluded.updated_at;
 
 -- name: TrackByPath :one
@@ -217,3 +218,6 @@ SELECT id, path, title,
 FROM tracks
 WHERE deleted_at IS NULL AND COALESCE(duration_ms,0) > 0
 ORDER BY RANDOM() LIMIT ?;
+
+-- name: ListPathsByPrefix :many
+SELECT path FROM tracks WHERE path LIKE ? AND deleted_at IS NULL;
