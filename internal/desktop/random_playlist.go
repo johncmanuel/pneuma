@@ -1,6 +1,36 @@
 package desktop
 
-import "strings"
+import (
+	"math/rand/v2"
+	"strings"
+)
+
+// selectRandomByDuration shuffles the given durations and returns
+// the indices of tracks to include until cumulative duration reaches targetMS.
+func selectRandomByDuration(durations []int64, targetMS int64) []int {
+	n := len(durations)
+	indices := make([]int, n)
+	for i := range indices {
+		indices[i] = i
+	}
+
+	rand.Shuffle(n, func(i, j int) {
+		indices[i], indices[j] = indices[j], indices[i]
+	})
+
+	selected := make([]int, 0, n)
+	var cumulative int64
+	for _, idx := range indices {
+		if cumulative >= targetMS {
+			break
+		}
+		selected = append(selected, idx)
+		cumulative += durations[idx]
+	}
+
+	return selected
+}
+
 
 // randomTrack holds the minimum info needed for random playlist generation.
 type randomTrack struct {

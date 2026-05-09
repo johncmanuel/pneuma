@@ -69,7 +69,7 @@ func main() {
 	userSvc := user.New(queries, store.DB())
 	metaParser := parser.New(cfg.Transcoding.FFmpegPath)
 	playEngine := playback.New(queries, hub, libSvc)
-	playlistSvc := playlist.New(queries)
+	playlistSvc := playlist.New(queries, libSvc)
 
 	transcoder := media.NewStreamTranscoder(media.TranscodeConfig{
 		FFmpegPath:        cfg.Transcoding.FFmpegPath,

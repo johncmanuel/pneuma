@@ -15,7 +15,6 @@ import (
 
 	"pneuma/internal/artwork"
 	"pneuma/internal/models"
-	"pneuma/internal/playlist"
 	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/desktopdb"
 )
@@ -554,7 +553,7 @@ func (pm *PlaylistManager) GenerateRandomPlaylist(name, description string, dura
 	for i, t := range deduped {
 		durations[i] = t.durationMS
 	}
-	selected := playlist.SelectRandomByDuration(durations, targetMS)
+	selected := selectRandomByDuration(durations, targetMS)
 
 	if len(selected) == 0 {
 		return nil, fmt.Errorf("no selected tracks available")

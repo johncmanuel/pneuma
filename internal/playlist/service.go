@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"pneuma/internal/library"
 	"pneuma/internal/models"
 	"pneuma/internal/store/sqlite/dbconv"
 	"pneuma/internal/store/sqlite/serverdb"
@@ -16,11 +17,12 @@ import (
 
 // Service is the server-side playlist domain service.
 type Service struct {
-	q *serverdb.Queries
+	q   *serverdb.Queries
+	lib *library.Service
 }
 
-func New(q *serverdb.Queries) *Service {
-	return &Service{q: q}
+func New(q *serverdb.Queries, lib *library.Service) *Service {
+	return &Service{q: q, lib: lib}
 }
 
 // Create makes a new playlist owned by the given user.
@@ -185,7 +187,9 @@ func (s *Service) PlaylistStats(ctx context.Context, playlistID string) (int, in
 }
 
 // GenerateRandom creates a new playlist filled with randomly selected tracks
-// targeting the given duration in minutes. Only remote tracks are used.
+// targeting the given duration in minutes.
+// Track selection is delegated to the library via SQL ORDER BY RANDOM(),
+// avoiding loading the full tracks table into memory.
 func (s *Service) GenerateRandom(ctx context.Context, userID, name, description string, durationMinutes int) (*models.Playlist, error) {
 	if strings.TrimSpace(name) == "" {
 		return nil, fmt.Errorf("playlist name is required")
@@ -194,20 +198,12 @@ func (s *Service) GenerateRandom(ctx context.Context, userID, name, description 
 		return nil, fmt.Errorf("duration must be at least 1 minute")
 	}
 
-	tracks, err := s.q.ListTracks(ctx)
+	// Fetch a large random batch from the library. 200 tracks covers ~12 hours
+	// of typical listening, which is more than enough for any target duration.
+	candidates, err := s.lib.GetRandomTracks(ctx, 200)
 	if err != nil {
-		return nil, fmt.Errorf("list tracks: %w", err)
+		return nil, fmt.Errorf("get random tracks: %w", err)
 	}
-
-	var candidates []serverdb.ListTracksRow
-	var durations []int64
-	for _, t := range tracks {
-		if t.DurationMs > 0 {
-			candidates = append(candidates, t)
-			durations = append(durations, t.DurationMs)
-		}
-	}
-
 	if len(candidates) == 0 {
 		return nil, fmt.Errorf("no tracks available")
 	}
@@ -218,10 +214,11 @@ func (s *Service) GenerateRandom(ctx context.Context, userID, name, description 
 	}
 
 	targetMS := int64(durationMinutes) * 60 * 1000
-	selected := SelectRandomByDuration(durations, targetMS)
-
-	for i, idx := range selected {
-		t := candidates[idx]
+	var cumulative int64
+	for i, t := range candidates {
+		if cumulative >= targetMS {
+			break
+		}
 		if err := s.q.InsertPlaylistItem(ctx, serverdb.InsertPlaylistItemParams{
 			PlaylistID:     pl.ID,
 			TrackID:        sql.NullString{String: t.ID, Valid: true},
@@ -231,10 +228,11 @@ func (s *Service) GenerateRandom(ctx context.Context, userID, name, description 
 			RefTitle:       t.Title,
 			RefAlbum:       t.AlbumName,
 			RefAlbumArtist: t.AlbumArtist,
-			RefDurationMs:  t.DurationMs,
+			RefDurationMs:  t.DurationMS,
 		}); err != nil {
 			return nil, fmt.Errorf("add playlist item: %w", err)
 		}
+		cumulative += t.DurationMS
 	}
 
 	count, err := s.q.CountPlaylistItems(ctx, pl.ID)

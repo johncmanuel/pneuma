@@ -129,7 +129,8 @@ type trackRows interface {
 		serverdb.SearchTracksByIDsRow |
 		serverdb.ListTracksByAlbumNameRow |
 		serverdb.ListTracksByAlbumNameAndArtistRow |
-		serverdb.ListTracksByAlbumUnorganizedRow
+		serverdb.ListTracksByAlbumUnorganizedRow |
+		serverdb.GetRandomTracksRow
 }
 
 func tracksToModels[T trackRows](rows []T) []*models.Track {
@@ -203,6 +204,10 @@ func ListTracksByAlbumNameAndArtistToModels(rows []serverdb.ListTracksByAlbumNam
 }
 
 func ListTracksByAlbumUnorganizedToModels(rows []serverdb.ListTracksByAlbumUnorganizedRow) []*models.Track {
+	return tracksToModels(rows)
+}
+
+func GetRandomTracksToModels(rows []serverdb.GetRandomTracksRow) []*models.Track {
 	return tracksToModels(rows)
 }
 
