@@ -57,7 +57,6 @@
     favorites: Heart,
     playlists: ListMusic,
     dashboard: LayoutDashboard,
-    __dashboard: LayoutDashboard,
     settings: SettingsIcon
   };
 </script>
