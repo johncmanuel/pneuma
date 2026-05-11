@@ -39,7 +39,7 @@
 
   let navItems = $derived(
     $currentUser?.is_admin
-      ? [...baseNavItems, { id: "__dashboard", label: "Dashboard" }]
+      ? [...baseNavItems, { id: "dashboard", label: "Dashboard" }]
       : baseNavItems
   );
 
@@ -94,7 +94,7 @@
   }
 
   async function handleNavClick(id: string) {
-    if (id === "__dashboard") {
+    if (id === "dashboard") {
       window.location.href = "/dashboard";
       onInteraction?.();
     } else if (id === "favorites") {
