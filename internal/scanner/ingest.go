@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"pneuma/internal/library"
 	"pneuma/internal/metadata/parser"
@@ -109,6 +110,16 @@ func (i *Ingestor) Ingest(ctx context.Context, path string, existing *models.Tra
 		track.CreatedAt = existing.CreatedAt
 		track.UploadedByUserID = existing.UploadedByUserID
 
+		if !fileChanged(track.LastModified, existing.LastModified, fingerprint, existing.Fingerprint) {
+			track.Title = existing.Title
+			track.AlbumArtist = existing.AlbumArtist
+			track.AlbumName = existing.AlbumName
+			track.Genre = existing.Genre
+			track.Year = existing.Year
+			track.TrackNumber = existing.TrackNumber
+			track.DiscNumber = existing.DiscNumber
+		}
+
 		baseName := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
 		if track.Title == baseName && existing.Title != "" {
 			track.Title = existing.Title
@@ -128,4 +139,21 @@ func (i *Ingestor) Ingest(ctx context.Context, path string, existing *models.Tra
 	}
 
 	return &IngestResult{Track: track, IsNew: isNew}, nil
+}
+
+// fileChanged determines whether a track's metadata should be updated based on changes to the
+// file's last modified time or fingerprint.
+func fileChanged(parsed time.Time, existing time.Time, parsedFP string, existingFP string) bool {
+	if parsedFP != "" && existingFP != "" {
+		return parsedFP != existingFP
+	}
+
+	if existing.IsZero() || parsed.IsZero() {
+		return false
+	}
+
+	p := parsed.UTC().Truncate(time.Second)
+	e := existing.UTC().Truncate(time.Second)
+
+	return !p.Equal(e)
 }

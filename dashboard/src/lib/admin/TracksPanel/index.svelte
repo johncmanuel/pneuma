@@ -15,6 +15,7 @@
   import UploadStatBar from "./UploadStatBar.svelte";
   import TrackTable from "./TrackTable.svelte";
   import BulkEditModal from "./BulkEditModal.svelte";
+  import TrackDetailDrawer from "./TrackDetailDrawer.svelte";
 
   let tracks: Track[] = $state([]);
   let loading = $state(false);
@@ -151,6 +152,10 @@
       selectedIds = new Set(
         [...selectedIds].filter((id) => tracks.some((track) => track.id === id))
       );
+      if (drawerTrack) {
+        const next = tracks.find((track) => track.id === drawerTrack?.id);
+        drawerTrack = next ?? null;
+      }
     } finally {
       loading = false;
     }
@@ -181,6 +186,7 @@
       selectedIds = new Set(
         [...selectedIds].filter((selected) => selected !== id)
       );
+      if (drawerTrack?.id === id) drawerTrack = null;
       return;
     }
 
@@ -192,6 +198,7 @@
     if (index >= 0)
       tracks = [...tracks.slice(0, index), next, ...tracks.slice(index + 1)];
     else tracks = [...tracks, next];
+    if (drawerTrack?.id === id) drawerTrack = next;
   }
 
   let _prevDeltaSeq: number | undefined = $state();
@@ -225,6 +232,8 @@
   });
 
   let editingTrackId: string | null = $state(null);
+  let drawerTrack: Track | null = $state(null);
+  let drawerSaving = $state(false);
 
   async function saveEdit(
     id: string,
@@ -250,6 +259,37 @@
         }
       }
       editingTrackId = null;
+    }
+  }
+
+  async function saveTrackPatch(
+    id: string,
+    patch: Record<string, string | number>
+  ) {
+    if (Object.keys(patch).length === 0) return;
+    drawerSaving = true;
+    try {
+      const r = await apiFetch(`/api/library/tracks/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch)
+      });
+      if (r.ok) {
+        addToast("Track updated successfully", "success");
+        const updated = await fetchTracksByIDs([id]);
+        if (updated.length === 1) {
+          const idx = tracks.findIndex((t) => t.id === id);
+          if (idx >= 0) {
+            tracks = [
+              ...tracks.slice(0, idx),
+              updated[0],
+              ...tracks.slice(idx + 1)
+            ];
+          }
+        }
+        drawerTrack = null;
+      }
+    } finally {
+      drawerSaving = false;
     }
   }
 
@@ -475,7 +515,10 @@
     if (files.length) enqueueFiles(files);
   }
 
-  async function handleReplaceTrack(file: File, track: Track) {
+  async function handleReplaceTrack(
+    file: File,
+    track: Track
+  ): Promise<boolean> {
     const form = new FormData();
     form.append("file", file);
     try {
@@ -486,11 +529,14 @@
       if (!r.ok) {
         const text = await r.text().catch(() => "Unknown error");
         addToast("Failed to replace file: " + text, "error");
+        return false;
       } else {
         addToast("File replacement queued successfully", "success");
+        return true;
       }
     } catch (e: any) {
       addToast("Upload error: " + (e.message || "Network error"), "error");
+      return false;
     }
   }
 
@@ -597,9 +643,20 @@
         replacingTrack = t;
         (toolbarRef as any)?.clickReplaceInput();
       }}
+      onOpenDetails={(t) => (drawerTrack = t)}
     />
   {/if}
 </div>
+
+<TrackDetailDrawer
+  track={drawerTrack}
+  {canEdit}
+  {canUpload}
+  saving={drawerSaving}
+  onClose={() => (drawerTrack = null)}
+  onSave={saveTrackPatch}
+  onReplaceTrack={handleReplaceTrack}
+/>
 
 <style>
   .panel {

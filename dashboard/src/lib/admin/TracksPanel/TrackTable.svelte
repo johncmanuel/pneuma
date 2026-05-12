@@ -29,6 +29,7 @@
     onCancelEdit: () => void;
     onDeleteTrack: (id: string) => void;
     onClickReplace: (t: Track) => void;
+    onOpenDetails: (t: Track) => void;
   }
 
   let {
@@ -50,7 +51,8 @@
     onSaveEdit,
     onCancelEdit,
     onDeleteTrack,
-    onClickReplace
+    onClickReplace,
+    onOpenDetails
   }: Props = $props();
 </script>
 
@@ -128,6 +130,9 @@
             {#if canEdit || canDelete}
               <td class="action-cell">
                 {#if canEdit}
+                  <button class="sm-btn" onclick={() => onOpenDetails(t)}
+                    >Details</button
+                  >
                   <button class="sm-btn" onclick={() => onStartEdit(t)}
                     >Edit</button
                   >
@@ -194,6 +199,9 @@
     border-bottom: 1px solid var(--border);
     white-space: nowrap;
     user-select: none;
+  }
+  th:last-child {
+    min-width: 220px;
   }
   th.sortable {
     cursor: pointer;

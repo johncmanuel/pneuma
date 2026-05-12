@@ -8,19 +8,23 @@
 
   let { selectedCount, saving, onSave, onClose }: Props = $props();
 
-  let applyArtist = $state(false);
-  let applyAlbum = $state(false);
+  let applyArtist = $state(true);
+  let applyAlbum = $state(true);
   let artist = $state("");
   let album = $state("");
 
-  let hasChanges = $derived(applyArtist || applyAlbum);
+  let hasChanges = $derived(
+    (applyArtist && artist.trim().length > 0) ||
+      (applyAlbum && album.trim().length > 0)
+  );
 
   function handleSubmit(e: SubmitEvent) {
     e.preventDefault();
     const patch: Record<string, string | number> = {};
 
-    if (applyArtist) patch.album_artist = artist;
-    if (applyAlbum) patch.album_name = album;
+    if (applyArtist && artist.trim().length > 0)
+      patch.album_artist = artist.trim();
+    if (applyAlbum && album.trim().length > 0) patch.album_name = album.trim();
 
     onSave(patch);
   }
@@ -41,30 +45,24 @@
 <div class="backdrop" onclick={handleBackdrop}>
   <div class="modal" role="dialog" aria-label="Bulk edit tracks">
     <h3>Edit {selectedCount} track{selectedCount !== 1 ? "s" : ""}</h3>
-    <p class="hint">
-      Enable a field to apply the value to all selected tracks.
-    </p>
+    <p class="hint">Update the fields you want to apply.</p>
 
     <form onsubmit={handleSubmit}>
       <label class="field-row">
-        <input type="checkbox" bind:checked={applyArtist} />
         <span class="label-text">Album Artist</span>
         <input
           type="text"
           bind:value={artist}
-          disabled={!applyArtist}
           placeholder="Album artist…"
           class="field-input"
         />
       </label>
 
       <label class="field-row">
-        <input type="checkbox" bind:checked={applyAlbum} />
         <span class="label-text">Album Name</span>
         <input
           type="text"
           bind:value={album}
-          disabled={!applyAlbum}
           placeholder="Album name…"
           class="field-input"
         />
@@ -119,21 +117,13 @@
     color: var(--text-3);
   }
   .field-row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 110px 1fr;
     align-items: center;
     gap: 8px;
     margin-bottom: 10px;
   }
-  .field-row input[type="checkbox"] {
-    width: 15px;
-    height: 15px;
-    accent-color: var(--accent);
-    cursor: pointer;
-    flex-shrink: 0;
-  }
   .label-text {
-    width: 100px;
-    flex-shrink: 0;
     font-size: 13px;
     color: var(--text-2);
   }
