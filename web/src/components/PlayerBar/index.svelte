@@ -481,7 +481,7 @@
         title="Queue"
         aria-label="Queue"
       >
-        <List size={18} />
+        <List size={16} />
       </button>
 
       <span class="vol-icon">
@@ -542,7 +542,9 @@
   }
 
   .vol-icon {
-    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
   }
 
@@ -551,9 +553,13 @@
     accent-color: var(--accent);
     height: 4px;
     padding: 0;
+    margin: 0;
   }
 
   .queue-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-right: 8px;
     color: var(--text-2);
     background: none;

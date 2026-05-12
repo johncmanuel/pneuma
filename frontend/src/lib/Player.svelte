@@ -878,15 +878,13 @@
       onclick={toggleQueuePanel}
       title="Queue"
     >
-      <List size={18} />
+      <List size={16} />
     </button>
     <span class="vol-icon"
       >{#if volume === 0}
         <VolumeX size={16} />
       {:else if volume < 0.4}
         <Volume1 size={16} />
-      {:else if volume < 0.8}
-        <Volume2 size={16} />
       {:else}
         <Volume2 size={16} />
       {/if}</span
@@ -1057,7 +1055,9 @@
     justify-content: flex-end;
   }
   .vol-icon {
-    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
   }
   .vol-bar {
@@ -1065,8 +1065,12 @@
     accent-color: var(--accent);
     height: 4px;
     padding: 0;
+    margin: 0;
   }
   .queue-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     margin-right: 8px;
     color: var(--text-2);
   }

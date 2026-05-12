@@ -436,11 +436,11 @@
         <div class="sheet-volume">
           <span class="vol-icon"
             >{#if volume === 0}
-              <VolumeX size={17} />
+              <VolumeX size={16} />
             {:else if volume < 0.4}
-              <Volume1 size={17} />
+              <Volume1 size={16} />
             {:else}
-              <Volume2 size={17} />
+              <Volume2 size={16} />
             {/if}</span
           >
           <input
@@ -859,6 +859,14 @@
   .sheet-volume .vol-bar {
     width: min(42vw, 220px);
     flex: 1;
+    margin: 0;
+  }
+
+  .vol-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
   }
 
   .ctrl-btn {
