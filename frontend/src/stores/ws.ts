@@ -2,10 +2,10 @@ import { writable } from "svelte/store";
 import { playerState } from "./player";
 import { type Track, addToast } from "@pneuma/shared";
 import {
-  invalidateCachedTrack,
   loadRemoteAlbumGroupsPage,
   tracks
 } from "./library";
+import { getTrackResolver } from "./trackResolver";
 import {
   applyRemotePlaylistDelta,
   favoritesRemotePlaylistId,
@@ -75,7 +75,7 @@ export function connectWS() {
         case "track.updated":
         case "track.removed":
           if (msg.payload?.id) {
-            invalidateCachedTrack(String(msg.payload.id));
+            getTrackResolver().invalidate(String(msg.payload.id));
           }
           loadRemoteAlbumGroupsPage(0);
           break;

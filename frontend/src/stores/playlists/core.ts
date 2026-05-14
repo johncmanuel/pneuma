@@ -36,11 +36,12 @@ import {
 } from "./helpers";
 import { loadPlaylists } from "./favorites";
 import { playerState } from "../player";
-import { fetchTracksByIDs } from "../library";
+import { getTrackResolver } from "../trackResolver";
 import { resolveLocalTracksByPaths } from "../localLibrary";
 import { recordRecentPlaylist, removeRecentPlaylist } from "../recentAlbums";
 import { wsSend } from "../ws";
 import { serverFetch } from "../../utils/api";
+import { serverDisconnected } from "../ws";
 
 export { isFavoritesPlaylist, visiblePlaylistsForAddMenu };
 
@@ -366,8 +367,10 @@ export async function playPlaylist(
         startTrack = localTrackToSharedTrack(lt);
       }
     } else {
-      const remotes = await fetchTracksByIDs([startId]);
-      if (remotes.length > 0) startTrack = remotes[0];
+      const remotes = await getTrackResolver().getTracks([startId], {
+        offline: get(serverDisconnected)
+      });
+      if (remotes[0]) startTrack = remotes[0];
     }
   } catch {
     console.error("Failed to resolve starting track");

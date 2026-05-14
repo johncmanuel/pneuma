@@ -1,6 +1,7 @@
 <script lang="ts">
   import { playerState } from "../stores/player";
-  import { fetchTracksByIDs, UNORGANIZED_KEY } from "../stores/library";
+  import { UNORGANIZED_KEY } from "../stores/library";
+  import { getTrackResolver } from "../stores/trackResolver";
   import { resolveLocalTracksByPaths } from "../stores/localLibrary";
   import {
     activePanel,
@@ -33,7 +34,7 @@
     streamQuality
   } from "@pneuma/shared";
   import { streamUrl, artworkUrl, connected } from "../utils/api";
-  import { wsSend } from "../stores/ws";
+  import { serverDisconnected, wsSend } from "../stores/ws";
   import { onMount, onDestroy } from "svelte";
   import {
     Play,
@@ -208,10 +209,13 @@
           return t;
         }
       } else {
-        const remotes = await fetchTracksByIDs([id]);
-        if (remotes.length > 0) {
-          trackCache.set(id, remotes[0]);
-          return remotes[0];
+        const remotes = await getTrackResolver().getTracks([id], {
+          offline: $serverDisconnected
+        });
+        const remoteTrack = remotes[0];
+        if (remoteTrack) {
+          trackCache.set(id, remoteTrack);
+          return remoteTrack;
         }
       }
     } catch {

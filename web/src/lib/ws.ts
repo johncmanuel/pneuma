@@ -13,7 +13,7 @@ import {
   selectedPlaylist,
   selectPlaylist
 } from "./stores/playlists";
-import { invalidateCachedTrack } from "./stores/library";
+import { getTrackResolver } from "./track-resolver";
 
 const libraryVersion = writable(0);
 const scanRunning = writable(false);
@@ -101,7 +101,7 @@ function handleMessage(msg: { type: string; payload: any }) {
       if (msg.payload?.id) {
         const trackID = String(msg.payload.id);
         clearMissingTrackArtID(trackID);
-        invalidateCachedTrack(trackID);
+        getTrackResolver().invalidate(trackID);
       }
       libraryVersion.update((n) => n + 1);
       break;

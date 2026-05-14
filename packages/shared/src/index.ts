@@ -10,3 +10,5 @@ export * from "./playlists";
 export * from "./stream-quality";
 export * from "./stream-quality-store";
 export * from "./api-client";
+export * from "./track-resolver";
+export { TTLCachePlugin } from "./ttl-cache-plugin";
