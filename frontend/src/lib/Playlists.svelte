@@ -33,7 +33,7 @@
   import TrackRow from "./TrackRow.svelte";
   import { SortButton } from "@pneuma/ui";
   import "@pneuma/ui/css/track-list.css";
-  import { totalDuration, type Track } from "@pneuma/shared";
+  import { totalDuration, type Track, formatDate } from "@pneuma/shared";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
 
@@ -180,16 +180,6 @@
     if ($selectedPlaylistId) {
       await removePlaylistItem($selectedPlaylistId, item.position);
     }
-  }
-
-  function formatDate(iso: string): string {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    });
   }
 
   async function handleUpload() {

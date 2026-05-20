@@ -20,7 +20,7 @@
   import { selectedPlaylistView, pushNav } from "../stores/ui";
   import { playerState } from "../stores/player";
   import { connected } from "../utils/api";
-  import { addToast, totalDuration } from "@pneuma/shared";
+  import { addToast, totalDuration, formatDate } from "@pneuma/shared";
   import { Heart } from "@lucide/svelte";
   import TrackRow from "./TrackRow.svelte";
   import { SortButton } from "@pneuma/ui";
@@ -150,17 +150,6 @@
       bitrate_kbps: 0,
       artwork_id: ""
     };
-  }
-
-  function formatDate(iso: string): string {
-    if (!iso) return "-";
-
-    const date = new Date(iso);
-    return date.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    });
   }
 </script>
 

@@ -25,7 +25,8 @@
     totalDuration,
     addToast,
     shuffle,
-    type PlaylistItem
+    type PlaylistItem,
+    formatDate
   } from "@pneuma/shared";
 
   const currentTrackId = derived(playerState, ($s) => $s.trackId);
@@ -201,17 +202,6 @@
     } finally {
       syncingFavorites = false;
     }
-  }
-
-  function formatDate(iso: string): string {
-    if (!iso) return "-";
-
-    const date = new Date(iso);
-    return date.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    });
   }
 </script>
 

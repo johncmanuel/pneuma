@@ -51,6 +51,7 @@
     pwaUpdateAvailable
   } from "./lib/pwa";
 
+  let sharedUsername = $state("");
   let wasLoggedIn = $state(false);
   let searchBar: any = $state(undefined);
 
@@ -407,9 +408,15 @@
       <ThemeToggle />
     </div>
     {#if $currentView === "register"}
-      <Register onSwitch={() => pushNav({ view: "login" })} />
+      <Register
+        bind:username={sharedUsername}
+        onSwitch={() => pushNav({ view: "login" })}
+      />
     {:else}
-      <Login onSwitch={() => pushNav({ view: "register" })} />
+      <Login
+        bind:username={sharedUsername}
+        onSwitch={() => pushNav({ view: "register" })}
+      />
     {/if}
   </div>
 {:else}

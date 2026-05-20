@@ -1,5 +1,10 @@
 import { writable, get } from "svelte/store";
 import { loggedIn, wsBase } from "./api";
+import {
+  createWSClient,
+  type WSEventPayloads,
+  type WSEventType
+} from "@pneuma/shared";
 
 type LibraryDelta = {
   seq: number;
@@ -11,74 +16,33 @@ export const libraryDelta = writable<LibraryDelta | null>(null);
 
 export const scanRunning = writable(false);
 
-export const scanResult = writable<{
-  added: number;
-  updated: number;
-  removed: number;
-} | null>(null);
+export const scanResult = writable<WSEventPayloads["scan.completed"]>(null);
 
-let socket: WebSocket | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+const wsClient = createWSClient({
+  buildUrl: () => {
+    const base = wsBase();
+    return base ? `${base}/ws` : "";
+  },
+  shouldReconnect: () => get(loggedIn),
+  onMessage: (msg) => handleMessage(msg),
+  onParseError: () => {
+    console.warn("Failed to parse WebSocket message");
+  }
+});
 let deltaSeq = 0;
 
 export function connectWS() {
-  if (!get(loggedIn)) return;
-
-  // Prevent double-connect: if a socket is already open or connecting, stop the
-  // connection
-  if (
-    socket &&
-    (socket.readyState === WebSocket.OPEN ||
-      socket.readyState === WebSocket.CONNECTING)
-  ) {
-    return;
-  }
-
-  // Close any old previous sockets before creating a new one.
-  if (socket) {
-    try {
-      socket.close();
-    } catch {
-      console.warn("Failed to close existing WebSocket");
-    }
-    socket = null;
-  }
-
-  const base = wsBase();
-  const url = `${base}/ws`;
-
-  const ws = new WebSocket(url);
-  socket = ws;
-
-  ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      handleMessage(msg);
-    } catch {
-      console.warn("Failed to parse WebSocket message");
-    }
-  };
-
-  ws.onclose = () => {
-    if (socket !== ws) return;
-    socket = null;
-    if (get(loggedIn)) {
-      reconnectTimer = setTimeout(connectWS, 3000);
-    }
-  };
-
-  ws.onerror = () => ws.close();
+  wsClient.connect();
 }
 
 export function disconnectWS() {
-  if (reconnectTimer) clearTimeout(reconnectTimer);
-  reconnectTimer = null;
-  socket?.close();
-  socket = null;
+  wsClient.disconnect();
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function handleMessage(msg: { type: string; payload: any }) {
+function handleMessage(msg: {
+  type: WSEventType;
+  payload: WSEventPayloads[WSEventType];
+}) {
   switch (msg.type) {
     case "track.added":
     case "track.updated":
@@ -97,9 +61,7 @@ function handleMessage(msg: { type: string; payload: any }) {
     case "scan.completed":
       scanRunning.set(false);
       if (msg.payload && typeof msg.payload === "object") {
-        scanResult.set(
-          msg.payload as { added: number; updated: number; removed: number }
-        );
+        scanResult.set(msg.payload);
       }
       break;
   }

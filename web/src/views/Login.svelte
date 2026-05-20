@@ -3,9 +3,11 @@
   import { pushNav } from "../lib/stores/ui";
   import { addToast } from "@pneuma/shared";
 
-  let { onSwitch }: { onSwitch?: () => void } = $props();
+  let {
+    onSwitch,
+    username = $bindable("")
+  }: { onSwitch?: () => void; username?: string } = $props();
 
-  let username = $state("");
   let password = $state("");
   let error = $state("");
   let loading = $state(false);

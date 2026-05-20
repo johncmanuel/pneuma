@@ -13,81 +13,49 @@ import {
   selectedPlaylist,
   selectPlaylist
 } from "./stores/playlists";
-import { invalidateCachedTrack } from "./stores/library";
+import { getTrackResolver } from "./track-resolver";
+import {
+  createWSClient,
+  type WSEventPayloads,
+  type WSEventType
+} from "@pneuma/shared";
 
 const libraryVersion = writable(0);
 const scanRunning = writable(false);
-const scanResult = writable<{
-  added: number;
-  updated: number;
-  removed: number;
-} | null>(null);
+const scanResult = writable<WSEventPayloads["scan.completed"]>(null);
 
-let socket: WebSocket | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+const wsClient = createWSClient({
+  buildUrl: () => {
+    const base = wsBase();
+    if (!base) return "";
+    return `${base}/ws?device_id=${encodeURIComponent(deviceId)}`;
+  },
+  shouldReconnect: () => get(loggedIn),
+  onMessage: (msg) => handleMessage(msg),
+  onParseError: () => {
+    console.warn("Failed to parse WebSocket message");
+  }
+});
 
 export function connectWS() {
-  if (!get(loggedIn)) return;
-
-  // Prevent double-connect
-  if (
-    socket &&
-    (socket.readyState === WebSocket.OPEN ||
-      socket.readyState === WebSocket.CONNECTING)
-  ) {
-    return;
-  }
-
-  if (socket) {
-    try {
-      socket.close();
-    } catch {
-      console.warn("Failed to close existing WebSocket");
-    }
-    socket = null;
-  }
-
-  const base = wsBase();
-  const url = `${base}/ws?device_id=${encodeURIComponent(deviceId)}`;
-
-  const ws = new WebSocket(url);
-  socket = ws;
-
-  ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      handleMessage(msg);
-    } catch {
-      console.warn("Failed to parse WebSocket message");
-    }
-  };
-
-  ws.onclose = () => {
-    if (socket !== ws) return;
-    socket = null;
-    if (get(loggedIn)) {
-      reconnectTimer = setTimeout(connectWS, 3000);
-    }
-  };
-
-  ws.onerror = () => ws.close();
+  wsClient.connect();
 }
 
 export function disconnectWS() {
-  if (reconnectTimer) clearTimeout(reconnectTimer);
-  reconnectTimer = null;
-  socket?.close();
-  socket = null;
+  wsClient.disconnect();
 }
 
-export function wsSend(type: string, payload: object) {
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({ type, payload }));
-  }
+export function wsSend<Type extends WSEventType>(
+  type: Type,
+  payload: WSEventPayloads[Type]
+) {
+  wsClient.send(type, payload);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function handleMessage(msg: { type: string; payload: any }) {
+function handleMessage(msg: {
+  type: WSEventType;
+  payload: WSEventPayloads[WSEventType];
+}) {
   switch (msg.type) {
     case "playback.changed":
       if (handlePlaybackChanged(msg.payload)) {
@@ -101,7 +69,7 @@ function handleMessage(msg: { type: string; payload: any }) {
       if (msg.payload?.id) {
         const trackID = String(msg.payload.id);
         clearMissingTrackArtID(trackID);
-        invalidateCachedTrack(trackID);
+        getTrackResolver().invalidate(trackID);
       }
       libraryVersion.update((n) => n + 1);
       break;
@@ -116,9 +84,7 @@ function handleMessage(msg: { type: string; payload: any }) {
       scanRunning.set(false);
       resetMissingTrackArtIDs();
       if (msg.payload && typeof msg.payload === "object") {
-        scanResult.set(
-          msg.payload as { added: number; updated: number; removed: number }
-        );
+        scanResult.set(msg.payload);
       }
       libraryVersion.update((n) => n + 1);
       break;

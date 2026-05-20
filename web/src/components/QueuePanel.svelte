@@ -1,6 +1,6 @@
 <script lang="ts">
   import { playerState } from "../lib/stores/playback";
-  import { fetchTracksByIDs } from "../lib/stores/library";
+  import { getTrackResolver } from "../lib/track-resolver";
   import { closePanel } from "../lib/stores/ui";
   import { formatDuration } from "@pneuma/shared";
   import { artworkUrl } from "../lib/api";
@@ -38,9 +38,9 @@
     if (uncached.length > 0) {
       resolving = true;
       try {
-        const fetched = await fetchTracksByIDs(uncached);
+        const fetched = await getTrackResolver().getTracks(uncached);
         for (const t of fetched) {
-          trackCache.set(t.id, t);
+          if (t) trackCache.set(t.id, t);
         }
       } finally {
         resolving = false;

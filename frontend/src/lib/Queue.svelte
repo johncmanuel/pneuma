@@ -7,11 +7,11 @@
     addToast
   } from "@pneuma/shared";
   import { playerState } from "../stores/player";
-  import { fetchTracksByIDs } from "../stores/library";
+  import { getTrackResolver } from "../stores/trackResolver";
   import { resolveLocalTracksByPaths } from "../stores/localLibrary";
   import { closePanel } from "../stores/ui";
   import { artworkUrl, connected } from "../utils/api";
-  import { wsSend } from "../stores/ws";
+  import { serverDisconnected, wsSend } from "../stores/ws";
 
   let queue = $derived($playerState.queue ?? []);
   let currentIndex = $derived($playerState.queueIndex ?? 0);
@@ -55,13 +55,17 @@
       resolving = true;
       try {
         const [remoteTracks, localTracks] = await Promise.all([
-          uncachedRemote.length > 0 ? fetchTracksByIDs(uncachedRemote) : [],
+          uncachedRemote.length > 0
+            ? getTrackResolver().getTracks(uncachedRemote, {
+                offline: $serverDisconnected
+              })
+            : [],
           uncachedLocal.length > 0
             ? resolveLocalTracksByPaths(uncachedLocal)
             : []
         ]);
         for (const t of remoteTracks) {
-          trackCache.set(t.id, t);
+          if (t) trackCache.set(t.id, t);
         }
         for (const lt of localTracks) {
           trackCache.set(lt.path, {

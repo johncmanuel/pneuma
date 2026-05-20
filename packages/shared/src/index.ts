@@ -1,6 +1,5 @@
 export * from "./types";
 export * from "./utils";
-export { clamp } from "./utils";
 export * from "./dom";
 export * from "./toasts";
 export * from "./media-session";
@@ -10,3 +9,7 @@ export * from "./playlists";
 export * from "./stream-quality";
 export * from "./stream-quality-store";
 export * from "./api-client";
+export * from "./track-resolver";
+export { TTLCachePlugin } from "./ttl-cache-plugin";
+export * from "./ws-events";
+export * from "./ws-client";
