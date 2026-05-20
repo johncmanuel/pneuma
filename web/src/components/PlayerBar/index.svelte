@@ -185,8 +185,14 @@
           paused: false
         }));
 
-        wsSend("playback.queue", { track_ids: newQueue, start_index: 0 });
-        wsSend("playback.play", { track_id: newQueue[0], position_ms: 0 });
+        wsSend("playback.queue", {
+          track_ids: newQueue,
+          start_index: 0
+        });
+        wsSend("playback.play", {
+          track_id: newQueue[0],
+          position_ms: 0
+        });
         return;
       } else {
         playerState.update((s) => ({ ...s, paused: true }));

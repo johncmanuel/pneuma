@@ -132,8 +132,14 @@
     }));
 
     if (track._source === "remote") {
-      wsSend("playback.queue", { track_ids: queue, start_index: 0 });
-      wsSend("playback.play", { track_id: track.id, position_ms: 0 });
+      wsSend("playback.queue", {
+        track_ids: queue,
+        start_index: 0
+      });
+      wsSend("playback.play", {
+        track_id: track.id,
+        position_ms: 0
+      });
     }
   }
 
