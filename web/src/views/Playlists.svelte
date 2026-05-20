@@ -42,7 +42,8 @@
     totalDuration,
     shuffle,
     type PlaylistItem,
-    type PlaylistSummary
+    type PlaylistSummary,
+    formatDate
   } from "@pneuma/shared";
   import { generateRandomPlaylist } from "../lib/api";
   import { SortButton } from "@pneuma/ui";
@@ -293,16 +294,6 @@
     if ($selectedPlaylistView) {
       await removePlaylistItem($selectedPlaylistView, item.position);
     }
-  }
-
-  function formatDate(iso: string): string {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    });
   }
 
   function startEdit(pl: PlaylistSummary) {

@@ -13,6 +13,16 @@ export function totalDuration(ms: number): string {
   return `${h} hr ${m} min`;
 }
 
+export function formatDate(iso: string): string {
+  if (!iso) return "-";
+  const date = new Date(iso);
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
+}
+
 export function shuffle<T>(arr: T[]): T[] {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
