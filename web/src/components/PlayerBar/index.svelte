@@ -12,7 +12,8 @@
     shuffle,
     RepeatLabels,
     RepeatModeEnum,
-    streamQuality
+    streamQuality,
+    crossfadeConfig
   } from "@pneuma/shared";
   import {
     activePanel,
@@ -406,6 +407,7 @@
   {volume}
   {mobileView}
   quality={$streamQuality}
+  crossfade={$crossfadeConfig}
   bind:displayPosition
   bind:audioDurationMs
   {seeking}

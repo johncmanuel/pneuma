@@ -3,13 +3,23 @@
   import {
     type StreamPresetOption,
     streamPresetOptions,
-    streamQuality
+    streamQuality,
+    crossfadeConfig
   } from "@pneuma/shared";
 
   const githubUrl = "https://github.com/johncmanuel/pneuma";
 
   function handlePresetClick(option: StreamPresetOption) {
     streamQuality.set(option.value);
+  }
+
+  function toggleCrossfade() {
+    crossfadeConfig.update((c) => ({ ...c, enabled: !c.enabled }));
+  }
+
+  function setCrossfadeDuration(e: Event) {
+    const sec = Number((e.target as HTMLInputElement).value);
+    crossfadeConfig.update((c) => ({ ...c, durationSec: sec }));
   }
 </script>
 
@@ -60,6 +70,46 @@
       </ul>
     </section>
   </article>
+
+  <div class="group">
+    <h2 class="group-heading">Crossfade</h2>
+    <p class="group-description text-3">
+      Smoothly blend between tracks at the end of each song.
+    </p>
+
+    <label class="toggle-row">
+      <span class="toggle-label">Enable crossfade</span>
+      <input
+        type="checkbox"
+        id="crossfade-toggle"
+        checked={$crossfadeConfig.enabled}
+        onchange={toggleCrossfade}
+        aria-describedby="crossfade-desc"
+      />
+    </label>
+
+    {#if $crossfadeConfig.enabled}
+      <div class="slider-row" id="crossfade-desc">
+        <label for="crossfade-duration" class="slider-label text-3">
+          Duration: <strong>{$crossfadeConfig.durationSec} s</strong>
+        </label>
+        <input
+          type="range"
+          id="crossfade-duration"
+          min="1"
+          max="12"
+          step="1"
+          value={$crossfadeConfig.durationSec}
+          oninput={setCrossfadeDuration}
+          class="duration-slider"
+          aria-label="Crossfade duration in seconds"
+        />
+        <div class="slider-ticks" aria-hidden="true">
+          <span>1s</span><span>6s</span><span>12s</span>
+        </div>
+      </div>
+    {/if}
+  </div>
 
   <div class="group">
     <h3>About</h3>
@@ -228,6 +278,59 @@
 
   .check-slot :global(.check-icon) {
     color: var(--accent);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .group-heading {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.18;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    max-width: 360px;
+  }
+
+  .toggle-label {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 360px;
+  }
+
+  .slider-label {
+    font-size: 12px;
+  }
+
+  .duration-slider {
+    width: 100%;
+    accent-color: var(--accent);
+    height: 4px;
+    padding: 0;
+    margin: 0;
+  }
+
+  .slider-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-3);
   }
 
   @media (max-width: 980px) {
