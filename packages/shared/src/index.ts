@@ -8,6 +8,8 @@ export * from "./auth";
 export * from "./playlists";
 export * from "./stream-quality";
 export * from "./stream-quality-store";
+export * from "./crossfade";
+export * from "./crossfade-store";
 export * from "./api-client";
 export * from "./track-resolver";
 export { TTLCachePlugin } from "./ttl-cache-plugin";

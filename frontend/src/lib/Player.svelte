@@ -31,7 +31,8 @@
     RepeatModeEnum,
     addToast,
     RepeatLabels,
-    streamQuality
+    streamQuality,
+    crossfadeConfig
   } from "@pneuma/shared";
   import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { serverDisconnected, wsSend } from "../stores/ws";
@@ -56,12 +57,127 @@
 
   const VOLUME_KEY = storageKeys.volume;
 
+  // Audio context for crossfade
+  let audioCtx: AudioContext | null = $state(null);
+  let gainA: GainNode | null = $state(null);
+  let gainB: GainNode | null = $state(null);
+  let sourceA: MediaElementAudioSourceNode | null = null;
+  let sourceB: MediaElementAudioSourceNode | null = null;
+  let audioA = $state<HTMLAudioElement | null>(null);
+  let audioB = $state<HTMLAudioElement | null>(null);
+  let primaryIsA = $state(true);
+  let crossfadeTriggered = $state(false);
+  let crossfadeActive = $state(false);
+  let pendingCrossfadeDuration = $state<number | null>(null);
+  let crossfadeTeardownTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Keep the monolithic audio variable in sync with the currently active element
+  $effect(() => {
+    const active = primaryIsA ? audioA : audioB;
+    if (active) {
+      audio = active;
+    }
+  });
+
+  function ensureAudioContext(): AudioContext {
+    if (!audioCtx) audioCtx = new AudioContext();
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume().catch((e) => console.warn("AudioContext resume", e));
+    }
+    return audioCtx;
+  }
+
+  // Ensure audio routing, which creates audio nodes for the active audio elements
+  function ensureAudioRouting() {
+    const ctx = ensureAudioContext();
+    if (audioA && !sourceA) {
+      gainA = ctx.createGain();
+      gainA.connect(ctx.destination);
+      sourceA = ctx.createMediaElementSource(audioA);
+      sourceA.connect(gainA);
+      gainA.gain.value = primaryIsA ? volume : 0;
+    }
+    if (audioB && !sourceB) {
+      gainB = ctx.createGain();
+      gainB.connect(ctx.destination);
+      sourceB = ctx.createMediaElementSource(audioB);
+      sourceB.connect(gainB);
+      gainB.gain.value = primaryIsA ? 0 : volume;
+    }
+  }
+
+  function cancelCrossfade() {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+
+    gainA?.gain.cancelScheduledValues(now);
+    gainB?.gain.cancelScheduledValues(now);
+
+    const activeGain = primaryIsA ? gainA : gainB;
+    if (activeGain) {
+      activeGain.gain.setValueAtTime(volume, now);
+    }
+
+    crossfadeTriggered = false;
+    crossfadeActive = false;
+    pendingCrossfadeDuration = null;
+
+    if (crossfadeTeardownTimer) {
+      clearTimeout(crossfadeTeardownTimer);
+      crossfadeTeardownTimer = null;
+    }
+
+    const incoming = primaryIsA ? audioB : audioA;
+    if (incoming) {
+      incoming.pause();
+      incoming.src = "";
+    }
+  }
+
+  function beginCrossfadeRamps(durationSec: number) {
+    ensureAudioRouting();
+    const ctx = audioCtx!;
+    crossfadeActive = true;
+
+    const newGain = primaryIsA ? gainA : gainB;
+    const oldGain = primaryIsA ? gainB : gainA;
+
+    const now = ctx.currentTime;
+    const end = now + durationSec;
+
+    // Fade out old track then fade in new track
+    oldGain?.gain.setValueAtTime(oldGain?.gain.value ?? volume, now);
+    oldGain?.gain.linearRampToValueAtTime(0, end);
+    newGain?.gain.setValueAtTime(0, now);
+    newGain?.gain.linearRampToValueAtTime(volume, end);
+
+    // remove old element after fade completes
+    crossfadeTeardownTimer = setTimeout(() => {
+      if (!crossfadeActive) return;
+
+      const old = primaryIsA ? audioB : audioA;
+      if (old) {
+        old.pause();
+        old.src = "";
+      }
+
+      crossfadeActive = false;
+      crossfadeTriggered = false;
+      crossfadeTeardownTimer = null;
+    }, durationSec * 1000);
+  }
+
   // load volume upon mounting
   onMount(() => {
     const saved = parseFloat(localStorage.getItem(VOLUME_KEY) ?? "1");
     volume = isNaN(saved) ? 1 : Math.max(0, Math.min(1, saved));
     prevVolume = volume > 0 ? volume : 1;
-    if (audio) audio.volume = volume;
+    if (audioA) {
+      audioA.volume = volume;
+    }
+    if (audioB) {
+      audioB.volume = volume;
+    }
 
     setupMediaSessionActions({
       onPlay: () => {
@@ -78,17 +194,21 @@
   onDestroy(() => {
     setMediaSessionTrack(null);
     setMediaSessionPlaybackState(null);
+    cancelCrossfade();
+    audioCtx?.close().catch(() => {});
+    audioCtx = null;
   });
 
   let audioDurationMs = $state(0); // actual duration from <audio> element
   let seeking = $state(false); // true while user is dragging seekbar
   let seekSyncTimer: ReturnType<typeof setTimeout> | null = $state(null);
 
-  // Track the URL we set on audio.src; don't compare against
-  // audio.src directly because the browser normalizes percent-encoding
-  // (e.g. %27 -> ') so the comparison never matches for paths with special
-  // characters, causing a continuous src reset that prevents playback.
-  let currentAudioSrc = $state("");
+  // Track the track ID we set on audio.src to prevent continuous reloads.
+  // We use the ID instead of URL because the browser normalizes percent-encoding
+  // on URLs, and stream URL parameters can fluctuate.
+  let currentTrackIdInAudio = $state("");
+  let lastTrackId = $state("");
+  let lastPaused = $state(true);
   let lastMediaMetadataKey = $state("");
 
   let track = $derived($playerState.track);
@@ -332,6 +452,7 @@
   }
 
   function togglePause() {
+    ensureAudioContext();
     if (!hasTrack) return;
     const newPaused = !$playerState.paused;
 
@@ -353,6 +474,7 @@
     queue: string[],
     queueIndex: number
   ) {
+    ensureAudioContext();
     const track = await findTrackById(trackId);
     audioDurationMs = 0;
     playerState.update((s) => ({
@@ -408,6 +530,9 @@
   }
 
   async function skipNext() {
+    // Hard-cancel any in-progress crossfade first
+    if (crossfadeActive) cancelCrossfade();
+
     if (!hasTrack) return;
 
     const q = $playerState.queue;
@@ -445,6 +570,9 @@
   }
 
   async function skipPrev() {
+    // Hard-cancel any in-progress crossfade first
+    if (crossfadeActive) cancelCrossfade();
+
     if (!hasTrack) return;
 
     const q = $playerState.queue;
@@ -547,23 +675,36 @@
     const target = e.target as HTMLInputElement;
     volume = Number(target.value);
 
-    if (audio) audio.volume = volume;
     if (volume > 0) prevVolume = volume;
-
     localStorage.setItem(VOLUME_KEY, String(volume));
   }
 
   function toggleMute() {
     if (!audio) return;
-    if (audio.volume > 0) {
-      prevVolume = audio.volume;
-      audio.volume = 0;
+    if (volume > 0) {
+      prevVolume = volume;
       volume = 0;
     } else {
       volume = prevVolume || 1;
-      audio.volume = volume;
     }
   }
+
+  // Update audio volume when it changes
+  $effect(() => {
+    const active = primaryIsA ? audioA : audioB;
+    if (active) {
+      active.volume = volume;
+      const activeGain = primaryIsA ? gainA : gainB;
+      if (
+        activeGain &&
+        audioCtx &&
+        !crossfadeActive &&
+        !pendingCrossfadeDuration
+      ) {
+        activeGain.gain.setValueAtTime(volume, audioCtx.currentTime);
+      }
+    }
+  });
 
   function handleKeyDown(e: KeyboardEvent) {
     // don't intercept when typing in an input / textarea / contenteditable.
@@ -631,32 +772,87 @@
 
   // Sync HTML audio element when track changes
   $effect(() => {
-    if (audio && $playerState.trackId) {
-      if (seekSyncTimer) {
-        clearTimeout(seekSyncTimer);
-        seekSyncTimer = null;
-      }
+    const active = primaryIsA ? audioA : audioB;
+    if (active && $playerState.trackId) {
+      const trackChanged = $playerState.trackId !== lastTrackId;
+      const pausedChanged = $playerState.paused !== lastPaused;
 
-      const url = streamUrl($playerState.trackId, {
-        localPath: $playerState.track?.path,
-        quality: $streamQuality
-      });
+      if (trackChanged) {
+        // If the user manually skipped during an active crossfade, hard-cancel it
+        if (crossfadeActive && !pendingCrossfadeDuration) {
+          cancelCrossfade();
+        }
 
-      if (currentAudioSrc !== url && url) {
-        currentAudioSrc = url;
-        audio.src = url;
-        audio.currentTime = $playerState.positionMs / 1000;
-        if (track) setMediaSessionTrack(track);
-      }
+        lastTrackId = $playerState.trackId;
+        lastPaused = $playerState.paused;
+        crossfadeTriggered = false;
 
-      if (!$playerState.paused && !audio.seeking && audio.paused) {
-        audio.play().catch((e) => {
-          if (e.name !== "AbortError") {
-            console.warn("Audio play failed", e);
-          }
+        if (seekSyncTimer) {
+          clearTimeout(seekSyncTimer);
+          seekSyncTimer = null;
+        }
+
+        const fadeDuration = pendingCrossfadeDuration;
+        pendingCrossfadeDuration = null;
+
+        const url = streamUrl($playerState.trackId, {
+          localPath: $playerState.track?.path,
+          quality: $streamQuality
         });
-      } else if ($playerState.paused && !audio.paused) {
-        audio.pause();
+
+        if (url) {
+          if (currentTrackIdInAudio !== $playerState.trackId) {
+            ensureAudioRouting();
+            currentTrackIdInAudio = $playerState.trackId;
+            active.src = url;
+            active.currentTime = $playerState.positionMs / 1000;
+
+            const activeGain = primaryIsA ? gainA : gainB;
+            if (activeGain && audioCtx) {
+              activeGain.gain.cancelScheduledValues(audioCtx.currentTime);
+              if (!fadeDuration) {
+                activeGain.gain.setValueAtTime(volume, audioCtx.currentTime);
+              }
+            }
+          }
+          if (track) setMediaSessionTrack(track);
+        }
+
+        if (!$playerState.paused) {
+          active.play().catch((e) => {
+            if (e.name !== "AbortError") {
+              console.warn("Audio play failed", e);
+            }
+          });
+        }
+
+        if (fadeDuration) {
+          beginCrossfadeRamps(fadeDuration);
+        }
+      } else if (pausedChanged) {
+        lastPaused = $playerState.paused;
+
+        if ($playerState.paused) {
+          audioA?.pause();
+          audioB?.pause();
+          if (audioCtx?.state === "running") {
+            audioCtx.suspend();
+          }
+        } else {
+          if (audioCtx?.state === "suspended") {
+            audioCtx.resume();
+          }
+          if (crossfadeActive) {
+            audioA?.play().catch(() => {});
+            audioB?.play().catch(() => {});
+          } else {
+            active.play().catch((e) => {
+              if (e.name !== "AbortError") {
+                console.warn("Audio play failed", e);
+              }
+            });
+          }
+        }
       }
     }
   });
@@ -665,28 +861,44 @@
   // stop and reset the audio element immediately. Maybe add a toast
   // saying the file is no longer available.
   $effect(() => {
-    if (audio && !$playerState.trackId && currentAudioSrc) {
-      audio.pause();
-      audio.src = "";
+    const active = primaryIsA ? audioA : audioB;
+    if (active && !$playerState.trackId && currentTrackIdInAudio) {
+      cancelCrossfade();
+      active.pause();
+      active.src = "";
 
-      currentAudioSrc = "";
+      currentTrackIdInAudio = "";
       lastMediaMetadataKey = "";
+      lastTrackId = "";
+      lastPaused = true;
 
       setMediaSessionTrack(null);
       setMediaSessionPlaybackState(null);
     }
   });
 
-  function onEnded() {
+  function onEnded(el: HTMLAudioElement) {
+    const active = primaryIsA ? audioA : audioB;
+    if (el !== active) return;
+
+    // During active crossfade, suppress the natural ended event;
+    // the crossfade's setTimeout will call skipNext when the ramp finishes.
+    if (crossfadeActive) return;
     skipNext();
   }
 
-  function onAudioPlay() {
+  function onAudioPlay(el: HTMLAudioElement) {
+    const active = primaryIsA ? audioA : audioB;
+    if (el !== active) return;
+
     setMediaSessionPlaybackState(false);
     if (track) setMediaSessionTrack(track);
   }
 
-  function onAudioPause() {
+  function onAudioPause(el: HTMLAudioElement) {
+    const active = primaryIsA ? audioA : audioB;
+    if (el !== active) return;
+
     setMediaSessionPlaybackState(hasTrack ? true : null);
   }
 
@@ -699,11 +911,14 @@
     );
   }
 
-  function onTimeUpdate() {
+  function onTimeUpdate(el: HTMLAudioElement) {
+    const active = primaryIsA ? audioA : audioB;
+    if (el !== active) return;
+
     if (!seeking) {
       playerState.update((s) => ({
         ...s,
-        positionMs: audio.currentTime * 1000
+        positionMs: active.currentTime * 1000
       }));
     }
 
@@ -715,16 +930,46 @@
         seekSyncTimer = null;
         if (!isLocalID($playerState.trackId ?? "")) {
           wsSend("playback.seek", {
-            position_ms: audio.currentTime * 1000
+            position_ms: active.currentTime * 1000
           });
         }
       }, debounceMs);
     }
+
+    if (active && isFinite(active.duration) && active.duration > 0) {
+      const remaining = active.duration - active.currentTime;
+
+      // Crossfade trigger (only if at least 1.0 seconds remain)
+      if (
+        $crossfadeConfig.enabled &&
+        !crossfadeTriggered &&
+        !crossfadeActive &&
+        remaining >= 1.0 &&
+        remaining <= $crossfadeConfig.durationSec
+      ) {
+        crossfadeTriggered = true;
+
+        const fadeDuration = Math.max(
+          1,
+          Math.min($crossfadeConfig.durationSec, remaining)
+        );
+
+        // Flip primary so the new track loads into the new primary element.
+        // The oldtrack keeps playing in the now-secondary element.
+        primaryIsA = !primaryIsA;
+        pendingCrossfadeDuration = fadeDuration;
+
+        skipNext();
+      }
+    }
   }
 
-  function changeAudioDuration() {
-    if (audio && isFinite(audio.duration)) {
-      audioDurationMs = audio.duration * 1000;
+  function changeAudioDuration(el: HTMLAudioElement) {
+    const active = primaryIsA ? audioA : audioB;
+    if (el !== active) return;
+
+    if (el && isFinite(el.duration)) {
+      audioDurationMs = el.duration * 1000;
     }
 
     if (track) setMediaSessionTrack(track);
@@ -735,15 +980,28 @@
 
 <div class="player">
   <audio
-    bind:this={audio}
-    ontimeupdate={onTimeUpdate}
-    onended={onEnded}
-    onplay={onAudioPlay}
-    onpause={onAudioPause}
-    onloadedmetadata={changeAudioDuration}
-    ondurationchange={changeAudioDuration}
+    bind:this={audioA}
+    ontimeupdate={() => onTimeUpdate(audioA!)}
+    onended={() => onEnded(audioA!)}
+    onplay={() => onAudioPlay(audioA!)}
+    onpause={() => onAudioPause(audioA!)}
+    onloadedmetadata={() => changeAudioDuration(audioA!)}
+    ondurationchange={() => changeAudioDuration(audioA!)}
     onerror={onAudioError}
     preload="metadata"
+    crossorigin="anonymous"
+  ></audio>
+  <audio
+    bind:this={audioB}
+    ontimeupdate={() => onTimeUpdate(audioB!)}
+    onended={() => onEnded(audioB!)}
+    onplay={() => onAudioPlay(audioB!)}
+    onpause={() => onAudioPause(audioB!)}
+    onloadedmetadata={() => changeAudioDuration(audioB!)}
+    ondurationchange={() => changeAudioDuration(audioB!)}
+    onerror={onAudioError}
+    preload="metadata"
+    crossorigin="anonymous"
   ></audio>
   <div
     class="now-playing"

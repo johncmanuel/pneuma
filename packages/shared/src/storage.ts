@@ -7,7 +7,8 @@ export const storageKeys = {
   themeMode: "pneuma_theme_mode",
   adminTracksPanel: "pneuma_admin_tracks",
   favoritesSyncEnabled: "pneuma_favorites_sync_enabled",
-  streamQuality: "pneuma_stream_quality"
+  streamQuality: "pneuma_stream_quality",
+  crossfade: "pneuma_crossfade"
 } as const;
 
 export function getScopedLocalFoldersKey(userId: string | null | undefined) {

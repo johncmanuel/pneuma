@@ -23,7 +23,8 @@
     streamQuality,
     type StreamPresetOption,
     streamPresetOptions,
-    addToast
+    addToast,
+    crossfadeConfig
   } from "@pneuma/shared";
   import { db } from "../utils/db";
   import { RotateCcw, Check, CircleAlert } from "@lucide/svelte";
@@ -31,6 +32,15 @@
 
   function handlePresetClick(option: StreamPresetOption) {
     streamQuality.set(option.value);
+  }
+
+  function toggleCrossfade() {
+    crossfadeConfig.update((c) => ({ ...c, enabled: !c.enabled }));
+  }
+
+  function setCrossfadeDuration(e: Event) {
+    const sec = Number((e.target as HTMLInputElement).value);
+    crossfadeConfig.update((c) => ({ ...c, durationSec: sec }));
   }
 
   let connectURL = $state("http://127.0.0.1:8989");
@@ -235,6 +245,43 @@
       </ul>
     </section>
   </article>
+
+  <div class="group">
+    <h3>Crossfade</h3>
+    <p class="text-3">Smoothly blend between tracks at the end of each song.</p>
+
+    <label class="toggle-row">
+      <span>Enable crossfade</span>
+      <input
+        type="checkbox"
+        id="crossfade-toggle"
+        checked={$crossfadeConfig.enabled}
+        onchange={toggleCrossfade}
+      />
+    </label>
+
+    {#if $crossfadeConfig.enabled}
+      <div class="slider-row">
+        <label for="crossfade-duration" class="text-3">
+          Duration: <strong>{$crossfadeConfig.durationSec} s</strong>
+        </label>
+        <input
+          type="range"
+          id="crossfade-duration"
+          min="1"
+          max="12"
+          step="1"
+          value={$crossfadeConfig.durationSec}
+          oninput={setCrossfadeDuration}
+          class="duration-slider"
+          aria-label="Crossfade duration in seconds"
+        />
+        <div class="slider-ticks" aria-hidden="true">
+          <span>1s</span><span>6s</span><span>12s</span>
+        </div>
+      </div>
+    {/if}
+  </div>
 
   <div class="group">
     <h3>About</h3>
@@ -468,5 +515,37 @@
     padding: 2px 6px;
     border-radius: 4px;
     font-size: 12px;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+    max-width: 320px;
+    font-size: 13px;
+  }
+
+  .slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 320px;
+  }
+
+  .duration-slider {
+    width: 100%;
+    accent-color: var(--accent);
+    height: 4px;
+    padding: 0;
+    margin: 0;
+  }
+
+  .slider-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-3);
   }
 </style>
