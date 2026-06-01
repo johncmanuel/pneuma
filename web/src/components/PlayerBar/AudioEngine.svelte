@@ -51,6 +51,13 @@
   let crossfadeTriggered = $state(false);
   let crossfadeActive = $state(false);
 
+  // Pending crossfade duration set when we trigger onEnded to advance the queue.
+  // The track-change $effect reads and consumes this to start the actual gain ramps.
+  let pendingCrossfadeDuration = $state<number | null>(null);
+
+  // Timer that removes the old (secondary) element after the fade finishes
+  let crossfadeTeardownTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Keep parent's audio prop bound to the currently active element
   $effect(() => {
     const active = primaryIsA ? audioA : audioB;
@@ -131,6 +138,12 @@
 
     crossfadeTriggered = false;
     crossfadeActive = false;
+    pendingCrossfadeDuration = null;
+
+    if (crossfadeTeardownTimer) {
+      clearTimeout(crossfadeTeardownTimer);
+      crossfadeTeardownTimer = null;
+    }
 
     const incoming = primaryIsA ? audioB : audioA;
     if (incoming) {
@@ -139,63 +152,35 @@
     }
   }
 
-  function startCrossfade(
-    nextUrl: string,
-    nextTrackId: string,
-    durationSec: number
-  ) {
+  function beginCrossfadeRamps(durationSec: number) {
     ensureAudioRouting();
     const ctx = audioCtx!;
     crossfadeActive = true;
 
-    const incoming = primaryIsA ? audioB : audioA;
-    if (!incoming) return;
-
-    incoming.src = nextUrl;
-    incoming.onerror = () => {
-      console.warn("crossfade: incoming track failed to load, aborting");
-      cancelCrossfade();
-    };
-
-    incoming.play().catch((e) => {
-      if (e.name !== "AbortError") {
-        console.warn("crossfade: incoming play failed", e);
-        cancelCrossfade();
-      }
-    });
-
-    const activeGain = primaryIsA ? gainA : gainB;
-    const incomingGain = primaryIsA ? gainB : gainA;
+    const newGain = primaryIsA ? gainA : gainB;
+    const oldGain = primaryIsA ? gainB : gainA;
 
     const now = ctx.currentTime;
     const end = now + durationSec;
 
-    activeGain?.gain.setValueAtTime(activeGain?.gain.value ?? volume, now);
-    activeGain?.gain.linearRampToValueAtTime(0, end);
+    // Fade out old track then fade in new track
+    oldGain?.gain.setValueAtTime(oldGain?.gain.value ?? volume, now);
+    oldGain?.gain.linearRampToValueAtTime(0, end);
+    newGain?.gain.setValueAtTime(0, now);
+    newGain?.gain.linearRampToValueAtTime(volume, end);
 
-    incomingGain?.gain.setValueAtTime(0, now);
-    incomingGain?.gain.linearRampToValueAtTime(volume, end);
-
-    setTimeout(() => {
+    crossfadeTeardownTimer = setTimeout(() => {
       if (!crossfadeActive) return;
 
-      const active = primaryIsA ? audioA : audioB;
-      if (active) {
-        active.pause();
-        active.src = "";
+      const old = primaryIsA ? audioB : audioA;
+      if (old) {
+        old.pause();
+        old.src = "";
       }
 
-      primaryIsA = !primaryIsA;
       crossfadeActive = false;
       crossfadeTriggered = false;
-      currentTrackIdInAudio = nextTrackId;
-
-      // Update duration immediately since the metadata is already loaded
-      if (incoming && isFinite(incoming.duration)) {
-        audioDurationMs = incoming.duration * 1000;
-      }
-
-      onEnded();
+      crossfadeTeardownTimer = null;
     }, durationSec * 1000);
   }
 
@@ -224,14 +209,6 @@
     if (active && isFinite(active.duration) && active.duration > 0) {
       const remaining = active.duration - active.currentTime;
 
-      // Handle seeking backward out of crossfade zone
-      if (
-        (crossfadeActive || crossfadeTriggered) &&
-        remaining > crossfade.durationSec
-      ) {
-        cancelCrossfade();
-      }
-
       // Crossfade trigger (only if at least 1.0 seconds remain)
       if (
         crossfade.enabled &&
@@ -242,22 +219,17 @@
       ) {
         crossfadeTriggered = true;
 
-        const q = $playerState.queue;
-        const idx = q.indexOf($playerState.trackId);
-        const nextIdx = idx + 1 < q.length ? idx + 1 : -1;
-        if (nextIdx >= 0) {
-          const nextId = q[nextIdx];
-          const nextUrl = streamUrl(nextId, {
-            quality: resolveEffectiveStreamQuality()
-          });
-          if (nextUrl) {
-            const fadeDuration = Math.max(
-              1,
-              Math.min(crossfade.durationSec, remaining)
-            );
-            startCrossfade(nextUrl, nextId, fadeDuration);
-          }
-        }
+        const fadeDuration = Math.max(
+          1,
+          Math.min(crossfade.durationSec, remaining)
+        );
+
+        // Flip primary so the new track loads into the new primary element.
+        // The oldtrack keeps playing in the now-secondary element.
+        primaryIsA = !primaryIsA;
+        pendingCrossfadeDuration = fadeDuration;
+
+        onEnded();
       }
     }
   }
@@ -285,8 +257,12 @@
 
   onDestroy(() => {
     stopPositionLoop();
+
     if (seekSyncTimer) clearTimeout(seekSyncTimer);
+    if (crossfadeTeardownTimer) clearTimeout(crossfadeTeardownTimer);
+
     cancelCrossfade();
+
     audioCtx?.close().catch(() => {});
     audioCtx = null;
   });
@@ -297,7 +273,7 @@
     if (active) {
       active.volume = volume;
       const activeGain = primaryIsA ? gainA : gainB;
-      if (activeGain && audioCtx && !crossfadeActive) {
+      if (activeGain && audioCtx && !crossfadeActive && !pendingCrossfadeDuration) {
         activeGain.gain.setValueAtTime(volume, audioCtx.currentTime);
       }
     }
@@ -311,7 +287,8 @@
       const pausedChanged = $playerState.paused !== lastPaused;
 
       if (trackChanged) {
-        if (crossfadeActive) {
+        // If the user manually skipped during an active crossfade, hard-cancel it
+        if (crossfadeActive && !pendingCrossfadeDuration) {
           cancelCrossfade();
         }
 
@@ -323,6 +300,9 @@
           clearTimeout(seekSyncTimer);
           seekSyncTimer = null;
         }
+
+        const fadeDuration = pendingCrossfadeDuration;
+        pendingCrossfadeDuration = null;
 
         const url = streamUrl($playerState.trackId, {
           quality: resolveEffectiveStreamQuality()
@@ -339,7 +319,11 @@
             const activeGain = primaryIsA ? gainA : gainB;
             if (activeGain && audioCtx) {
               activeGain.gain.cancelScheduledValues(audioCtx.currentTime);
-              activeGain.gain.setValueAtTime(volume, audioCtx.currentTime);
+              // If crossfading, the gain starts at 0 (note: beginCrossfadeRamps will ramp it up).
+              // Otherwise, set it to the volume immediately.
+              if (!fadeDuration) {
+                activeGain.gain.setValueAtTime(volume, audioCtx.currentTime);
+              }
             }
           }
         }
@@ -349,6 +333,10 @@
             if (e.name !== "AbortError") console.warn("Audio play failed", e);
           });
           startPositionLoop();
+        }
+
+        if (fadeDuration) {
+          beginCrossfadeRamps(fadeDuration);
         }
       } else if (pausedChanged) {
         lastPaused = $playerState.paused;
