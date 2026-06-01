@@ -273,7 +273,12 @@
     if (active) {
       active.volume = volume;
       const activeGain = primaryIsA ? gainA : gainB;
-      if (activeGain && audioCtx && !crossfadeActive && !pendingCrossfadeDuration) {
+      if (
+        activeGain &&
+        audioCtx &&
+        !crossfadeActive &&
+        !pendingCrossfadeDuration
+      ) {
         activeGain.gain.setValueAtTime(volume, audioCtx.currentTime);
       }
     }
