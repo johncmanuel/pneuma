@@ -16,7 +16,9 @@ import {
   loadPlaylists,
   selectPlaylist,
   selectedPlaylistId,
-  syncFavoritesFromServer
+  syncAllPlaylistsFromServer,
+  syncFavoritesFromServer,
+  syncPlaylistFromServer
 } from "./playlists";
 import {
   wsBase,
@@ -59,6 +61,10 @@ export function connectWS() {
         serverDisconnected.set(false);
         addToast("Reconnected to server.", "success");
       }
+
+      syncAllPlaylistsFromServer().catch((e) =>
+        console.warn("Failed to sync playlists on reconnect:", e)
+      );
 
       if (get(favoritesSyncEnabled)) {
         syncFavoritesFromServer()
@@ -167,17 +173,7 @@ function handleMessage(msg: {
           const deltaResult = await applyRemotePlaylistDelta(msg.payload);
 
           if (!deltaResult.applied) {
-            await loadPlaylists();
-
-            if (get(favoritesSyncEnabled)) {
-              await syncFavoritesFromServer();
-            }
-
-            const selId = get(selectedPlaylistId);
-            if (selId) {
-              await selectPlaylist(selId);
-            }
-
+            await syncPlaylistFromServer(remoteID);
             return;
           }
 
@@ -206,9 +202,18 @@ function handleMessage(msg: {
     }
     case "playlist.created":
     case "playlist.deleted": {
+      const createdRemoteID: string = msg.payload?.id ?? "";
+
       applyRemotePlaylistDelta(msg.payload)
         .then(async (deltaResult) => {
           if (!deltaResult.applied) {
+            // if playlist was created on the server and not yet synced with desktop,
+            // sync it
+            if (msg.type === "playlist.created" && createdRemoteID) {
+              await syncPlaylistFromServer(createdRemoteID);
+              return;
+            }
+
             await loadPlaylists();
 
             if (get(favoritesSyncEnabled)) {

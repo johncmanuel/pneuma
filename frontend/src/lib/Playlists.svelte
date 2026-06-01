@@ -335,10 +335,6 @@
           <button class="action-btn" onclick={handleUpload}
             >Upload to Server</button
           >
-        {:else if $connected && $selectedPlaylist.remote_playlist_id}
-          <button class="action-btn" onclick={handleUpload}
-            >Sync to Server</button
-          >
         {/if}
         <button
           class="action-btn danger"
