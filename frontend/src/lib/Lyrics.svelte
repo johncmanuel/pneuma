@@ -1,6 +1,6 @@
 <script lang="ts">
   import { playerState, seekRequest } from "../stores/player";
-  import { serverFetch, artworkUrl } from "../utils/api";
+  import { serverFetch, artworkUrl, localBase } from "../utils/api";
   import { isLocalID, type LrcLine, parseLrc } from "@pneuma/shared";
   import { Music } from "@lucide/svelte";
 
@@ -19,7 +19,7 @@
   );
 
   async function fetchLyrics(id: string) {
-    if (!id || isLocalID(id)) {
+    if (!id) {
       lines = [];
       loadError = false;
       lastFetchedId = id;
@@ -31,7 +31,12 @@
     lines = [];
 
     try {
-      const res = await serverFetch(`/api/library/tracks/${id}/lyrics`);
+      const isLocal = isLocalID(id);
+      const url = isLocal
+        ? `${localBase()}/local/lyrics?path=${encodeURIComponent(id)}`
+        : `/api/library/tracks/${id}/lyrics`;
+
+      const res = isLocal ? await fetch(url) : await serverFetch(url);
       if (!res.ok) {
         loadError = true;
         return;

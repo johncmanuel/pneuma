@@ -11,9 +11,6 @@
   import {
     localLoading,
     localFolders,
-    addLocalFolder,
-    removeLocalFolder,
-    scanLocalFolders,
     localAlbumGroups,
     localAlbumGroupsTotal,
     localAlbumFilter,
@@ -23,6 +20,7 @@
     localChangeSeq,
     localTrackToTrack,
     scanProgress,
+    scanLocalFolders,
     type LocalAlbumGroup
   } from "../stores/localLibrary";
   import { playerState } from "../stores/player";
@@ -55,7 +53,6 @@
   import {
     Music,
     FolderOpen,
-    RotateCcw,
     X,
     TriangleAlert,
     ChevronRight,
@@ -443,11 +440,6 @@
     });
   }
 
-  async function scanLibrary() {
-    if (!$connected) return;
-    await serverFetch("/api/library/scan", { method: "POST" });
-  }
-
   function switchTab(tab: LibTab) {
     albumGridFilter = "";
     pushNav({ tab, albumKey: null, subTab: "albums" });
@@ -528,10 +520,6 @@
       }
     }
     await addTracksToPlaylist(pl.id, tracksToAdd, group.isLocal ?? false);
-  }
-
-  async function handleAddFolder() {
-    await addLocalFolder();
   }
 
   function hideImgOnError(e: Event) {
@@ -700,24 +688,6 @@
       >
         <div class="toolbar">
           <h2>{$activeTab === "library" ? "Library" : "Local Albums"}</h2>
-          <div class="toolbar-actions">
-            {#if $activeTab === "library"}
-              <button onclick={scanLibrary} title="Rescan watch folders"
-                ><RotateCcw size={14} /> Scan</button
-              >
-            {:else}
-              <button onclick={handleAddFolder} title="Add a local music folder"
-                >+ Add Folder</button
-              >
-              {#if $localFolders.length > 0}
-                <button
-                  onclick={() => scanLocalFolders()}
-                  title="Rescan local folders"
-                  ><RotateCcw size={14} /> Rescan</button
-                >
-              {/if}
-            {/if}
-          </div>
         </div>
 
         <div class="album-grid-search">
@@ -735,21 +705,6 @@
             >
           {/if}
         </div>
-
-        {#if $activeTab === "local" && $localFolders.length > 0}
-          <div class="folder-chips">
-            {#each $localFolders as dir}
-              <span class="folder-chip">
-                {dir.split("/").pop() || dir}
-                <button
-                  class="chip-remove"
-                  onclick={() => removeLocalFolder(dir)}
-                  title="Remove folder"><X size={14} /></button
-                >
-              </span>
-            {/each}
-          </div>
-        {/if}
 
         {#if $activeTab === "library" && !$connected}
           <div class="offline-state">
@@ -781,7 +736,7 @@
         {:else if displayedGroups.length === 0}
           {#if $activeTab === "local"}
             <p class="text-3">
-              No local music. Click "Add Folder" to add a music directory.
+              No local music. Add a music folder in Settings.
             </p>
           {:else}
             <p class="text-3">
@@ -954,35 +909,6 @@
   .album-meta {
     font-size: 13px;
     margin: 0;
-  }
-
-  .folder-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-bottom: 12px;
-  }
-
-  .folder-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 10px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    font-size: 12px;
-    color: var(--text-2);
-  }
-
-  .chip-remove {
-    font-size: 14px;
-    color: var(--text-3);
-    padding: 0 2px;
-    line-height: 1;
-  }
-  .chip-remove:hover {
-    color: var(--danger);
   }
 
   .album-grid-search {

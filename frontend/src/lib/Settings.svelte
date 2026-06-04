@@ -20,6 +20,12 @@
     setFavoritesSyncEnabled
   } from "../stores/playlists";
   import {
+    localFolders,
+    addLocalFolder,
+    removeLocalFolder,
+    scanLocalFolders
+  } from "../stores/localLibrary";
+  import {
     streamQuality,
     type StreamPresetOption,
     streamPresetOptions,
@@ -27,7 +33,7 @@
     crossfadeConfig
   } from "@pneuma/shared";
   import { db } from "../utils/db";
-  import { RotateCcw, Check, CircleAlert } from "@lucide/svelte";
+  import { RotateCcw, Check, CircleAlert, X } from "@lucide/svelte";
   import { BrowserOpenURL } from "../../wailsjs/runtime";
 
   function handlePresetClick(option: StreamPresetOption) {
@@ -112,10 +118,43 @@
       changingFavoritesSync = false;
     }
   }
+
+  async function handleAddFolder() {
+    await addLocalFolder();
+  }
 </script>
 
 <section>
   <h2>Settings</h2>
+
+  <div class="group">
+    <h3>Local Music Folders</h3>
+    <p class="text-3">
+      Add folders from your computer to scan for music files.
+    </p>
+    <div style="display: flex; gap: 8px;">
+      <button onclick={handleAddFolder}>+ Add Folder</button>
+      {#if $localFolders.length > 0}
+        <button onclick={() => scanLocalFolders()} title="Rescan local folders"
+          ><RotateCcw size={14} /> Rescan</button
+        >
+      {/if}
+    </div>
+    {#if $localFolders.length > 0}
+      <div class="folder-chips">
+        {#each $localFolders as dir}
+          <span class="folder-chip">
+            {dir.split("/").pop() || dir}
+            <button
+              class="chip-remove"
+              onclick={() => removeLocalFolder(dir)}
+              title="Remove folder"><X size={14} /></button
+            >
+          </span>
+        {/each}
+      </div>
+    {/if}
+  </div>
 
   <div class="group">
     <h3>Server Connection</h3>
@@ -547,5 +586,33 @@
     justify-content: space-between;
     font-size: 11px;
     color: var(--text-3);
+  }
+
+  .folder-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .folder-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--text-2);
+  }
+
+  .chip-remove {
+    font-size: 14px;
+    color: var(--text-3);
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .chip-remove:hover {
+    color: var(--danger);
   }
 </style>
