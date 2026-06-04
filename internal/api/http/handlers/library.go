@@ -68,7 +68,7 @@ type compactTrackListItem struct {
 type adminTrackListItem struct {
 	compactTrackListItem
 	UploadedByUserID string    `json:"uploaded_by_user_id,omitempty"`
-	CreatedAt        time.Time `json:"created_at,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
 	HasLyrics        bool      `json:"has_lyrics"`
 }
 
