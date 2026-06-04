@@ -22,6 +22,7 @@
   import Favorites from "./lib/Favorites.svelte";
   import SearchBar from "./lib/SearchBar.svelte";
   import Queue from "./lib/Queue.svelte";
+  import Lyrics from "./lib/Lyrics.svelte";
   import Settings from "./lib/Settings.svelte";
   import DisconnectBanner from "./lib/DisconnectBanner.svelte";
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
@@ -245,6 +246,8 @@
       <Playlists />
     {:else if $currentView === "settings"}
       <Settings />
+    {:else if $currentView === "lyrics"}
+      <Lyrics />
     {/if}
   </main>
 

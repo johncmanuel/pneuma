@@ -123,7 +123,10 @@
                 />
               </td>
             {/if}
-            <td class="truncate">{t.title}</td>
+            <td class="truncate"
+              >{t.title}{#if t.has_lyrics}<span class="lrc-badge">LRC</span
+                >{/if}</td
+            >
             <td class="truncate text-2">{t.album_artist || "–"}</td>
             <td class="truncate text-2">{t.album_name || "–"}</td>
             <td class="text-3">{formatDuration(t.duration_ms)}</td>
@@ -265,5 +268,19 @@
   .track-count {
     font-size: 12px;
     text-align: right;
+  }
+
+  .lrc-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent);
+    vertical-align: middle;
+    line-height: 1.4;
   }
 </style>

@@ -109,6 +109,7 @@ type Track struct {
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
+	OriginalFilename sql.NullString
 }
 
 type TrackAlbumGroup struct {

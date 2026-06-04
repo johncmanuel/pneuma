@@ -37,6 +37,7 @@ func (s *LocalStreamer) Start() (int, error) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/local/stream", s.handleLocalStream)
 	mux.HandleFunc("/local/art", s.handleLocalArt)
+	mux.HandleFunc("/local/lyrics", s.handleLocalLyrics)
 	mux.HandleFunc("/local/playlist-art", s.handlePlaylistArt)
 
 	s.server = &http.Server{Handler: mux}
@@ -227,6 +228,42 @@ func (s *LocalStreamer) handleLocalArt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, thumbPath)
+}
+
+// handleLocalLyrics serves the .lrc lyrics file that sits alongside a local audio file.
+// The .lrc file is resolved by replacing the audio file's extension with ".lrc".
+func (s *LocalStreamer) handleLocalLyrics(w http.ResponseWriter, r *http.Request) {
+	if handleLocalOptions(w, r) {
+		return
+	}
+
+	setLocalCORSHeaders(w)
+
+	path := r.URL.Query().Get("path")
+	if path == "" {
+		http.Error(w, "path required", http.StatusBadRequest)
+		return
+	}
+
+	ext := filepath.Ext(path)
+	lrcPath := strings.TrimSuffix(path, ext) + ".lrc"
+
+	f, err := os.Open(lrcPath)
+	if err != nil {
+		http.Error(w, "no lyrics file", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		http.Error(w, "stat failed", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	http.ServeContent(w, r, filepath.Base(lrcPath), info.ModTime(), f)
 }
 
 // handlePlaylistArt serves a playlist's custom artwork thumbnail.

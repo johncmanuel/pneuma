@@ -36,6 +36,7 @@
   } from "@pneuma/shared";
   import { streamUrl, artworkUrl, connected } from "../utils/api";
   import { serverDisconnected, wsSend } from "../stores/ws";
+  import { seekRequest } from "../stores/player";
   import { onMount, onDestroy } from "svelte";
   import {
     Play,
@@ -48,7 +49,8 @@
     Volume1,
     Volume2,
     Music,
-    List
+    List,
+    MicVocal
   } from "@lucide/svelte";
 
   let audio: HTMLAudioElement = $state() as HTMLAudioElement;
@@ -654,6 +656,16 @@
 
   let repeatLabel = $derived(RepeatLabels[$playerState.repeat] ?? "Off");
 
+  $effect(() => {
+    const sr = $seekRequest;
+    if (sr !== null) {
+      if (audio) audio.currentTime = sr / 1000;
+      playerState.update((s) => ({ ...s, positionMs: sr }));
+      if (!isLocal) wsSend("playback.seek", { position_ms: sr });
+      seekRequest.set(null);
+    }
+  });
+
   function onSeekInput(e: Event) {
     seeking = true;
     const ms = Number((e.target as HTMLInputElement).value);
@@ -1135,7 +1147,21 @@
 
   <div class="right-controls">
     <button
-      class="ctrl-btn queue-toggle"
+      class="queue-toggle"
+      class:active-toggle={$currentView === "lyrics"}
+      onclick={() => {
+        if ($currentView === "lyrics") {
+          pushNav({ view: "library" });
+        } else {
+          pushNav({ view: "lyrics" });
+        }
+      }}
+      title="Lyrics"
+    >
+      <MicVocal size={16} />
+    </button>
+    <button
+      class="queue-toggle"
       class:active-toggle={$activePanel === "queue"}
       onclick={toggleQueuePanel}
       title="Queue"
@@ -1335,6 +1361,9 @@
     justify-content: center;
     margin-right: 8px;
     color: var(--text-2);
+    background: none;
+    border: none;
+    cursor: pointer;
   }
   .queue-toggle:hover {
     color: var(--text-1);

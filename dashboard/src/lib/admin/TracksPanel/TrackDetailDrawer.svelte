@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { formatDuration } from "@pneuma/shared";
+  import { formatDuration, addToast } from "@pneuma/shared";
+  import { apiFetch } from "../../api";
   import { AUDIO_ACCEPT } from "./uploader";
   import type { Track } from "./types";
 
@@ -31,6 +32,68 @@
 
   let replaceInput: HTMLInputElement | undefined = $state();
 
+  let lyricsInput: HTMLInputElement | undefined = $state();
+  let hasLyrics = $state(false);
+  let lyricsLoading = $state(false);
+
+  async function checkLyrics(id: string) {
+    lyricsLoading = true;
+    try {
+      const res = await apiFetch(`/api/library/tracks/${id}/lyrics`, {
+        method: "HEAD"
+      });
+      hasLyrics = res.ok;
+    } catch {
+      hasLyrics = false;
+    } finally {
+      lyricsLoading = false;
+    }
+  }
+
+  async function handleLyricsUpload() {
+    const file = lyricsInput?.files?.[0];
+    if (!file || !track) return;
+
+    const form = new FormData();
+    form.append("file", file);
+
+    try {
+      const res = await apiFetch(`/api/library/tracks/${track.id}/lyrics`, {
+        method: "POST",
+        body: form
+      });
+      if (res.ok) {
+        addToast("Lyrics uploaded", "success");
+        hasLyrics = true;
+      } else {
+        const text = await res.text().catch(() => "Unknown error");
+        addToast("Failed to upload lyrics: " + text, "error");
+      }
+    } catch (e: any) {
+      addToast("Upload error: " + (e.message || "Network error"), "error");
+    }
+
+    if (lyricsInput) lyricsInput.value = "";
+  }
+
+  async function handleDeleteLyrics() {
+    if (!track || !confirm("Remove lyrics file?")) return;
+
+    try {
+      const res = await apiFetch(`/api/library/tracks/${track.id}/lyrics`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        addToast("Lyrics removed", "success");
+        hasLyrics = false;
+      } else {
+        addToast("Failed to remove lyrics", "error");
+      }
+    } catch {
+      addToast("Failed to remove lyrics", "error");
+    }
+  }
+
   $effect(() => {
     if (!track) return;
     editTitle = track.title || "";
@@ -38,6 +101,7 @@
     editAlbum = track.album_name || "";
     editTrackNumber = track.track_number ?? 0;
     editDiscNumber = track.disc_number ?? 0;
+    checkLyrics(track.id);
   });
 
   let isDirty = $derived.by(() => {
@@ -140,7 +204,6 @@
                 bind:value={editTitle}
                 class="field-input"
                 disabled={!canEdit || saving}
-                // autofocus
               />
             </label>
             <label class="field">
@@ -213,6 +276,44 @@
             </button>
           {:else}
             <p class="text-3">You don't have permission to replace audio.</p>
+          {/if}
+        </section>
+
+        <section>
+          <h4>Lyrics</h4>
+          {#if lyricsLoading}
+            <p class="text-3">Checking…</p>
+          {:else if hasLyrics}
+            <div class="lyrics-status">
+              <span class="lyrics-badge found">Lyrics file found</span>
+              {#if canEdit}
+                <button
+                  class="btn secondary btn-sm"
+                  onclick={handleDeleteLyrics}
+                  disabled={saving}
+                >
+                  Remove
+                </button>
+              {/if}
+            </div>
+          {:else}
+            <p class="text-3 lyrics-none">No lyrics file</p>
+          {/if}
+          {#if canEdit}
+            <input
+              class="hidden-input"
+              type="file"
+              accept=".lrc"
+              bind:this={lyricsInput}
+              onchange={handleLyricsUpload}
+            />
+            <button
+              class="btn secondary"
+              onclick={() => lyricsInput?.click()}
+              disabled={saving}
+            >
+              {hasLyrics ? "Replace .lrc file" : "Upload .lrc file"}
+            </button>
           {/if}
         </section>
       </div>
@@ -419,5 +520,33 @@
     .field-grid.two-col {
       grid-template-columns: 1fr;
     }
+  }
+
+  .lyrics-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+  }
+
+  .lyrics-badge {
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: var(--r-sm);
+    font-weight: 600;
+  }
+
+  .lyrics-badge.found {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    color: var(--accent);
+  }
+
+  .lyrics-none {
+    margin: 0 0 6px;
+  }
+
+  .btn-sm {
+    padding: 3px 10px;
+    font-size: 12px;
   }
 </style>

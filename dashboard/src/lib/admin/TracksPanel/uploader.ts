@@ -25,10 +25,21 @@ const AUDIO_EXTS = new Set([
 ]);
 export const AUDIO_ACCEPT = Array.from(AUDIO_EXTS).join(",");
 
+/** Accept string for the general upload input (audio + .lrc). */
+export const UPLOAD_ACCEPT = AUDIO_ACCEPT + ",.lrc";
+
 export function isAudioFile(name: string): boolean {
   const dot = name.lastIndexOf(".");
   if (dot < 0) return false;
   return AUDIO_EXTS.has(name.slice(dot).toLowerCase());
+}
+
+export function isLrcFile(name: string): boolean {
+  return name.toLowerCase().endsWith(".lrc");
+}
+
+export function isUploadableFile(name: string): boolean {
+  return isAudioFile(name) || isLrcFile(name);
 }
 
 export async function collectFilesFromEntries(
@@ -75,6 +86,10 @@ function readEntriesBatch(
 }
 
 export async function processUploadItem(item: UploadItem): Promise<UploadItem> {
+  if (isLrcFile(item.file.name)) {
+    return processLrcUploadItem(item);
+  }
+
   try {
     const form = new FormData();
     form.append("file", item.file);
@@ -89,10 +104,47 @@ export async function processUploadItem(item: UploadItem): Promise<UploadItem> {
     } else if (r.ok) {
       return { ...item, status: "done" };
     } else {
-      const body = await r.text().catch(() => "Upload failed");
-      return { ...item, status: "error", error: body.slice(0, 120) };
+      return { ...item, status: "error", error: "Upload failed" };
     }
   } catch (e: unknown) {
-    return { ...item, status: "error", error: e.message ?? "Network error" };
+    return { ...item, status: "error", error: "Upload failed" };
   }
+}
+
+/**
+ * Process an .lrc file upload by posting it to the server's filename-matching
+ * lyrics endpoint. The server matches the .lrc basename against track titles
+ * and path basenames. Retries on 404 to handle the race condition where the
+ * corresponding audio file is still being ingested until max retries are met.
+ */
+async function processLrcUploadItem(item: UploadItem): Promise<UploadItem> {
+  const maxRetries = 5;
+  const retryDelayMs = 2000;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const form = new FormData();
+      form.append("file", item.file);
+
+      const res = await apiFetch("/api/library/lyrics/upload", {
+        method: "POST",
+        body: form
+      });
+
+      if (res.ok) {
+        return { ...item, status: "done" };
+      }
+
+      if (res.status === 404 && attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, retryDelayMs));
+        continue;
+      }
+
+      return { ...item, status: "error", error: "Upload failed" };
+    } catch (e: unknown) {
+      return { ...item, status: "error", error: e.message ?? "Upload failed" };
+    }
+  }
+
+  return { ...item, status: "error", error: "Track not found after retries" };
 }

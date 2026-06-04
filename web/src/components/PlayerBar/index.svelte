@@ -31,7 +31,7 @@
     handleAddTracksToPlaylist
   } from "../../lib/stores/playlists";
   import { artworkUrl } from "../../lib/api";
-  import { VolumeX, Volume1, Volume2, List } from "@lucide/svelte";
+  import { VolumeX, Volume1, Volume2, List, MicVocal } from "@lucide/svelte";
 
   import AudioEngine from "./AudioEngine.svelte";
   import MediaSession from "./MediaSession.svelte";
@@ -482,6 +482,21 @@
     </div>
 
     <div class="right-controls">
+      <button
+        class="ctrl-btn queue-toggle"
+        class:active-toggle={$currentView === "lyrics"}
+        onclick={() => {
+          if ($currentView === "lyrics") {
+            pushNav({ view: "library" });
+          } else {
+            pushNav({ view: "lyrics" });
+          }
+        }}
+        title="Lyrics"
+        aria-label="Lyrics"
+      >
+        <MicVocal size={16} />
+      </button>
       <button
         class="ctrl-btn queue-toggle"
         class:active-toggle={$activePanel === "queue"}

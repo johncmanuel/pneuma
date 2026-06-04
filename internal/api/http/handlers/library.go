@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -67,7 +68,8 @@ type compactTrackListItem struct {
 type adminTrackListItem struct {
 	compactTrackListItem
 	UploadedByUserID string    `json:"uploaded_by_user_id,omitempty"`
-	CreatedAt        time.Time `json:"created_at,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	HasLyrics        bool      `json:"has_lyrics"`
 }
 
 func compactTrackListItems(tracks []*models.Track) []compactTrackListItem {
@@ -97,6 +99,9 @@ func adminTrackListItems(tracks []*models.Track) []adminTrackListItem {
 			continue
 		}
 
+		lrcPath := lrcPathForTrack(track)
+		_, lrcErr := os.Stat(lrcPath)
+
 		items = append(items, adminTrackListItem{
 			compactTrackListItem: compactTrackListItem{
 				ID:          track.ID,
@@ -110,6 +115,7 @@ func adminTrackListItems(tracks []*models.Track) []adminTrackListItem {
 			},
 			UploadedByUserID: track.UploadedByUserID,
 			CreatedAt:        track.CreatedAt,
+			HasLyrics:        lrcErr == nil,
 		})
 	}
 
@@ -209,15 +215,7 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 	if offsetStr != "" || limitStr != "" {
 		offset, _ := strconv.Atoi(offsetStr)
 		limit, _ := strconv.Atoi(limitStr)
-		if limit <= 0 {
-			limit = 50
-		}
-		if limit > 200 {
-			limit = 200
-		}
-		if offset < 0 {
-			offset = 0
-		}
+		offset, limit = models.ClampPagination(offset, limit)
 		tracks, err := h.lib.AllTracksPage(ctx, offset, limit)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -531,15 +529,9 @@ func (h *LibraryHandler) ListAlbumGroups(c echo.Context) error {
 	offset, _ := strconv.Atoi(c.QueryParam("offset"))
 	limit, _ := strconv.Atoi(c.QueryParam("limit"))
 	filter := c.QueryParam("filter")
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 200 {
-		limit = 200
-	}
-	if offset < 0 {
-		offset = 0
-	}
+
+	offset, limit = models.ClampPagination(offset, limit)
+
 	groups, err := h.lib.AllTrackAlbumGroupsPage(ctx, filter, offset, limit)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -663,6 +655,7 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		// re-read tags from the temp file
 		populateTrackFromTags(existing, tmpPath)
 		existing.UpdatedAt = time.Now()
+		existing.OriginalFilename = file.Filename
 
 		finalPath := filepath.Join(h.uploadsDir, hash+ext)
 		existing.Path = finalPath
@@ -696,6 +689,7 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		FileSizeBytes:    info.Size(),
 		LastModified:     info.ModTime(),
 		UploadedByUserID: claims.UserID,
+		OriginalFilename: file.Filename,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -869,6 +863,7 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// populateTrackFromTags populates the given track's metadata from the audio file's tags.
 func populateTrackFromTags(t *models.Track, tmpPath string) {
 	if f, openErr := os.Open(tmpPath); openErr == nil {
 		defer f.Close()
@@ -893,4 +888,202 @@ func populateTrackFromTags(t *models.Track, tmpPath string) {
 			t.DiscNumber, _ = m.Disc()
 		}
 	}
+}
+
+const maxLrcBytes = 2 << 20
+
+// lrcPathForTrack returns the .lrc file path that corresponds to the given track
+// by replacing the audio file extension with ".lrc".
+func lrcPathForTrack(track *models.Track) string {
+	ext := filepath.Ext(track.Path)
+	return strings.TrimSuffix(track.Path, ext) + ".lrc"
+}
+
+// GetLyrics serves the .lrc lyrics file for a track as plain text.
+// Returns 404 if the track has no accompanying .lrc file.
+func (h *LibraryHandler) GetLyrics(c echo.Context) error {
+	track, err := h.lib.TrackByID(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if track == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "track not found")
+	}
+
+	lrcPath := lrcPathForTrack(track)
+	if _, err := os.Stat(lrcPath); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "no lyrics file")
+	}
+
+	c.Response().Header().Set("Cache-Control", "private, no-cache")
+	return c.File(lrcPath)
+}
+
+// UploadLyrics accepts a .lrc file upload and saves it alongside the track's
+// audio file. Overwrites any existing lyrics file.
+func (h *LibraryHandler) UploadLyrics(c echo.Context) error {
+	track, err := h.lib.TrackByID(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if track == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "track not found")
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "file field required")
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if ext != ".lrc" {
+		return echo.NewHTTPError(http.StatusBadRequest, "only .lrc files are accepted")
+	}
+
+	if file.Size > maxLrcBytes {
+		return echo.NewHTTPError(http.StatusBadRequest, "lyrics file too large (max 1 MB)")
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer src.Close()
+
+	lrcPath := lrcPathForTrack(track)
+
+	dst, err := os.Create(lrcPath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create lyrics file: "+err.Error())
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		if err := os.Remove(lrcPath); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to write lyrics file and remove failed: "+err.Error())
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write lyrics file: "+err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// DeleteLyrics removes the .lrc lyrics file associated with a track.
+func (h *LibraryHandler) DeleteLyrics(c echo.Context) error {
+	track, err := h.lib.TrackByID(c.Request().Context(), c.Param("id"))
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if track == nil {
+		return echo.NewHTTPError(http.StatusNotFound, "track not found")
+	}
+
+	lrcPath := lrcPathForTrack(track)
+	if _, err := os.Stat(lrcPath); err != nil {
+		return echo.NewHTTPError(http.StatusNotFound, "no lyrics file")
+	}
+
+	if err := os.Remove(lrcPath); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to remove lyrics file: "+err.Error())
+	}
+
+	return c.NoContent(http.StatusNoContent)
+}
+
+// UploadLyricsByFilename accepts an .lrc file upload and matches it to a track
+// by comparing the uploaded filename (minus .lrc) to each track's title or path
+// basename (minus the audio extension). If the track hasn't been ingested yet
+// (race condition with concurrent audio upload), the .lrc file is staged in the
+// uploads directory so the scanner can pick it up later.
+func (h *LibraryHandler) UploadLyricsByFilename(c echo.Context) error {
+	file, err := c.FormFile("file")
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "file field required")
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if ext != ".lrc" {
+		return echo.NewHTTPError(http.StatusBadRequest, "only .lrc files are accepted")
+	}
+
+	if file.Size > maxLrcBytes {
+		return echo.NewHTTPError(http.StatusBadRequest, "lyrics file too large")
+	}
+
+	// The base name we want to match: e.g. "abc123.flac.lrc" -> "abc123.flac"
+	lrcBase := strings.TrimSuffix(file.Filename, filepath.Ext(file.Filename))
+	lrcBaseLower := strings.ToLower(lrcBase)
+
+	ctx := c.Request().Context()
+	tracks, err := h.lib.AllTracks(ctx)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	// Try to find a matching track by title or path basename.
+	// Uploaded tracks have hash-based paths (e.g. "abc123.flac") but their
+	// title might be overwritten by tags, so we check the original filename as well.
+	var matched *models.Track
+	for _, t := range tracks {
+		if t.OriginalFilename != "" {
+			origBase := strings.TrimSuffix(t.OriginalFilename, filepath.Ext(t.OriginalFilename))
+			if strings.ToLower(origBase) == lrcBaseLower {
+				matched = t
+				break
+			}
+		}
+
+		// Check title match for uploaded tracks via dashboard
+		if strings.ToLower(t.Title) == lrcBaseLower {
+			matched = t
+			break
+		}
+
+		// Check path basename match for scanner-ingested tracks
+		trackFile := filepath.Base(t.Path)
+		trackBase := strings.TrimSuffix(trackFile, filepath.Ext(trackFile))
+		if strings.ToLower(trackBase) == lrcBaseLower {
+			matched = t
+			break
+		}
+	}
+
+	if matched == nil {
+		// The track may not be in the DB yet due to concurrent upload.
+		// Stage the .lrc in the uploads directory so it's available when
+		// the track eventually gets ingested and the user refreshes.
+		if h.uploadsDir != "" {
+			stagePath := filepath.Join(h.uploadsDir, file.Filename)
+			return writeLrcFile(c, file, stagePath, "staged")
+		}
+		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("no track matches filename %q", lrcBase))
+	}
+
+	lrcPath := lrcPathForTrack(matched)
+	return writeLrcFile(c, file, lrcPath, matched.ID)
+}
+
+// writeLrcFile saves the uploaded .lrc multipart file to destPath and returns
+// a JSON response. trackID is "staged" when the .lrc is staged for later matching.
+func writeLrcFile(c echo.Context, file *multipart.FileHeader, destPath, trackID string) error {
+	src, err := file.Open()
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	defer src.Close()
+
+	dst, err := os.Create(destPath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create lyrics file: "+err.Error())
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		if err := os.Remove(destPath); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to write and cleanup lyrics file: "+err.Error()+".lrc name: "+destPath)
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write lyrics file: "+err.Error())
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{"status": "ok", "track_id": trackID})
 }
