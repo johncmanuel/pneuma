@@ -12,7 +12,8 @@
     saveSession,
     clearSession,
     isReconnecting,
-    stopAutoReconnect
+    stopAutoReconnect,
+    savedServerUrl
   } from "../utils/api";
   import { recentAlbums, recentPlaylists } from "../stores/recentAlbums";
   import {
@@ -49,7 +50,7 @@
     crossfadeConfig.update((c) => ({ ...c, durationSec: sec }));
   }
 
-  let connectURL = $state("http://127.0.0.1:8989");
+  let connectURL = $state(savedServerUrl() ?? "");
   let connectUser = $state("");
   let connectPass = $state("");
   let connectErr = $state("");

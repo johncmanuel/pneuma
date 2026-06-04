@@ -119,20 +119,33 @@
       Upload Folder
     </button>
 
-    <select
-      bind:value={concurrencyLimit}
-      class="search-input"
-      style="width: auto"
-      title="Upload Concurrency"
+    <div
+      style="display: flex; align-items: center; gap: 12px; color: var(--text-2);"
     >
-      <option value={0}>Auto Concurrency</option>
-      <option value={1}>1 at a time</option>
-      <option value={2}>2 at a time</option>
-      <option value={3}>3 at a time</option>
-      <option value={4}>4 at a time</option>
-      <option value={5}>5 at a time</option>
-      <option value={10}>10 at a time</option>
-    </select>
+      <label
+        style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;"
+      >
+        <input
+          type="checkbox"
+          checked={concurrencyLimit <= 0}
+          onchange={(e) => (concurrencyLimit = e.currentTarget.checked ? 0 : 3)}
+        />
+        No Limit
+      </label>
+      {#if concurrencyLimit > 0}
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <input
+            type="number"
+            bind:value={concurrencyLimit}
+            class="search-input"
+            style="width: 60px; padding: 4px 8px;"
+            min="1"
+            title="Upload Concurrency Limit"
+          />
+          <span style="font-size: 13px;">at a time</span>
+        </div>
+      {/if}
+    </div>
   {/if}
 
   {#if $currentUser?.is_admin}

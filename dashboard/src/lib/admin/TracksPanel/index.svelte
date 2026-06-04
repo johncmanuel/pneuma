@@ -22,7 +22,7 @@
   let searchQuery = $state("");
   let sortKey: SortKey = $state("title");
   let sortDir: SortDir = $state("asc");
-  let concurrencyLimit: number = $state(0);
+  let concurrencyLimit: number = $state(3);
 
   let selectedIds = $state(new Set<string>());
   let bulkDeleting = $state(false);
@@ -424,24 +424,22 @@
     if (!uploadActive) startUpload();
   }
 
-  function getConcurrencyLevel(pendingCount: number): number {
-    if (pendingCount <= 5) return 1;
-    if (pendingCount <= 30) return 2;
-    return 3;
-  }
-
   async function startUpload() {
     uploadActive = true;
     uploadCancelled = false;
     const pendingCount = uploadQueue.filter(
       (i) => i.status === "pending"
     ).length;
+
+    // If concurrencyLimit <= 0, it means no limit (unbounded)
     const concurrency =
       concurrencyLimit > 0
-        ? concurrencyLimit
-        : getConcurrencyLevel(pendingCount);
+        ? Math.min(concurrencyLimit, pendingCount)
+        : pendingCount;
 
-    const workers = Array.from({ length: concurrency }, () => uploadWorker());
+    const workers = Array.from({ length: concurrency || 1 }, () =>
+      uploadWorker()
+    );
     await Promise.all(workers);
 
     uploadActive = false;

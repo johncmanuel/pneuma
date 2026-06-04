@@ -29,9 +29,6 @@ export const isReconnecting = writable(false);
 
 export const deviceId = getOrCreateDeviceID();
 
-// Only the server URL and JWT token are persisted.
-// The token is short-lived (24 h), rotated automatically, and can be
-// revoked server-side
 const SESSION_KEY = storageKeys.session;
 
 interface SavedSession {
@@ -73,6 +70,15 @@ function loadSession(): SavedSession | null {
   return null;
 }
 
+/** Returns the server URL from the persisted session, or null if none saved. */
+export function savedServerUrl(): string | null {
+  return loadSession()?.url ?? null;
+}
+
+/**
+ * Initialize the API by retrieving the local port, loading local data and restoring the connection.
+ * Also attempts to auto-reconnect if a session is saved.
+ */
 export async function initApi() {
   try {
     const port = await GetLocalPort();
@@ -81,16 +87,16 @@ export async function initApi() {
     console.error("Failed to get local port from backend");
   }
 
-  // Load persisted local state from SQLite before any reactive subscribers write.
   await Promise.all([initLocalLibrary(), initRecentAlbums()]);
   await refreshConnection();
 
-  if (!get(connected)) {
+  // only start reconnecting if there is a valid server URL
+  if (!get(connected) && savedServerUrl() !== null) {
     autoReconnect();
   }
 }
 
-/** Re-read connection state from the Go backend. */
+/** Re-read connection state from the backend. */
 export async function refreshConnection() {
   try {
     const ok = await IsConnected();
@@ -117,6 +123,10 @@ export async function refreshConnection() {
 
 let reconnectInterval: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Automatically attempt to restore the saved session if available.
+ * @param onSuccess Optional callback to run if the connection is successful.
+ */
 export async function autoReconnect(onSuccess?: () => void) {
   const session = loadSession();
   if (!session) return;
