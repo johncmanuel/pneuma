@@ -3,9 +3,9 @@ INSERT INTO tracks (
     id, path, title, album_artist, album_name, genre, year,
     track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
     codec, file_size_bytes, last_modified, fingerprint,
-    uploaded_by_user_id,
+    uploaded_by_user_id, original_filename,
     created_at, updated_at
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(path) DO UPDATE SET
     title=excluded.title,
     album_artist=excluded.album_artist, album_name=excluded.album_name,
@@ -15,7 +15,7 @@ ON CONFLICT(path) DO UPDATE SET
     bitrate_kbps=excluded.bitrate_kbps, sample_rate_hz=excluded.sample_rate_hz,
     codec=excluded.codec, file_size_bytes=excluded.file_size_bytes,
     last_modified=excluded.last_modified, fingerprint=excluded.fingerprint,
-    uploaded_by_user_id=excluded.uploaded_by_user_id,
+    uploaded_by_user_id=excluded.uploaded_by_user_id, original_filename=excluded.original_filename,
     deleted_at=NULL,
     updated_at=excluded.updated_at;
 
@@ -29,6 +29,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.path = ? LIMIT 1;
 
@@ -42,6 +43,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.id = ? LIMIT 1;
 
@@ -55,6 +57,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL ORDER BY title COLLATE NOCASE;
 
@@ -68,6 +71,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL ORDER BY title COLLATE NOCASE LIMIT ? OFFSET ?;
 
@@ -81,6 +85,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks
 WHERE tracks.id IN (sqlc.slice('ids'));
@@ -98,6 +103,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.fingerprint = ? AND fingerprint != '' LIMIT 1;
 
@@ -111,6 +117,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks
 WHERE tracks.deleted_at IS NULL
@@ -154,6 +161,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks
 WHERE tracks.deleted_at IS NULL
@@ -169,6 +177,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND TRIM(COALESCE(album_name,''))=''
 ORDER BY disc_number, track_number, title COLLATE NOCASE;
@@ -183,6 +192,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ?
 ORDER BY disc_number, track_number, title COLLATE NOCASE;
@@ -197,6 +207,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ? AND COALESCE(album_artist,'') = ?
 ORDER BY disc_number, track_number, title COLLATE NOCASE;
@@ -214,6 +225,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks
 WHERE deleted_at IS NULL AND COALESCE(duration_ms,0) > 0

@@ -655,6 +655,7 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		// re-read tags from the temp file
 		populateTrackFromTags(existing, tmpPath)
 		existing.UpdatedAt = time.Now()
+		existing.OriginalFilename = file.Filename
 
 		finalPath := filepath.Join(h.uploadsDir, hash+ext)
 		existing.Path = finalPath
@@ -688,6 +689,7 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		FileSizeBytes:    info.Size(),
 		LastModified:     info.ModTime(),
 		UploadedByUserID: claims.UserID,
+		OriginalFilename: file.Filename,
 		CreatedAt:        now,
 		UpdatedAt:        now,
 	}
@@ -957,7 +959,9 @@ func (h *LibraryHandler) UploadLyrics(c echo.Context) error {
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, src); err != nil {
-		os.Remove(lrcPath)
+		if err := os.Remove(lrcPath); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to write lyrics file and remove failed: "+err.Error())
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write lyrics file: "+err.Error())
 	}
 
@@ -1018,9 +1022,17 @@ func (h *LibraryHandler) UploadLyricsByFilename(c echo.Context) error {
 
 	// Try to find a matching track by title or path basename.
 	// Uploaded tracks have hash-based paths (e.g. "abc123.flac") but their
-	// title is set to the original filename, so we check both.
+	// title might be overwritten by tags, so we check the original filename as well.
 	var matched *models.Track
 	for _, t := range tracks {
+		if t.OriginalFilename != "" {
+			origBase := strings.TrimSuffix(t.OriginalFilename, filepath.Ext(t.OriginalFilename))
+			if strings.ToLower(origBase) == lrcBaseLower {
+				matched = t
+				break
+			}
+		}
+
 		// Check title match for uploaded tracks via dashboard
 		if strings.ToLower(t.Title) == lrcBaseLower {
 			matched = t
@@ -1067,7 +1079,9 @@ func writeLrcFile(c echo.Context, file *multipart.FileHeader, destPath, trackID 
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, src); err != nil {
-		os.Remove(destPath)
+		if err := os.Remove(destPath); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to write and cleanup lyrics file: "+err.Error()+".lrc name: "+destPath)
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write lyrics file: "+err.Error())
 	}
 

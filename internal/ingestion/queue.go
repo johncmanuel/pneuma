@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -116,7 +117,43 @@ func (iq *Queue) process(_ context.Context, job Job) {
 
 	go iq.scanner.ScanPath(job.FinalPath)
 
+	iq.adoptStagedLrc(job)
+
 	iq.log.Info("track ingested", "id", job.Track.ID, "path", job.FinalPath)
+}
+
+// adoptStagedLrc looks for a staged .lrc file in the uploads directory that
+// matches the original filename of the uploaded track, and moves it next to
+// the ingested audio file.
+func (iq *Queue) adoptStagedLrc(job Job) {
+	if job.Filename == "" {
+		return
+	}
+
+	uploadsDir := filepath.Dir(job.FinalPath)
+
+	// The staged .lrc filename matches the original upload filename with .lrc appended.
+	// e.g., "song.flac" -> "song.flac.lrc" or "song.lrc"
+	base := strings.TrimSuffix(job.Filename, filepath.Ext(job.Filename))
+
+	candidates := []string{
+		filepath.Join(uploadsDir, base+".lrc"),
+		filepath.Join(uploadsDir, job.Filename+".lrc"),
+	}
+
+	lrcDest := strings.TrimSuffix(job.FinalPath, filepath.Ext(job.FinalPath)) + ".lrc"
+
+	// find the first candidate that exists and move it to lrcDest
+	for _, staged := range candidates {
+		if _, err := os.Stat(staged); err == nil {
+			if err := os.Rename(staged, lrcDest); err != nil {
+				iq.log.Error("failed to adopt staged .lrc", "src", staged, "dst", lrcDest, "err", err)
+			} else {
+				iq.log.Info("adopted staged .lrc", "src", staged, "dst", lrcDest)
+			}
+			return
+		}
+	}
 }
 
 // CleanupTempUploads removes all files from the temp upload directory.

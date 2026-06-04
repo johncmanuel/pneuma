@@ -43,6 +43,7 @@ type Track struct {
 	LastModified     time.Time  `json:"last_modified"`
 	Fingerprint      string     `json:"fingerprint,omitempty"`
 	UploadedByUserID string     `json:"uploaded_by_user_id,omitempty"`
+	OriginalFilename string     `json:"original_filename,omitempty"`
 	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`

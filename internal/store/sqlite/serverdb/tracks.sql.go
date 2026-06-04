@@ -55,6 +55,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks
 WHERE deleted_at IS NULL AND COALESCE(duration_ms,0) > 0
@@ -79,6 +80,7 @@ type GetRandomTracksRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -111,6 +113,7 @@ func (q *Queries) GetRandomTracks(ctx context.Context, limit int64) ([]GetRandom
 			&i.LastModified,
 			&i.Fingerprint,
 			&i.UploadedByUserID,
+			&i.OriginalFilename,
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -165,6 +168,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL ORDER BY title COLLATE NOCASE
 `
@@ -187,6 +191,7 @@ type ListTracksRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -219,6 +224,7 @@ func (q *Queries) ListTracks(ctx context.Context) ([]ListTracksRow, error) {
 			&i.LastModified,
 			&i.Fingerprint,
 			&i.UploadedByUserID,
+			&i.OriginalFilename,
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -246,6 +252,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ?
 ORDER BY disc_number, track_number, title COLLATE NOCASE
@@ -269,6 +276,7 @@ type ListTracksByAlbumNameRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -301,6 +309,7 @@ func (q *Queries) ListTracksByAlbumName(ctx context.Context, albumName sql.NullS
 			&i.LastModified,
 			&i.Fingerprint,
 			&i.UploadedByUserID,
+			&i.OriginalFilename,
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -328,6 +337,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND album_name = ? AND COALESCE(album_artist,'') = ?
 ORDER BY disc_number, track_number, title COLLATE NOCASE
@@ -356,6 +366,7 @@ type ListTracksByAlbumNameAndArtistRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -388,6 +399,7 @@ func (q *Queries) ListTracksByAlbumNameAndArtist(ctx context.Context, arg ListTr
 			&i.LastModified,
 			&i.Fingerprint,
 			&i.UploadedByUserID,
+			&i.OriginalFilename,
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -415,6 +427,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL AND TRIM(COALESCE(album_name,''))=''
 ORDER BY disc_number, track_number, title COLLATE NOCASE
@@ -438,6 +451,7 @@ type ListTracksByAlbumUnorganizedRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -470,6 +484,7 @@ func (q *Queries) ListTracksByAlbumUnorganized(ctx context.Context) ([]ListTrack
 			&i.LastModified,
 			&i.Fingerprint,
 			&i.UploadedByUserID,
+			&i.OriginalFilename,
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -497,6 +512,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks
 WHERE tracks.id IN (/*SLICE:ids*/?)
@@ -520,6 +536,7 @@ type ListTracksByIDsRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -562,6 +579,7 @@ func (q *Queries) ListTracksByIDs(ctx context.Context, ids []string) ([]ListTrac
 			&i.LastModified,
 			&i.Fingerprint,
 			&i.UploadedByUserID,
+			&i.OriginalFilename,
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -589,6 +607,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.deleted_at IS NULL ORDER BY title COLLATE NOCASE LIMIT ? OFFSET ?
 `
@@ -616,6 +635,7 @@ type ListTracksPageRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -648,6 +668,7 @@ func (q *Queries) ListTracksPage(ctx context.Context, arg ListTracksPageParams) 
 			&i.LastModified,
 			&i.Fingerprint,
 			&i.UploadedByUserID,
+			&i.OriginalFilename,
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -716,6 +737,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks
 WHERE tracks.deleted_at IS NULL
@@ -740,6 +762,7 @@ type SearchTracksByIDsRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -782,6 +805,7 @@ func (q *Queries) SearchTracksByIDs(ctx context.Context, ids []string) ([]Search
 			&i.LastModified,
 			&i.Fingerprint,
 			&i.UploadedByUserID,
+			&i.OriginalFilename,
 			&i.DeletedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -835,6 +859,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.fingerprint = ? AND fingerprint != '' LIMIT 1
 `
@@ -857,6 +882,7 @@ type TrackByFingerprintRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -883,6 +909,7 @@ func (q *Queries) TrackByFingerprint(ctx context.Context, fingerprint sql.NullSt
 		&i.LastModified,
 		&i.Fingerprint,
 		&i.UploadedByUserID,
+		&i.OriginalFilename,
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -900,6 +927,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.id = ? LIMIT 1
 `
@@ -922,6 +950,7 @@ type TrackByIDRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -948,6 +977,7 @@ func (q *Queries) TrackByID(ctx context.Context, id string) (TrackByIDRow, error
 		&i.LastModified,
 		&i.Fingerprint,
 		&i.UploadedByUserID,
+		&i.OriginalFilename,
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -965,6 +995,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks WHERE tracks.path = ? LIMIT 1
 `
@@ -987,6 +1018,7 @@ type TrackByPathRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -1013,6 +1045,7 @@ func (q *Queries) TrackByPath(ctx context.Context, path string) (TrackByPathRow,
 		&i.LastModified,
 		&i.Fingerprint,
 		&i.UploadedByUserID,
+		&i.OriginalFilename,
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1030,6 +1063,7 @@ SELECT id, path, title,
     COALESCE(file_size_bytes,0) AS file_size_bytes, last_modified,
     COALESCE(fingerprint,'') AS fingerprint,
     COALESCE(uploaded_by_user_id,'') AS uploaded_by_user_id,
+    COALESCE(original_filename,'') AS original_filename,
     deleted_at, created_at, updated_at
 FROM tracks
 WHERE tracks.deleted_at IS NULL
@@ -1067,6 +1101,7 @@ type TrackDuplicateByMetaRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -1099,6 +1134,7 @@ func (q *Queries) TrackDuplicateByMeta(ctx context.Context, arg TrackDuplicateBy
 		&i.LastModified,
 		&i.Fingerprint,
 		&i.UploadedByUserID,
+		&i.OriginalFilename,
 		&i.DeletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1111,9 +1147,9 @@ INSERT INTO tracks (
     id, path, title, album_artist, album_name, genre, year,
     track_number, disc_number, duration_ms, bitrate_kbps, sample_rate_hz,
     codec, file_size_bytes, last_modified, fingerprint,
-    uploaded_by_user_id,
+    uploaded_by_user_id, original_filename,
     created_at, updated_at
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
 ON CONFLICT(path) DO UPDATE SET
     title=excluded.title,
     album_artist=excluded.album_artist, album_name=excluded.album_name,
@@ -1123,7 +1159,7 @@ ON CONFLICT(path) DO UPDATE SET
     bitrate_kbps=excluded.bitrate_kbps, sample_rate_hz=excluded.sample_rate_hz,
     codec=excluded.codec, file_size_bytes=excluded.file_size_bytes,
     last_modified=excluded.last_modified, fingerprint=excluded.fingerprint,
-    uploaded_by_user_id=excluded.uploaded_by_user_id,
+    uploaded_by_user_id=excluded.uploaded_by_user_id, original_filename=excluded.original_filename,
     deleted_at=NULL,
     updated_at=excluded.updated_at
 `
@@ -1146,6 +1182,7 @@ type UpsertTrackParams struct {
 	LastModified     string
 	Fingerprint      sql.NullString
 	UploadedByUserID sql.NullString
+	OriginalFilename sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
 }
@@ -1169,6 +1206,7 @@ func (q *Queries) UpsertTrack(ctx context.Context, arg UpsertTrackParams) error 
 		arg.LastModified,
 		arg.Fingerprint,
 		arg.UploadedByUserID,
+		arg.OriginalFilename,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)

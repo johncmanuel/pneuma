@@ -117,6 +117,7 @@ type trackRow struct {
 	LastModified     string
 	Fingerprint      string
 	UploadedByUserID string
+	OriginalFilename string
 	DeletedAt        sql.NullString
 	CreatedAt        string
 	UpdatedAt        string
@@ -160,6 +161,7 @@ func trackToModel(r trackRow) *models.Track {
 		LastModified:     ParseTime(r.LastModified),
 		Fingerprint:      r.Fingerprint,
 		UploadedByUserID: r.UploadedByUserID,
+		OriginalFilename: r.OriginalFilename,
 		CreatedAt:        ParseTime(r.CreatedAt),
 		UpdatedAt:        ParseTime(r.UpdatedAt),
 	}

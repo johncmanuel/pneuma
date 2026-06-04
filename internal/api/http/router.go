@@ -189,6 +189,7 @@ func NewRouter(svc Services) *echo.Echo {
 	lib.PUT("/tracks/:id/file", lh.ReplaceTrackFile, middleware.RequirePerm(secret, "can_edit"), uploadBodyLimit)
 	lib.DELETE("/tracks/:id", lh.DeleteTrack, middleware.RequirePerm(secret, "can_delete"))
 	lib.GET("/tracks/:id/lyrics", lh.GetLyrics)
+	lib.HEAD("/tracks/:id/lyrics", lh.GetLyrics)
 	lib.POST("/tracks/:id/lyrics", lh.UploadLyrics, middleware.RequirePerm(secret, "can_edit"))
 	lib.DELETE("/tracks/:id/lyrics", lh.DeleteLyrics, middleware.RequirePerm(secret, "can_edit"))
 	lib.POST("/lyrics/upload", lh.UploadLyricsByFilename, middleware.RequirePerm(secret, "can_edit"))

@@ -228,6 +228,7 @@ func (s *Service) UpsertTrack(ctx context.Context, t *models.Track) error {
 		LastModified:     dbconv.FormatTime(t.LastModified),
 		Fingerprint:      dbconv.NullStr(t.Fingerprint),
 		UploadedByUserID: dbconv.NullStr(t.UploadedByUserID),
+		OriginalFilename: dbconv.NullStr(t.OriginalFilename),
 		CreatedAt:        dbconv.FormatTime(t.CreatedAt),
 		UpdatedAt:        dbconv.FormatTime(t.UpdatedAt),
 	})
