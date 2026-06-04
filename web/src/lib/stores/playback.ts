@@ -22,6 +22,8 @@ const initial: PlayerState = {
 
 export const playerState = writable<PlayerState>(initial);
 
+export const seekRequest = writable<number | null>(null);
+
 function isTrackPayload(value: unknown): value is Track {
   if (!value || typeof value !== "object") return false;
 

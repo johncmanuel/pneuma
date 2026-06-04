@@ -30,6 +30,7 @@
   import Playlists from "./views/Playlists.svelte";
   import Favorites from "./views/Favorites.svelte";
   import SettingsView from "./views/Settings.svelte";
+  import LyricsView from "./views/Lyrics.svelte";
   import Login from "./views/Login.svelte";
   import Register from "./views/Register.svelte";
   import {
@@ -534,6 +535,8 @@
         <SearchView mobileView={isMobileView} />
       {:else if $currentView === "settings"}
         <SettingsView />
+      {:else if $currentView === "lyrics"}
+        <LyricsView />
       {/if}
     </main>
 

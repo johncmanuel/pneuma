@@ -14,3 +14,5 @@ const initial: PlayerState = {
 };
 
 export const playerState = writable<PlayerState>(initial);
+
+export const seekRequest = writable<number | null>(null);

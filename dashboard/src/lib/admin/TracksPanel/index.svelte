@@ -7,7 +7,7 @@
   import type { UploadItem } from "./uploader";
   import {
     processUploadItem,
-    isAudioFile,
+    isUploadableFile,
     collectFilesFromEntries
   } from "./uploader";
 
@@ -408,7 +408,7 @@
       const key = `${f.name}::${f.size}`;
       if (existing.has(key)) continue;
       existing.add(key);
-      if (!isAudioFile(f.name)) {
+      if (!isUploadableFile(f.name)) {
         newItems.push({
           file: f,
           status: "unsupported",
@@ -510,7 +510,7 @@
     }
 
     const files = Array.from(e.dataTransfer.files).filter(
-      (f) => f.type.startsWith("audio/") || isAudioFile(f.name)
+      (f) => f.type.startsWith("audio/") || isUploadableFile(f.name)
     );
     if (files.length) enqueueFiles(files);
   }
@@ -612,7 +612,7 @@
     <div class="drop-overlay">
       <div class="drop-message">
         <span class="drop-icon">↓</span>
-        <p>Drop audio files or folders to upload</p>
+        <p>Drop audio files, .lrc lyrics, or folders to upload</p>
       </div>
     </div>
   {/if}

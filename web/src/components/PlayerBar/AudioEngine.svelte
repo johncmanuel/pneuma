@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { playerState } from "../../lib/stores/playback";
+  import { playerState, seekRequest } from "../../lib/stores/playback";
   import { streamUrl } from "../../lib/api";
   import { wsSend } from "../../lib/ws";
   import type { CrossfadeConfig, StreamQuality } from "@pneuma/shared";
@@ -63,6 +63,18 @@
     const active = primaryIsA ? audioA : audioB;
     if (active) {
       audio = active;
+    }
+  });
+
+  $effect(() => {
+    const sr = $seekRequest;
+    if (sr !== null) {
+      const active = primaryIsA ? audioA : audioB;
+      if (active) active.currentTime = sr / 1000;
+      playerState.update((s) => ({ ...s, positionMs: sr }));
+      displayPosition = sr;
+      wsSend("playback.seek", { position_ms: sr });
+      seekRequest.set(null);
     }
   });
 
@@ -195,6 +207,13 @@
   function onTimeUpdate(el: HTMLAudioElement) {
     const active = primaryIsA ? audioA : audioB;
     if (el !== active) return;
+
+    if (!seeking) {
+      playerState.update((s) => ({
+        ...s,
+        positionMs: active.currentTime * 1000
+      }));
+    }
 
     const debounceMs = 5000;
     if (!seekSyncTimer) {

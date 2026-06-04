@@ -1,7 +1,7 @@
 <script lang="ts">
   import { currentUser } from "../../api";
   import { scanRunning } from "../../ws";
-  import { AUDIO_ACCEPT } from "./uploader";
+  import { AUDIO_ACCEPT, UPLOAD_ACCEPT } from "./uploader";
   import type { Track } from "./types";
 
   interface Props {
@@ -89,7 +89,7 @@
     />
     <input
       type="file"
-      accept={AUDIO_ACCEPT}
+      accept={UPLOAD_ACCEPT}
       multiple
       bind:this={fileInput}
       onchange={handleFileInput}

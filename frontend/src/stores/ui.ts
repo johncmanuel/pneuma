@@ -1,7 +1,12 @@
 import { writable, derived, get } from "svelte/store";
 
 type PanelName = "queue" | null;
-export type DesktopView = "library" | "favorites" | "playlists" | "settings";
+export type DesktopView =
+  | "library"
+  | "favorites"
+  | "playlists"
+  | "settings"
+  | "lyrics";
 
 export const activePanel = writable<PanelName>(null);
 export const currentView = writable<DesktopView>("library");
@@ -13,7 +18,6 @@ function togglePanel(name: "queue") {
 export function toggleQueuePanel() {
   togglePanel("queue");
 }
-
 export function closePanel() {
   activePanel.set(null);
 }
