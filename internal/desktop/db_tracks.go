@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"pneuma/internal/models"
 	"pneuma/internal/store/sqlite"
 	"pneuma/internal/store/sqlite/desktopdb"
 )
@@ -36,9 +37,6 @@ func buildFolderIN(conditions []string, args []any, folders []string) ([]string,
 }
 
 const (
-	minPaginationLimit = 50
-	maxPaginationLimit = 200
-
 	// localTrackCols is the shared column list for raw SQL queries against local_tracks.
 	localTrackCols = `path, folder, title, artist, album, album_artist, genre,
 						year, track_number, disc_number, duration_ms, has_artwork`
@@ -47,21 +45,6 @@ const (
 	// Includes SQL single quotes for direct use in query concatenation.
 	unknownArtist = "'Unknown Artist'"
 )
-
-// clampPagination constrains offset and limit to fixed ranges.
-func clampPagination(offset, limit int) (int, int) {
-	if limit <= 0 {
-		limit = minPaginationLimit
-	}
-	if limit > maxPaginationLimit {
-		limit = maxPaginationLimit
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	return offset, limit
-}
 
 // localTrackFromDB converts a desktopdb.LocalTrack to a desktop.LocalTrack.
 func localTrackFromDB(row desktopdb.LocalTrack) LocalTrack {
@@ -245,7 +228,7 @@ func (s *AppStore) getLocalTracksPage(folders []string, offset, limit int) ([]Lo
 		return nil, 0, nil
 	}
 
-	offset, limit = clampPagination(offset, limit)
+	offset, limit = models.ClampPagination(offset, limit)
 
 	if len(folders) == 0 {
 		total, err := s.dq.CountAllLocalTracks(context.Background())
@@ -357,7 +340,7 @@ func (s *AppStore) getLocalAlbumGroups(folders []string, filter string, offset, 
 		return &LocalAlbumGroupsResult{}, nil
 	}
 
-	offset, limit = clampPagination(offset, limit)
+	offset, limit = models.ClampPagination(offset, limit)
 
 	// Build optional WHERE clauses.
 	var conditions []string

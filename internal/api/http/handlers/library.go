@@ -215,15 +215,7 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 	if offsetStr != "" || limitStr != "" {
 		offset, _ := strconv.Atoi(offsetStr)
 		limit, _ := strconv.Atoi(limitStr)
-		if limit <= 0 {
-			limit = 50
-		}
-		if limit > 200 {
-			limit = 200
-		}
-		if offset < 0 {
-			offset = 0
-		}
+		offset, limit = models.ClampPagination(offset, limit)
 		tracks, err := h.lib.AllTracksPage(ctx, offset, limit)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -537,15 +529,9 @@ func (h *LibraryHandler) ListAlbumGroups(c echo.Context) error {
 	offset, _ := strconv.Atoi(c.QueryParam("offset"))
 	limit, _ := strconv.Atoi(c.QueryParam("limit"))
 	filter := c.QueryParam("filter")
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 200 {
-		limit = 200
-	}
-	if offset < 0 {
-		offset = 0
-	}
+
+	offset, limit = models.ClampPagination(offset, limit)
+
 	groups, err := h.lib.AllTrackAlbumGroupsPage(ctx, filter, offset, limit)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -875,6 +861,7 @@ func (h *LibraryHandler) DeleteTrack(c echo.Context) error {
 	return c.NoContent(http.StatusNoContent)
 }
 
+// populateTrackFromTags populates the given track's metadata from the audio file's tags.
 func populateTrackFromTags(t *models.Track, tmpPath string) {
 	if f, openErr := os.Open(tmpPath); openErr == nil {
 		defer f.Close()
