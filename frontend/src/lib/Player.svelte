@@ -1147,7 +1147,7 @@
 
   <div class="right-controls">
     <button
-      class="ctrl-btn queue-toggle"
+      class="queue-toggle"
       class:active-toggle={$currentView === "lyrics"}
       onclick={() => {
         if ($currentView === "lyrics") {
@@ -1161,7 +1161,7 @@
       <MicVocal size={16} />
     </button>
     <button
-      class="ctrl-btn queue-toggle"
+      class="queue-toggle"
       class:active-toggle={$activePanel === "queue"}
       onclick={toggleQueuePanel}
       title="Queue"
@@ -1361,6 +1361,9 @@
     justify-content: center;
     margin-right: 8px;
     color: var(--text-2);
+    background: none;
+    border: none;
+    cursor: pointer;
   }
   .queue-toggle:hover {
     color: var(--text-1);
