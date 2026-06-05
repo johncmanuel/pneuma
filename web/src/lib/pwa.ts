@@ -58,30 +58,10 @@ function trustedScriptURL(url: string): string {
 
 const UPDATE_CHECK_INTERVAL_MS = 15 * 60 * 1000;
 
-let hasReloadedAfterControllerChange = false;
-let shouldReloadOnControllerChange = false;
-let waitingServiceWorker: ServiceWorker | null = null;
 let registeredServiceWorker: ServiceWorkerRegistration | null = null;
 let updateCheckTimer: ReturnType<typeof setInterval> | null = null;
 
 export const pwaUpdateAvailable = writable(false);
-
-function setWaitingServiceWorker(worker: ServiceWorker | null) {
-  waitingServiceWorker = worker;
-  pwaUpdateAvailable.set(Boolean(worker));
-}
-
-function watchInstallingWorker(registration: ServiceWorkerRegistration) {
-  const installingWorker = registration.installing;
-  if (!installingWorker) return;
-
-  installingWorker.addEventListener("statechange", () => {
-    if (installingWorker.state !== "installed") return;
-    if (!navigator.serviceWorker.controller) return;
-
-    setWaitingServiceWorker(registration.waiting ?? installingWorker);
-  });
-}
 
 function scheduleUpdateChecks(registration: ServiceWorkerRegistration) {
   if (updateCheckTimer) {
@@ -97,21 +77,10 @@ function scheduleUpdateChecks(registration: ServiceWorkerRegistration) {
   }, UPDATE_CHECK_INTERVAL_MS);
 }
 
-export function applyPWAUpdate() {
-  if (!waitingServiceWorker) return;
-
-  shouldReloadOnControllerChange = true;
-  waitingServiceWorker.postMessage({ type: "SKIP_WAITING" });
-}
-
 export async function checkForPWAUpdate() {
   if (!registeredServiceWorker) return;
 
   await registeredServiceWorker.update();
-
-  if (registeredServiceWorker.waiting) {
-    setWaitingServiceWorker(registeredServiceWorker.waiting);
-  }
 }
 
 export async function registerPWAServiceWorker() {
@@ -135,27 +104,7 @@ export async function registerPWAServiceWorker() {
 
     registeredServiceWorker = registration;
 
-    if (registration.waiting) {
-      setWaitingServiceWorker(registration.waiting);
-    }
-
-    watchInstallingWorker(registration);
-
-    registration.addEventListener("updatefound", () => {
-      watchInstallingWorker(registration);
-    });
-
     scheduleUpdateChecks(registration);
-
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (!shouldReloadOnControllerChange) return;
-      if (hasReloadedAfterControllerChange) return;
-
-      hasReloadedAfterControllerChange = true;
-      shouldReloadOnControllerChange = false;
-      setWaitingServiceWorker(null);
-      window.location.reload();
-    });
 
     console.info("PWA: service worker registered", {
       scope: registration.scope
