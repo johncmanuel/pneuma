@@ -212,6 +212,7 @@ func (h *LibraryHandler) ListTracks(c echo.Context) error {
 
 	offsetStr := c.QueryParam("offset")
 	limitStr := c.QueryParam("limit")
+
 	if offsetStr != "" || limitStr != "" {
 		offset, _ := strconv.Atoi(offsetStr)
 		limit, _ := strconv.Atoi(limitStr)
@@ -336,7 +337,8 @@ func normalizeRangeHeader(req *http.Request, fileSize int64) {
 	}
 }
 
-// parseRangeStart extracts the starting byte offset from a Range header value.
+// parseRangeStart extracts the starting byte offset from a Range header value. Defaults to 0 if no Range header is present.
+// Returns the starting byte offset and whether it was present.
 func parseRangeStart(value string) (int64, bool) {
 	rangeValue := strings.TrimSpace(value)
 	if rangeValue == "" || !strings.HasPrefix(rangeValue, "bytes=") {
@@ -622,24 +624,32 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	}
 	tmpPath := tmp.Name()
 
+	var keepTmp bool
+	defer func() {
+		_ = tmp.Close()
+		if !keepTmp {
+			if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+				c.Logger().Warnf("failed to remove tmp file %s: %v", tmpPath, err)
+			}
+		}
+	}()
+
 	hasher := sha256.New()
 	if _, err = io.Copy(tmp, io.TeeReader(src, hasher)); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	tmp.Close()
+	if err := tmp.Close(); err != nil {
+		c.Logger().Warnf("failed to close tmp file early: %v", err)
+	}
 
 	hash := hex.EncodeToString(hasher.Sum(nil))
 
 	// handle dupes
 	existing, err := h.lib.TrackByFingerprint(ctx, hash)
 	if err != nil {
-		os.Remove(tmpPath)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if existing != nil && existing.DeletedAt == nil {
-		os.Remove(tmpPath)
 		return c.JSON(http.StatusConflict, map[string]any{
 			"error": "duplicate file",
 			"track": existing,
@@ -649,9 +659,9 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 	// if previously soft-deleted, restore it via the queue
 	if existing != nil && existing.DeletedAt != nil {
 		if err := h.lib.RestoreTrack(ctx, existing.ID); err != nil {
-			os.Remove(tmpPath)
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+
 		// re-read tags from the temp file
 		populateTrackFromTags(existing, tmpPath)
 		existing.UpdatedAt = time.Now()
@@ -667,15 +677,18 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 			UserID:    claims.UserID,
 			Filename:  file.Filename,
 		}); err != nil {
-			os.Remove(tmpPath)
 			return echo.NewHTTPError(http.StatusServiceUnavailable, "upload queue full")
 		}
+		keepTmp = true
 		return c.JSON(http.StatusAccepted, map[string]any{"status": "queued", "id": existing.ID})
 	}
 
 	// handle new uploads from temp file
 	now := time.Now()
-	info, _ := os.Stat(tmpPath)
+	info, err := os.Stat(tmpPath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "cannot stat temp file: "+err.Error())
+	}
 
 	finalPath := filepath.Join(h.uploadsDir, hash+ext)
 
@@ -703,10 +716,10 @@ func (h *LibraryHandler) UploadTrack(c echo.Context) error {
 		UserID:    claims.UserID,
 		Filename:  file.Filename,
 	}); err != nil {
-		os.Remove(tmpPath)
 		return echo.NewHTTPError(http.StatusServiceUnavailable, "upload queue full")
 	}
 
+	keepTmp = true
 	return c.JSON(http.StatusAccepted, map[string]any{"status": "queued", "id": t.ID})
 }
 
@@ -750,23 +763,28 @@ func (h *LibraryHandler) ReplaceTrackFile(c echo.Context) error {
 	}
 	tmpPath := tmp.Name()
 
+	defer func() {
+		_ = tmp.Close()
+		if err := os.Remove(tmpPath); err != nil && !os.IsNotExist(err) {
+			c.Logger().Warnf("failed to remove tmp file %s: %v", tmpPath, err)
+		}
+	}()
+
 	hasher := sha256.New()
 	if _, err = io.Copy(tmp, io.TeeReader(src, hasher)); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
-	tmp.Close()
+	if err := tmp.Close(); err != nil {
+		c.Logger().Warnf("failed to close tmp file early: %v", err)
+	}
 
 	hash := hex.EncodeToString(hasher.Sum(nil))
 
 	dup, err := h.lib.TrackByFingerprint(ctx, hash)
 	if err != nil {
-		os.Remove(tmpPath)
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if dup != nil && dup.ID != existing.ID && dup.DeletedAt == nil {
-		os.Remove(tmpPath)
 		return c.JSON(http.StatusConflict, map[string]any{
 			"error": "duplicate file belongs to another track",
 			"track": dup,
@@ -780,7 +798,6 @@ func (h *LibraryHandler) ReplaceTrackFile(c echo.Context) error {
 
 	// Move the temp file to its final location atomically.
 	if err := os.Rename(tmpPath, finalPath); err != nil {
-		os.Remove(tmpPath)
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to move file: "+err.Error())
 	}
 
@@ -890,6 +907,7 @@ func populateTrackFromTags(t *models.Track, tmpPath string) {
 	}
 }
 
+// maxLrcBytes is the maximum size of an .lrc file that will be served.
 const maxLrcBytes = 2 << 20
 
 // lrcPathForTrack returns the .lrc file path that corresponds to the given track
@@ -956,15 +974,25 @@ func (h *LibraryHandler) UploadLyrics(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create lyrics file: "+err.Error())
 	}
-	defer dst.Close()
+
+	var keepDst bool
+	defer func() {
+		_ = dst.Close()
+		if !keepDst {
+			if err := os.Remove(lrcPath); err != nil && !os.IsNotExist(err) {
+				c.Logger().Warnf("failed to remove incomplete lyrics file %s: %v", lrcPath, err)
+			}
+		}
+	}()
 
 	if _, err := io.Copy(dst, src); err != nil {
-		if err := os.Remove(lrcPath); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to write lyrics file and remove failed: "+err.Error())
-		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write lyrics file: "+err.Error())
 	}
+	if err := dst.Close(); err != nil {
+		c.Logger().Warnf("failed to close lyrics file early: %v", err)
+	}
 
+	keepDst = true
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -1076,14 +1104,24 @@ func writeLrcFile(c echo.Context, file *multipart.FileHeader, destPath, trackID 
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to create lyrics file: "+err.Error())
 	}
-	defer dst.Close()
+
+	var keepDst bool
+	defer func() {
+		_ = dst.Close()
+		if !keepDst {
+			if err := os.Remove(destPath); err != nil && !os.IsNotExist(err) {
+				c.Logger().Warnf("failed to remove incomplete lyrics file %s: %v", destPath, err)
+			}
+		}
+	}()
 
 	if _, err := io.Copy(dst, src); err != nil {
-		if err := os.Remove(destPath); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "failed to write and cleanup lyrics file: "+err.Error()+".lrc name: "+destPath)
-		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to write lyrics file: "+err.Error())
 	}
+	if err := dst.Close(); err != nil {
+		c.Logger().Warnf("failed to close lyrics file early: %v", err)
+	}
 
+	keepDst = true
 	return c.JSON(http.StatusOK, map[string]any{"status": "ok", "track_id": trackID})
 }
