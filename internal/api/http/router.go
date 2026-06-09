@@ -114,6 +114,7 @@ func NewRouter(svc Services) *echo.Echo {
 	ah := handlers.NewAdminHandler(svc.User, svc.Queries, svc.DiskCollector)
 	plh := handlers.NewPlaylistHandler(svc.Playlist, svc.Hub, svc.ArtworkDir)
 	rh := handlers.NewRecentHandler(svc.Queries)
+	th := handlers.NewTelemetryHandler(svc.Queries)
 
 	svc.Hub.SetMessageHandler(playbackWSDispatch(svc.Playback))
 	svc.Hub.SetOutboundPayloadTransformer(transformOutboundEventPayload)
@@ -238,6 +239,11 @@ func NewRouter(svc Services) *echo.Echo {
 	recent.POST("/albums", rh.RecordAlbum)
 	recent.POST("/playlists", rh.RecordPlaylist)
 	recent.DELETE("/playlists/:id", rh.DeleteRecentPlaylist)
+
+	// Telemetry
+	e.POST("/api/telemetry/stream", th.SubmitStreamTelemetry, authMW)
+	admin.GET("/telemetry/stream", th.GetStreamTelemetryStats)
+	admin.DELETE("/telemetry/stream", th.ClearStreamTelemetry)
 
 	// redirect to player UI if visiting root
 	e.GET("/", func(c echo.Context) error {
