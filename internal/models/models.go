@@ -169,6 +169,36 @@ type DiskUsage struct {
 	RecordedAt          time.Time `json:"recorded_at"`
 }
 
+// StreamTelemetry represents a single stream-quality measurement event.
+type StreamTelemetry struct {
+	ID                string    `json:"id"`
+	TrackID           string    `json:"track_id"`
+	UserID            string    `json:"user_id,omitempty"`
+	DeviceID          string    `json:"device_id,omitempty"`
+	StreamQuality     string    `json:"stream_quality"`
+	LatencyMs         int64     `json:"latency_ms"`
+	StutterCount      int       `json:"stutter_count"`
+	StutterDurationMs int64     `json:"stutter_duration_ms"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+// StreamTelemetryStat contains aggregated stream telemetry for a track+quality pair.
+type StreamTelemetryStat struct {
+	TrackID              string `json:"track_id"`
+	TrackTitle           string `json:"track_title"`
+	TrackArtist          string `json:"track_artist"`
+	TrackCodec           string `json:"track_codec"`
+	TrackFileSize        int64  `json:"track_file_size"`
+	TrackDurationMs      int64  `json:"track_duration_ms"`
+	StreamQuality        string `json:"stream_quality"`
+	SampleCount          int    `json:"sample_count"`
+	AvgLatencyMs         int64  `json:"avg_latency_ms"`
+	MinLatencyMs         int64  `json:"min_latency_ms"`
+	MaxLatencyMs         int64  `json:"max_latency_ms"`
+	TotalStutters        int    `json:"total_stutters"`
+	AvgStutterDurationMs int64  `json:"avg_stutter_duration_ms"`
+}
+
 type Event struct {
 	Type    EventType `json:"type"`
 	Payload any       `json:"payload"`
