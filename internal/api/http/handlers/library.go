@@ -325,42 +325,76 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 }
 
 // normalizeRangeHeader removes the Range header if the requested
-// start byte is beyond the end of the file.
+// start byte is beyond the end of the file, and caps the chunk size
+// to prevent the browser from buffering massive files entirely at once.
 func normalizeRangeHeader(req *http.Request, fileSize int64) {
-	start, ok := parseRangeStart(req.Header.Get("Range"))
+	rangeHeader := req.Header.Get("Range")
+	if rangeHeader == "" {
+		return
+	}
+
+	start, endStr, ok := parseRange(rangeHeader)
 	if !ok {
 		return
 	}
 
 	if start >= fileSize {
 		req.Header.Del("Range")
+		return
 	}
+
+	// Cap the chunk size to 2MB
+	const maxChunkSize = 2 * 1024 * 1024
+
+	var end int64
+	if endStr != "" {
+		var err error
+		end, err = strconv.ParseInt(endStr, 10, 64)
+		if err != nil || end < start {
+			end = fileSize - 1
+		}
+	} else {
+		end = fileSize - 1
+	}
+
+	if end >= fileSize {
+		end = fileSize - 1
+	}
+
+	if end-start+1 > maxChunkSize {
+		end = start + maxChunkSize - 1
+	}
+
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
 }
 
-// parseRangeStart extracts the starting byte offset from a Range header value. Defaults to 0 if no Range header is present.
-// Returns the starting byte offset and whether it was present.
-func parseRangeStart(value string) (int64, bool) {
+// parseRange extracts the starting byte offset and ending byte string from a Range header value.
+// Returns the starting byte offset, ending string, and whether it was successfully parsed.
+func parseRange(value string) (int64, string, bool) {
 	rangeValue := strings.TrimSpace(value)
 	if rangeValue == "" || !strings.HasPrefix(rangeValue, "bytes=") {
-		return 0, false
+		return 0, "", false
 	}
 
 	spec := strings.TrimSpace(strings.TrimPrefix(rangeValue, "bytes="))
 	if spec == "" || strings.Contains(spec, ",") {
-		return 0, false
+		return 0, "", false
 	}
 
+	// Ignore suffix-byte-range requests like "bytes=-500" since there aren't any known use cases for
+	// clients to request the last n bytes for this app.
 	sep := strings.Index(spec, "-")
 	if sep <= 0 {
-		return 0, false
+		return 0, "", false
 	}
 
+	// parse the start byte
 	start, err := strconv.ParseInt(strings.TrimSpace(spec[:sep]), 10, 64)
 	if err != nil || start < 0 {
-		return 0, false
+		return 0, "", false
 	}
 
-	return start, true
+	return start, strings.TrimSpace(spec[sep+1:]), true
 }
 
 // ServeTrackArt returns embedded album art from the audio file.
