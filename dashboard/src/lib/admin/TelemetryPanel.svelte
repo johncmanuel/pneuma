@@ -124,9 +124,7 @@
   {:else if stats.length === 0}
     <div class="empty-state">
       <p>No telemetry data yet.</p>
-      <p class="text-3">
-        Play tracks in the web player to collect metrics.
-      </p>
+      <p class="text-3">Play tracks in the web player to collect metrics.</p>
     </div>
   {:else}
     <div class="summary">
