@@ -29,10 +29,10 @@ type Claims struct {
 }
 
 // AccessTokenTTL is the lifetime of a regular access token.
-const AccessTokenTTL = 24 * time.Hour
+const AccessTokenTTL = 30 * 24 * time.Hour
 
 // RefreshTokenTTL is the lifetime of a refresh token.
-const RefreshTokenTTL = 7 * 24 * time.Hour
+const RefreshTokenTTL = 90 * 24 * time.Hour
 
 // GenerateToken creates a signed JWT for the given user.
 func GenerateToken(secret, userID, username string, isAdmin, canUpload, canEdit, canDelete bool, ttl time.Duration) (string, error) {
