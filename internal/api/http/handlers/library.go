@@ -324,6 +324,12 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 	return nil
 }
 
+// maxChunkSizeBytes is the maximum size of a chunk of audio to serve at once.
+// 512 kilobytes seems like a good balance; seems like Spotify uses 512 kilobytes per chunk as well
+// (not sure if they changed this or not recently) for streaming their content:
+// https://engineering.atspotify.com/2018/08/smoother-streaming-with-bbr
+const maxChunkSizeBytes = 512 * 1024
+
 // normalizeRangeHeader removes the Range header if the requested
 // start byte is beyond the end of the file, and caps the chunk size
 // to prevent the browser from buffering massive files entirely at once.
@@ -343,9 +349,6 @@ func normalizeRangeHeader(req *http.Request, fileSize int64) {
 		return
 	}
 
-	// Cap the chunk size to 2MB
-	const maxChunkSize = 2 * 1024 * 1024
-
 	var end int64
 	if endStr != "" {
 		var err error
@@ -361,8 +364,8 @@ func normalizeRangeHeader(req *http.Request, fileSize int64) {
 		end = fileSize - 1
 	}
 
-	if end-start+1 > maxChunkSize {
-		end = start + maxChunkSize - 1
+	if end-start+1 > maxChunkSizeBytes {
+		end = start + maxChunkSizeBytes - 1
 	}
 
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
