@@ -36,6 +36,12 @@
       href="%BASE_URL%apple-touch-icon.png"
     />
 
+    <link
+      rel="preload"
+      as="fetch"
+      crossorigin="use-credentials"
+      href="/api/library/albumgroups?offset=0&limit=50"
+    />
     <script type="module" src="./src/theme-init.ts"></script>
     <title>pneuma</title>
   </head>

@@ -206,6 +206,12 @@
   });
 </script>
 
+<svelte:head>
+  {#if track && track.id}
+    <link rel="prefetch" as="image" href="/api/library/tracks/{track.id}/art" />
+  {/if}
+</svelte:head>
+
 <div class="mobile-player-shell">
   <div class="mini-player" class:disabled={!hasTrack}>
     <span class="mini-progress-track" aria-hidden="true">

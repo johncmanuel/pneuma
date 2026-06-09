@@ -334,6 +334,11 @@ func setSPAStaticCacheHeader(h http.Header, path string) {
 
 	if p == "/" || p == "/index.html" || p == "/sw.js" || p == "/site.webmanifest" || p == "/offline.html" || strings.HasSuffix(p, ".html") {
 		h.Set("Cache-Control", "no-cache")
+
+		if p == "/" || p == "/index.html" {
+			h.Add("Link", "</api/library/albumgroups?offset=0&limit=50>; rel=preload; as=fetch; crossorigin=use-credentials")
+		}
+
 		return
 	}
 
