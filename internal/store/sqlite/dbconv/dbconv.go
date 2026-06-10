@@ -306,3 +306,46 @@ func DiskUsageToModel(d serverdb.DiskUsage) *models.DiskUsage {
 		RecordedAt:          ParseTime(d.RecordedAt),
 	}
 }
+
+// TelemetryStatToModel converts a generated serverdb.GetStreamTelemetryStatsRow
+// into a domain models.StreamTelemetryStat.
+func TelemetryStatToModel(r serverdb.GetStreamTelemetryStatsRow) models.StreamTelemetryStat {
+	return models.StreamTelemetryStat{
+		TrackID:              r.TrackID,
+		TrackTitle:           r.TrackTitle.String,
+		TrackArtist:          r.TrackArtist.String,
+		TrackCodec:           r.TrackCodec.String,
+		TrackFileSize:        r.TrackFileSize.Int64,
+		TrackDurationMs:      r.TrackDurationMs.Int64,
+		StreamQuality:        r.StreamQuality,
+		SampleCount:          int(r.SampleCount),
+		AvgLatencyMs:         r.AvgLatencyMs,
+		MinLatencyMs:         toInt64(r.MinLatencyMs),
+		MaxLatencyMs:         toInt64(r.MaxLatencyMs),
+		TotalStutters:        int(r.TotalStutters),
+		AvgStutterDurationMs: r.AvgStutterDurationMs,
+	}
+}
+
+// TelemetryStatsToModels converts a slice of telemetry stat rows into domain models.
+func TelemetryStatsToModels(rows []serverdb.GetStreamTelemetryStatsRow) []models.StreamTelemetryStat {
+	out := make([]models.StreamTelemetryStat, len(rows))
+	for i, r := range rows {
+		out[i] = TelemetryStatToModel(r)
+	}
+	return out
+}
+
+// toInt64 converts an interface{} (from sqlite MIN/MAX aggregates) to int64.
+func toInt64(v interface{}) int64 {
+	switch n := v.(type) {
+	case int64:
+		return n
+	case float64:
+		return int64(n)
+	case nil:
+		return 0
+	default:
+		return 0
+	}
+}

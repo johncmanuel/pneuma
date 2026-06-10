@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { playerState, seekRequest } from "../../lib/stores/playback";
-  import { streamUrl } from "../../lib/api";
+  import { streamUrl, apiFetch } from "../../lib/api";
   import { wsSend } from "../../lib/ws";
   import type { CrossfadeConfig, StreamQuality } from "@pneuma/shared";
 
@@ -58,6 +58,23 @@
   // Timer that removes the old (secondary) element after the fade finishes
   let crossfadeTeardownTimer: ReturnType<typeof setTimeout> | null = null;
 
+  let nextTrackId = $derived(
+    $playerState.repeat === 2
+      ? $playerState.trackId
+      : $playerState.queue[$playerState.queueIndex + 1] ||
+        ($playerState.repeat === 1 ? $playerState.queue[0] : null)
+  );
+  let preloadedTrackId = $state("");
+
+  let telemetryTrackId = "";
+  let telemetryQuality = "";
+  let playRequestTime = 0; // performance.now() when play() is called
+  let latencyMs = 0; // time from play() to first audio output
+  let latencyRecorded = false;
+  let stutterCount = 0;
+  let stutterDurationMs = 0;
+  let waitingStartTime = 0; // performance.now() when a 'waiting' event fires
+
   // Keep parent's audio prop bound to the currently active element
   $effect(() => {
     const active = primaryIsA ? audioA : audioB;
@@ -92,6 +109,67 @@
 
   function stopPositionLoop() {
     cancelAnimationFrame(rafId);
+  }
+
+  function resetTelemetry(trackId: string, quality: string) {
+    telemetryTrackId = trackId;
+    telemetryQuality = quality;
+    playRequestTime = performance.now();
+    latencyMs = 0;
+    latencyRecorded = false;
+    stutterCount = 0;
+    stutterDurationMs = 0;
+    waitingStartTime = 0;
+  }
+
+  function flushTelemetry() {
+    if (!telemetryTrackId || !latencyRecorded) return;
+
+    const body = {
+      track_id: telemetryTrackId,
+      stream_quality: telemetryQuality || "original",
+      latency_ms: Math.round(latencyMs),
+      stutter_count: stutterCount,
+      stutter_duration_ms: Math.round(stutterDurationMs)
+    };
+
+    apiFetch("/api/telemetry/stream", {
+      method: "POST",
+      body: JSON.stringify(body)
+    }).catch((e) => console.warn("Telemetry submit failed", e));
+
+    telemetryTrackId = "";
+  }
+
+  function onAudioPlaying(el: HTMLAudioElement) {
+    const active = primaryIsA ? audioA : audioB;
+    if (el !== active) return;
+
+    if (!latencyRecorded && playRequestTime > 0) {
+      latencyMs = performance.now() - playRequestTime;
+      latencyRecorded = true;
+    }
+  }
+
+  function onAudioWaiting(el: HTMLAudioElement) {
+    const active = primaryIsA ? audioA : audioB;
+    if (el !== active) return;
+
+    // Only count as a stutter after initial playback has started
+    if (latencyRecorded) {
+      stutterCount++;
+      waitingStartTime = performance.now();
+    }
+  }
+
+  function onAudioCanPlay(el: HTMLAudioElement) {
+    const active = primaryIsA ? audioA : audioB;
+    if (el !== active) return;
+
+    if (waitingStartTime > 0) {
+      stutterDurationMs += performance.now() - waitingStartTime;
+      waitingStartTime = 0;
+    }
   }
 
   function resolveEffectiveStreamQuality(): StreamQuality {
@@ -228,6 +306,20 @@
     if (active && isFinite(active.duration) && active.duration > 0) {
       const remaining = active.duration - active.currentTime;
 
+      // Preload the next track into the idle audio element
+      if (remaining <= 15.0 && nextTrackId && preloadedTrackId !== nextTrackId) {
+        const idle = primaryIsA ? audioB : audioA;
+        if (idle && !crossfadeActive) {
+          const preloadUrl = streamUrl(nextTrackId, {
+            quality: resolveEffectiveStreamQuality()
+          });
+          if (preloadUrl) {
+            idle.src = preloadUrl;
+            preloadedTrackId = nextTrackId;
+          }
+        }
+      }
+
       // Crossfade trigger (only if at least 1.0 seconds remain)
       if (
         crossfade.enabled &&
@@ -272,9 +364,20 @@
     if (audioB) {
       audioB.volume = volume;
     }
+
+    const onBeforeUnload = () => {
+      flushTelemetry();
+    };
+
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
   });
 
   onDestroy(() => {
+    flushTelemetry();
     stopPositionLoop();
 
     if (seekSyncTimer) clearTimeout(seekSyncTimer);
@@ -305,12 +408,15 @@
 
   // Update audio when trackId changes
   $effect(() => {
-    const active = primaryIsA ? audioA : audioB;
+    let active = primaryIsA ? audioA : audioB;
     if (active && $playerState.trackId) {
       const trackChanged = $playerState.trackId !== lastTrackId;
       const pausedChanged = $playerState.paused !== lastPaused;
 
       if (trackChanged) {
+        // Flush telemetry for the previous track before switching
+        flushTelemetry();
+
         // If the user manually skipped during an active crossfade, hard-cancel it
         if (crossfadeActive && !pendingCrossfadeDuration) {
           cancelCrossfade();
@@ -334,10 +440,27 @@
 
         if (url) {
           if (currentTrackIdInAudio !== $playerState.trackId) {
-            ensureAudioRouting();
+            const wasPreloaded = preloadedTrackId === $playerState.trackId;
+            if (wasPreloaded) {
+              primaryIsA = !primaryIsA;
+              active = primaryIsA ? audioA : audioB;
+              preloadedTrackId = "";
+            }
+
+            if (crossfade.enabled) {
+              ensureAudioRouting();
+            }
+
             currentTrackIdInAudio = $playerState.trackId;
-            active.src = url;
-            active.currentTime = $playerState.positionMs / 1000;
+            resetTelemetry(
+              $playerState.trackId,
+              resolveEffectiveStreamQuality()
+            );
+
+            if (!wasPreloaded) {
+              active!.src = url;
+            }
+            active!.currentTime = $playerState.positionMs / 1000;
             displayPosition = $playerState.positionMs;
 
             const activeGain = primaryIsA ? gainA : gainB;
@@ -395,6 +518,7 @@
   $effect(() => {
     const active = primaryIsA ? audioA : audioB;
     if (active && !$playerState.trackId && currentTrackIdInAudio) {
+      flushTelemetry();
       cancelCrossfade();
       active.pause();
 
@@ -415,6 +539,9 @@
   onended={() => handleEnded(audioA!)}
   onloadedmetadata={() => changeAudioDuration(audioA!)}
   ondurationchange={() => changeAudioDuration(audioA!)}
+  onplaying={() => onAudioPlaying(audioA!)}
+  onwaiting={() => onAudioWaiting(audioA!)}
+  oncanplay={() => onAudioCanPlay(audioA!)}
   preload="metadata"
   crossorigin="anonymous"
 ></audio>
@@ -425,6 +552,9 @@
   onended={() => handleEnded(audioB!)}
   onloadedmetadata={() => changeAudioDuration(audioB!)}
   ondurationchange={() => changeAudioDuration(audioB!)}
+  onplaying={() => onAudioPlaying(audioB!)}
+  onwaiting={() => onAudioWaiting(audioB!)}
+  oncanplay={() => onAudioCanPlay(audioB!)}
   preload="metadata"
   crossorigin="anonymous"
 ></audio>

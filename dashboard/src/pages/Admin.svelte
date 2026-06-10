@@ -4,8 +4,9 @@
   import UsersPanel from "../lib/admin/UsersPanel.svelte";
   import AuditPanel from "../lib/admin/AuditPanel.svelte";
   import DiskUsagePanel from "../lib/admin/DiskUsagePanel.svelte";
+  import TelemetryPanel from "../lib/admin/TelemetryPanel.svelte";
 
-  type Tab = "tracks" | "users" | "audit" | "disk";
+  type Tab = "tracks" | "users" | "audit" | "disk" | "telemetry";
 
   let isAdmin = $derived($currentUser?.is_admin ?? false);
   let hasAnyPerm = $derived(
@@ -31,6 +32,7 @@
       tabs.push({ id: "users", label: "Users" });
       tabs.push({ id: "audit", label: "Audit Log" });
       tabs.push({ id: "disk", label: "Disk Usage" });
+      tabs.push({ id: "telemetry", label: "Telemetry" });
     }
     return tabs;
   }
@@ -77,6 +79,8 @@
         <AuditPanel />
       {:else if activeTab === "disk"}
         <DiskUsagePanel />
+      {:else if activeTab === "telemetry"}
+        <TelemetryPanel />
       {/if}
     </div>
   {/if}

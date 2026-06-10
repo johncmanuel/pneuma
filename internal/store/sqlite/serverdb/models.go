@@ -88,6 +88,18 @@ type RecentPlaylist struct {
 	PlayedAt   string
 }
 
+type StreamTelemetry struct {
+	ID                string
+	TrackID           string
+	UserID            string
+	DeviceID          string
+	StreamQuality     string
+	LatencyMs         int64
+	StutterCount      int64
+	StutterDurationMs int64
+	CreatedAt         string
+}
+
 type Track struct {
 	ID               string
 	Path             string
