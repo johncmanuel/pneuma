@@ -58,6 +58,14 @@
   // Timer that removes the old (secondary) element after the fade finishes
   let crossfadeTeardownTimer: ReturnType<typeof setTimeout> | null = null;
 
+  let nextTrackId = $derived(
+    $playerState.repeat === 2
+      ? $playerState.trackId
+      : $playerState.queue[$playerState.queueIndex + 1] ||
+        ($playerState.repeat === 1 ? $playerState.queue[0] : null)
+  );
+  let preloadedTrackId = $state("");
+
   let telemetryTrackId = "";
   let telemetryQuality = "";
   let playRequestTime = 0; // performance.now() when play() is called
@@ -298,6 +306,20 @@
     if (active && isFinite(active.duration) && active.duration > 0) {
       const remaining = active.duration - active.currentTime;
 
+      // Preload the next track into the idle audio element
+      if (remaining <= 15.0 && nextTrackId && preloadedTrackId !== nextTrackId) {
+        const idle = primaryIsA ? audioB : audioA;
+        if (idle && !crossfadeActive) {
+          const preloadUrl = streamUrl(nextTrackId, {
+            quality: resolveEffectiveStreamQuality()
+          });
+          if (preloadUrl) {
+            idle.src = preloadUrl;
+            preloadedTrackId = nextTrackId;
+          }
+        }
+      }
+
       // Crossfade trigger (only if at least 1.0 seconds remain)
       if (
         crossfade.enabled &&
@@ -386,7 +408,7 @@
 
   // Update audio when trackId changes
   $effect(() => {
-    const active = primaryIsA ? audioA : audioB;
+    let active = primaryIsA ? audioA : audioB;
     if (active && $playerState.trackId) {
       const trackChanged = $playerState.trackId !== lastTrackId;
       const pausedChanged = $playerState.paused !== lastPaused;
@@ -418,14 +440,27 @@
 
         if (url) {
           if (currentTrackIdInAudio !== $playerState.trackId) {
-            ensureAudioRouting();
+            const wasPreloaded = preloadedTrackId === $playerState.trackId;
+            if (wasPreloaded) {
+              primaryIsA = !primaryIsA;
+              active = primaryIsA ? audioA : audioB;
+              preloadedTrackId = "";
+            }
+
+            if (crossfade.enabled) {
+              ensureAudioRouting();
+            }
+
             currentTrackIdInAudio = $playerState.trackId;
             resetTelemetry(
               $playerState.trackId,
               resolveEffectiveStreamQuality()
             );
-            active.src = url;
-            active.currentTime = $playerState.positionMs / 1000;
+
+            if (!wasPreloaded) {
+              active!.src = url;
+            }
+            active!.currentTime = $playerState.positionMs / 1000;
             displayPosition = $playerState.positionMs;
 
             const activeGain = primaryIsA ? gainA : gainB;
