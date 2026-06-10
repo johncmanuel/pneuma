@@ -297,10 +297,9 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 			}
 
 			c.Response().Header().Set("Content-Type", media.MimeFromExt(".ogg"))
-			c.Response().Header().Set("Cache-Control", "private, no-store")
+			c.Response().Header().Set("Cache-Control", "private, max-age=604800")
 			c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.NormalizeStreamQuality(quality)))
-			normalizeRangeHeader(c.Request(), cachedInfo.Size())
-			http.ServeContent(c.Response(), c.Request(), cachedInfo.Name(), cachedInfo.ModTime(), cachedFile)
+			http.ServeContent(c.Response(), c.Request(), cachedInfo.Name(), cachedInfo.ModTime(), newThrottledReadSeeker(cachedFile, streamThrottleBytesPerSec))
 			return nil
 		}
 
@@ -316,88 +315,11 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 	ext := strings.ToLower(filepath.Ext(track.Path))
 
 	c.Response().Header().Set("Content-Type", media.MimeFromExt(ext))
-	c.Response().Header().Set("Cache-Control", "private, no-store")
+	c.Response().Header().Set("Cache-Control", "private, max-age=604800")
 	c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.StreamQualityOriginal))
-	normalizeRangeHeader(c.Request(), info.Size())
-	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
+	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), newThrottledReadSeeker(f, streamThrottleBytesPerSec))
 
 	return nil
-}
-
-// maxChunkSizeBytes is the maximum size of a chunk of audio to serve at once.
-// 512 kilobytes seems like a good balance; seems like Spotify uses 512 kilobytes per chunk as well
-// (not sure if they changed this or not recently) for streaming their content:
-// https://engineering.atspotify.com/2018/08/smoother-streaming-with-bbr
-const maxChunkSizeBytes = 512 * 1024
-
-// normalizeRangeHeader removes the Range header if the requested
-// start byte is beyond the end of the file, and caps the chunk size
-// to prevent the browser from buffering massive files entirely at once.
-func normalizeRangeHeader(req *http.Request, fileSize int64) {
-	rangeHeader := req.Header.Get("Range")
-	if rangeHeader == "" {
-		return
-	}
-
-	start, endStr, ok := parseRange(rangeHeader)
-	if !ok {
-		return
-	}
-
-	if start >= fileSize {
-		req.Header.Del("Range")
-		return
-	}
-
-	var end int64
-	if endStr != "" {
-		var err error
-		end, err = strconv.ParseInt(endStr, 10, 64)
-		if err != nil || end < start {
-			end = fileSize - 1
-		}
-	} else {
-		end = fileSize - 1
-	}
-
-	if end >= fileSize {
-		end = fileSize - 1
-	}
-
-	if end-start+1 > maxChunkSizeBytes {
-		end = start + maxChunkSizeBytes - 1
-	}
-
-	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-}
-
-// parseRange extracts the starting byte offset and ending byte string from a Range header value.
-// Returns the starting byte offset, ending string, and whether it was successfully parsed.
-func parseRange(value string) (int64, string, bool) {
-	rangeValue := strings.TrimSpace(value)
-	if rangeValue == "" || !strings.HasPrefix(rangeValue, "bytes=") {
-		return 0, "", false
-	}
-
-	spec := strings.TrimSpace(strings.TrimPrefix(rangeValue, "bytes="))
-	if spec == "" || strings.Contains(spec, ",") {
-		return 0, "", false
-	}
-
-	// Ignore suffix-byte-range requests like "bytes=-500" since there aren't any known use cases for
-	// clients to request the last n bytes for this app.
-	sep := strings.Index(spec, "-")
-	if sep <= 0 {
-		return 0, "", false
-	}
-
-	// parse the start byte
-	start, err := strconv.ParseInt(strings.TrimSpace(spec[:sep]), 10, 64)
-	if err != nil || start < 0 {
-		return 0, "", false
-	}
-
-	return start, strings.TrimSpace(spec[sep+1:]), true
 }
 
 // ServeTrackArt returns embedded album art from the audio file.
