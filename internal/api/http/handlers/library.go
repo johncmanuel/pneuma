@@ -299,7 +299,7 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 			c.Response().Header().Set("Content-Type", media.MimeFromExt(".ogg"))
 			c.Response().Header().Set("Cache-Control", "private, max-age=604800")
 			c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.NormalizeStreamQuality(quality)))
-			http.ServeContent(c.Response(), c.Request(), cachedInfo.Name(), cachedInfo.ModTime(), newThrottledReadSeeker(cachedFile, streamThrottleBytesPerSec))
+			http.ServeContent(c.Response(), c.Request(), cachedInfo.Name(), cachedInfo.ModTime(), cachedFile)
 			return nil
 		}
 
@@ -317,8 +317,7 @@ func (h *LibraryHandler) StreamTrack(c echo.Context) error {
 	c.Response().Header().Set("Content-Type", media.MimeFromExt(ext))
 	c.Response().Header().Set("Cache-Control", "private, max-age=604800")
 	c.Response().Header().Set("X-Pneuma-Stream-Profile", string(media.StreamQualityOriginal))
-	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), newThrottledReadSeeker(f, streamThrottleBytesPerSec))
-
+	http.ServeContent(c.Response(), c.Request(), info.Name(), info.ModTime(), f)
 	return nil
 }
 
