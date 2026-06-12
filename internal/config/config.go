@@ -260,13 +260,15 @@ func Load(path string, dataDir string) (*Config, error) {
 		}
 	}
 
-	applyEnvOverrides(cfg)
-
 	// Always save back so auto-generated fields are persisted
 	// even when the file pre-existed without them.
+	// This is done before applying env overrides so ephemeral environment
+	// variables don't permanently overwrite the config file on disk.
 	if err := Save(path, cfg); err != nil {
 		slog.Warn("could not persist config to disk (read-only filesystem?)", "path", path, "err", err)
 	}
+
+	applyEnvOverrides(cfg)
 
 	return cfg, nil
 }
