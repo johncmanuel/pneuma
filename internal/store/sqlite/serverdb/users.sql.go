@@ -7,7 +7,17 @@ package serverdb
 
 import (
 	"context"
+	"database/sql"
 )
+
+const clearTrackUploadAttributionForUser = `-- name: ClearTrackUploadAttributionForUser :exec
+UPDATE tracks SET uploaded_by_user_id = '' WHERE uploaded_by_user_id = ?
+`
+
+func (q *Queries) ClearTrackUploadAttributionForUser(ctx context.Context, uploadedByUserID sql.NullString) error {
+	_, err := q.db.ExecContext(ctx, clearTrackUploadAttributionForUser, uploadedByUserID)
+	return err
+}
 
 const countUsers = `-- name: CountUsers :one
 SELECT COUNT(*) FROM users
@@ -69,6 +79,56 @@ WHERE id = ?
 
 func (q *Queries) DeleteUser(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteUser, id)
+	return err
+}
+
+const deleteUserAuditLogs = `-- name: DeleteUserAuditLogs :exec
+DELETE FROM audit_log WHERE user_id = ? OR target_id = ?
+`
+
+type DeleteUserAuditLogsParams struct {
+	UserID   string
+	TargetID string
+}
+
+func (q *Queries) DeleteUserAuditLogs(ctx context.Context, arg DeleteUserAuditLogsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteUserAuditLogs, arg.UserID, arg.TargetID)
+	return err
+}
+
+const deleteUserDevices = `-- name: DeleteUserDevices :exec
+DELETE FROM devices WHERE user_id = ?
+`
+
+func (q *Queries) DeleteUserDevices(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUserDevices, userID)
+	return err
+}
+
+const deleteUserPlaybackSessions = `-- name: DeleteUserPlaybackSessions :exec
+DELETE FROM playback_sessions WHERE user_id = ?
+`
+
+func (q *Queries) DeleteUserPlaybackSessions(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUserPlaybackSessions, userID)
+	return err
+}
+
+const deleteUserPlaylists = `-- name: DeleteUserPlaylists :exec
+DELETE FROM playlists WHERE user_id = ?
+`
+
+func (q *Queries) DeleteUserPlaylists(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUserPlaylists, userID)
+	return err
+}
+
+const deleteUserWatchFolders = `-- name: DeleteUserWatchFolders :exec
+DELETE FROM watch_folders WHERE user_id = ?
+`
+
+func (q *Queries) DeleteUserWatchFolders(ctx context.Context, userID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUserWatchFolders, userID)
 	return err
 }
 

@@ -166,29 +166,34 @@ func (s *Service) DeleteUser(ctx context.Context, callerID, targetID string) err
 	}
 	defer tx.Rollback()
 
+	qtx := s.q.WithTx(tx)
+
 	// clear tracks upload attribution
-	if _, err := tx.ExecContext(ctx, "UPDATE tracks SET uploaded_by_user_id = '' WHERE uploaded_by_user_id = ?", targetID); err != nil {
+	if err := qtx.ClearTrackUploadAttributionForUser(ctx, sql.NullString{String: targetID, Valid: true}); err != nil {
 		return err
 	}
 
 	// then delete user collections and references
-	if _, err := tx.ExecContext(ctx, "DELETE FROM playlists WHERE user_id = ?", targetID); err != nil {
+	if err := qtx.DeleteUserPlaylists(ctx, targetID); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM watch_folders WHERE user_id = ?", targetID); err != nil {
+	if err := qtx.DeleteUserWatchFolders(ctx, targetID); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM playback_sessions WHERE user_id = ?", targetID); err != nil {
+	if err := qtx.DeleteUserPlaybackSessions(ctx, targetID); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM audit_log WHERE user_id = ? OR target_id = ?", targetID, targetID); err != nil {
+	if err := qtx.DeleteUserAuditLogs(ctx, serverdb.DeleteUserAuditLogsParams{
+		UserID:   targetID,
+		TargetID: targetID,
+	}); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, "DELETE FROM devices WHERE user_id = ?", targetID); err != nil {
+	if err := qtx.DeleteUserDevices(ctx, targetID); err != nil {
 		return err
 	}
 
-	if err := s.q.WithTx(tx).DeleteUser(ctx, targetID); err != nil {
+	if err := qtx.DeleteUser(ctx, targetID); err != nil {
 		return err
 	}
 

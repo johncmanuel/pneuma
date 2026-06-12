@@ -68,3 +68,21 @@ WHERE id = ? LIMIT 1;
 
 -- name: CountUsers :one
 SELECT COUNT(*) FROM users;
+
+-- name: ClearTrackUploadAttributionForUser :exec
+UPDATE tracks SET uploaded_by_user_id = '' WHERE uploaded_by_user_id = ?;
+
+-- name: DeleteUserPlaylists :exec
+DELETE FROM playlists WHERE user_id = ?;
+
+-- name: DeleteUserWatchFolders :exec
+DELETE FROM watch_folders WHERE user_id = ?;
+
+-- name: DeleteUserPlaybackSessions :exec
+DELETE FROM playback_sessions WHERE user_id = ?;
+
+-- name: DeleteUserAuditLogs :exec
+DELETE FROM audit_log WHERE user_id = ? OR target_id = ?;
+
+-- name: DeleteUserDevices :exec
+DELETE FROM devices WHERE user_id = ?;
