@@ -2,6 +2,9 @@ import { defineConfig } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import path from "path";
 import fs from "fs";
+import { resolveAppVersion } from "../scripts/app-version";
+
+const appVersion = resolveAppVersion();
 
 // for versioning the service worker and other assets
 // to ensure clients get updates when a new version is deployed
@@ -57,6 +60,7 @@ export default defineConfig(({ command }) => ({
     drop: ["debugger"]
   },
   define: {
-    __PWA_BUILD_ID__: JSON.stringify(buildID)
+    __PWA_BUILD_ID__: JSON.stringify(buildID),
+    __APP_VERSION__: JSON.stringify(appVersion)
   }
 }));

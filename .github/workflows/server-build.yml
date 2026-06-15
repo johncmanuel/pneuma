@@ -32,6 +32,8 @@ jobs:
 
       - name: Build Web Player
         working-directory: ./web
+        env:
+          VITE_APP_VERSION: ${{ github.ref_name }}
         run: bun run build
 
       - name: Upload UI artifacts

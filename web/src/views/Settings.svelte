@@ -129,6 +129,8 @@
       </a>.
     </p>
   </div>
+
+  <p class="version-label">Version: {__APP_VERSION__}</p>
 </section>
 
 <style>
@@ -362,5 +364,11 @@
     .preset-description {
       font-size: 12px;
     }
+  }
+
+  .version-label {
+    margin: 8px 0 0;
+    font-size: 12px;
+    color: var(--text-3);
   }
 </style>
