@@ -62,7 +62,7 @@
     $playerState.repeat === 2
       ? $playerState.trackId
       : $playerState.queue[$playerState.queueIndex + 1] ||
-        ($playerState.repeat === 1 ? $playerState.queue[0] : null)
+          ($playerState.repeat === 1 ? $playerState.queue[0] : null)
   );
   let preloadedTrackId = $state("");
 
@@ -307,7 +307,11 @@
       const remaining = active.duration - active.currentTime;
 
       // Preload the next track into the idle audio element
-      if (remaining <= 15.0 && nextTrackId && preloadedTrackId !== nextTrackId) {
+      if (
+        remaining <= 15.0 &&
+        nextTrackId &&
+        preloadedTrackId !== nextTrackId
+      ) {
         const idle = primaryIsA ? audioB : audioA;
         if (idle && !crossfadeActive) {
           const preloadUrl = streamUrl(nextTrackId, {
