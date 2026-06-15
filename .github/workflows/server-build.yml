@@ -165,3 +165,5 @@ jobs:
           # https://docs.docker.com/build/ci/github-actions/attestations/
           provenance: true
           sbom: true
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}

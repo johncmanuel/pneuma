@@ -18,6 +18,9 @@ RUN bun install --filter "!frontend" --filter "!landing" --frozen-lockfile
 COPY dashboard/ ./dashboard/
 RUN cd dashboard && bun run build
 
+ARG APP_VERSION=unknown
+ENV VITE_APP_VERSION=$APP_VERSION
+
 COPY web/ ./web/
 RUN cd web && bun run build
 
@@ -39,12 +42,13 @@ COPY . .
 COPY --from=ui-builder /src/dashboard/dist ./dashboard/dist
 COPY --from=ui-builder /src/web/dist ./web/dist
 
-RUN if [ "$EMBED_UI" = "true" ]; then \
-    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /bin/prod/pneuma-server ./cmd/server ; \
-    else \
-    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -tags no_embed -trimpath -ldflags="-s -w" -o /bin/prod/pneuma-server ./cmd/server ; \
-    fi
+ARG APP_VERSION=unknown
 
+RUN if [ "$EMBED_UI" = "true" ]; then \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w -X main.version=$APP_VERSION" -o /bin/prod/pneuma-server ./cmd/server ; \
+    else \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -tags no_embed -trimpath -ldflags="-s -w -X main.version=$APP_VERSION" -o /bin/prod/pneuma-server ./cmd/server ; \
+    fi
 
 # Emulated (if arch differs from runner) but minimal
 FROM alpine:latest
