@@ -310,7 +310,8 @@
       if (
         remaining <= 15.0 &&
         nextTrackId &&
-        preloadedTrackId !== nextTrackId
+        preloadedTrackId !== nextTrackId &&
+        $playerState.repeat !== 2
       ) {
         const idle = primaryIsA ? audioB : audioA;
         if (idle && !crossfadeActive) {
@@ -330,7 +331,8 @@
         !crossfadeTriggered &&
         !crossfadeActive &&
         remaining >= 1.0 &&
-        remaining <= crossfade.durationSec
+        remaining <= crossfade.durationSec &&
+        $playerState.repeat !== 2
       ) {
         crossfadeTriggered = true;
 
@@ -446,8 +448,10 @@
           if (currentTrackIdInAudio !== $playerState.trackId) {
             const wasPreloaded = preloadedTrackId === $playerState.trackId;
             if (wasPreloaded) {
-              primaryIsA = !primaryIsA;
-              active = primaryIsA ? audioA : audioB;
+              if (!fadeDuration) {
+                primaryIsA = !primaryIsA;
+                active = primaryIsA ? audioA : audioB;
+              }
               preloadedTrackId = "";
             }
 
